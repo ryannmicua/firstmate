@@ -1599,13 +1599,10 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_TARGET=$FM_BACKEND_VALIDATED_TARGET
   fm_backend_validate_spawn "$BACKEND" || exit 1
   fm_backend_source "$BACKEND" || exit 1
-  # A relaunch must PROVE the previous agent is gone before it launches another
-  # one into the same endpoint, and only tmux and herdr have a recovery-grade
-  # classifier that can (bin/fm-control-lib.sh owns that capability table).
-  fm_control_backend_state_verified "$BACKEND" || {
+  if [ "$BACKEND" != paseo ] && ! fm_control_backend_state_verified "$BACKEND"; then
     echo "error: backend '$BACKEND' has no recovery-grade agent-state classifier, so a relaunch cannot prove the previous agent exited; refusing rather than risking two agents in one endpoint" >&2
     exit 1
-  }
+  fi
   # Two states are agent-free, and both license a relaunch:
   #   dead    - the endpoint exists and confidently holds no agent. The
   #             endpoint is ADOPTED, so the task keeps its exact address.
@@ -1635,7 +1632,15 @@ if [ "$RELAUNCH" -eq 1 ]; then
   # owns that vocabulary). The proof itself lives in one place for the whole
   # control plane - fm_control_endpoint_absence_verdict - so `exit` and
   # `relaunch` cannot reach two different answers about one endpoint.
-  RELAUNCH_STATE=$(fm_backend_agent_state "$BACKEND" "$RELAUNCH_TARGET")
+  if [ "$BACKEND" = paseo ]; then
+    [ "$(fm_backend_paseo_busy_state "$RELAUNCH_TARGET" 2>/dev/null || true)" = idle ] || {
+      echo "error: Paseo task $ID's native status does not prove an agent-free workspace; refusing to launch another agent into it" >&2
+      exit 1
+    }
+    RELAUNCH_STATE=dead
+  else
+    RELAUNCH_STATE=$(fm_backend_agent_state "$BACKEND" "$RELAUNCH_TARGET")
+  fi
   if [ "$RELAUNCH_STATE" = missing ]; then
     RELAUNCH_ABSENCE=$(fm_control_endpoint_absence_verdict "$BACKEND" "$RELAUNCH_TARGET")
     case "${RELAUNCH_ABSENCE%%$'\t'*}" in
@@ -1657,6 +1662,13 @@ if [ "$RELAUNCH" -eq 1 ]; then
       ;;
   esac
   RELAUNCH_PRIOR_HARNESS=$(fm_meta_get "$RELAUNCH_META" harness)
+  if [ "$BACKEND" = paseo ]; then
+    PASEO_WORKSPACE_ID=$(fm_meta_get "$RELAUNCH_META" paseo_workspace_id)
+    [ -n "$PASEO_WORKSPACE_ID" ] || {
+      echo "error: Paseo task $ID has no recorded workspace; refusing to relaunch without its isolated worktree owner" >&2
+      exit 1
+    }
+  fi
   KIND=$(fm_meta_get "$RELAUNCH_META" kind)
   [ -n "$KIND" ] || KIND=ship
   # A secondmate whose endpoint is gone already has ONE owner for that
@@ -2823,15 +2835,39 @@ BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"
 # persisted in this task's record.
 PASEO_DIRECT=0
 PASEO_AGENT_ID=
-PASEO_WORKSPACE_ID=
-if [ "$BACKEND" = paseo ] && [ "$RELAUNCH" -eq 0 ]; then
+PASEO_WORKSPACE_ID=${PASEO_WORKSPACE_ID:-}
+PASEO_ENV_ARGS=()
+if [ "$BACKEND" = paseo ]; then
   if command -v shasum >/dev/null 2>&1; then
     PASEO_HOME_TAG=$(printf '%s' "$FM_HOME" | shasum -a 256 | cut -c1-12)
   else
     PASEO_HOME_TAG=$(printf '%s' "$FM_HOME" | sha256sum | cut -c1-12)
   fi
-  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "${MODE:-}" "$PASEO_HOME_TAG" \
-    "FM_TASK_ID=$ID" "FIRSTMATE_HOME=$FM_HOME" "FIRSTMATE_STATE=$STATE") || exit 1
+  PASEO_ENV_ARGS=(
+    "FM_TASK_ID=$ID"
+    "FIRSTMATE_HOME=$FM_HOME"
+    "FIRSTMATE_STATE=$STATE"
+    "FM_TURNEND=$STATE/$ID.turn-ended"
+    "GOTMPDIR=/tmp/fm-$ID/gotmp"
+    "COMPACT_ADVISER_DISABLE=1"
+  )
+  if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
+    for paseo_env_name in $LAUNCH_ENV_NAMES; do
+      [ "$paseo_env_name" = PASEO_AGENT_ID ] && continue
+      paseo_env_value=${!paseo_env_name-}
+      [ -v "$paseo_env_name" ] || continue
+      PASEO_ENV_ARGS+=("$paseo_env_name=$paseo_env_value")
+    done
+  fi
+  case "$HARNESS" in
+    claude*)
+      PASEO_ENV_ARGS+=("CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false" "CLAUDE_CODE_SEND_FEEDBACK=0")
+      [ -n "${CLAUDE_CONFIG_DIR:-}" ] && PASEO_ENV_ARGS+=("CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR")
+      ;;
+    opencode*) PASEO_ENV_ARGS+=("OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}") ;;
+    gemini) PASEO_ENV_ARGS+=("GEMINI_CLI_TRUST_WORKSPACE=true" "GEMINI_CLI_SYSTEM_SETTINGS_PATH=$STATE/$ID.gemini-settings.json") ;;
+  esac
+  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "${MODE:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "${PASEO_ENV_ARGS[@]}") || exit 1
   IFS=$'\t' read -r PASEO_AGENT_ID PASEO_WORKSPACE_ID WT <<EOF
 $PASEO_RESULT
 EOF
@@ -3183,7 +3219,9 @@ if [ -e "$STATE/$ID.backlog-close" ] || [ -L "$STATE/$ID.backlog-close" ]; then
 fi
 
 W="fm-$ID"
-if [ "$RELAUNCH" -eq 1 ]; then
+if [ "$RELAUNCH" -eq 1 ] && [ "$BACKEND" = paseo ]; then
+  :
+elif [ "$RELAUNCH" -eq 1 ]; then
   # A secondmate's home already resolved WT above through the same validation a
   # fresh secondmate spawn uses; every other kind takes the recorded worktree.
   # Either way the worktree is REUSED, never re-created: its branch, commits and

@@ -18,7 +18,7 @@ Absent providers are rejected by name rather than substituted.
 Workers are root agents created with `env -u PASEO_AGENT_ID`.
 Each task records its labeled agent, workspace, and worktree identities.
 Logs are timeline output, not a verified visible viewport, and agent liveness remains `unverified` because Paseo exposes no worker pid.
-Interrupt maps to `paseo stop`; unsupported keys and stop-proving exit/relaunch verbs are rejected.
+Interrupt maps to `paseo stop`; exit proves the native stopped status and archives the agent if that proof is unavailable. Liveness remains unverified.
 Teardown archives the agent and then its separate workspace record.
 
 ## Verification
