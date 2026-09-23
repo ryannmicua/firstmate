@@ -1714,6 +1714,22 @@ tests/fm-bootstrap.test.sh
 
 The fake-Orca suite covers readiness, registration, create response parsing, metadata routing, popup-safe submit, and path-matched release refusal.
 
+## Paseo
+
+Paseo 0.9.1 was live and reachable on 2026-09-23/24 through the existing daemon.
+A disposable labeled probe used `env -u PASEO_AGENT_ID`, `--background`, and the OpenCode provider.
+The adapter returned all three required identities: agent, workspace, and worktree path.
+The probe was stopped, archived, and its workspace was separately archived.
+
+```sh
+paseo --version
+paseo daemon status
+tests/fm-backend-paseo.test.sh
+```
+
+Observed version and status were `0.9.1` and `connectedDaemon: reachable`.
+The portable suite covers provider refusal, unverified liveness, unsupported key refusal, and the Paseo control route with a stubbed CLI.
+
 ## cmux
 
 The current compatibility floor is cmux 0.64, and the active live evidence uses 0.64.17 build 97 on macOS aarch64.
