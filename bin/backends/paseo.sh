@@ -72,7 +72,8 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
     if paseo run --help 2>&1 | grep -F -- '--env-file' >/dev/null; then
       args+=(--env-file "$env_file")
     else
-      args+=(--env "FM_PASEO_ENV_FILE=$env_file")
+      echo "error: Paseo CLI has no native --env-file transport; refusing to launch task $id without delivering its allowlisted environment" >&2
+      return 1
     fi
   fi
   for env_value in "$@"; do args+=(--env "$env_value"); done
