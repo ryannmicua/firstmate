@@ -1048,6 +1048,13 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
       return 0
       ;;
   esac
+  if [ "$backend" = paseo ] && command -v fm_backend_busy_state >/dev/null 2>&1; then
+    native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || true)
+    case "$native" in
+      busy) printf 'busy paseo-native'; return 0 ;;
+      idle) printf 'idle paseo-native'; return 0 ;;
+    esac
+  fi
   out=$(fm_busy_record_read "$state" "$id") && rc=0 || rc=$?
   if [ "$rc" = 0 ]; then
     r_state=${out%% *}

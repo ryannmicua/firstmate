@@ -876,6 +876,7 @@ fm_backend_busy_state() {  # <backend> <target>
   fm_backend_source "$backend" || { printf 'unknown'; return 0; }
   case "$backend" in
     herdr) fm_backend_herdr_busy_state "$@" ;;
+    paseo) fm_backend_paseo_busy_state "$@" ;;
     *) printf 'unknown' ;;
   esac
 }
