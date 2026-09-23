@@ -280,6 +280,9 @@ fm_control_endpoint_absence_verdict() {  # <backend> <target>
         *) printf 'unproven\tthe recorded herdr session'"'"'s server could not be started, or its pane could not be classified once it was running' ;;
       esac
       ;;
+    paseo)
+      case "$key" in C-c|ctrl+c|Ctrl-c|Ctrl-C) return 0 ;; esac
+      ;;
     *)
       printf 'unproven\tbackend %s has no recovery-grade classifier, so absence cannot be proven on it at all' "'$backend'"
       ;;

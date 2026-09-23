@@ -142,7 +142,7 @@ Pi's `/supervision-model` command pins a cheaper model and a shallower reasoning
 
 ### More backends
 
-Setup guides for tmux (the default) and every other supported backend (herdr, zellij, Orca, cmux) are linked in [Documentation](#documentation) below.
+Setup guides for tmux (the default) and every other supported backend (herdr, zellij, Orca, cmux, Paseo) are linked in [Documentation](#documentation) below.
 
 ## How It Works
 
@@ -224,6 +224,7 @@ Firstmate's skills live in two separate places with different audiences:
 - [docs/zellij-backend.md](docs/zellij-backend.md) - current setup and limits for the experimental Zellij backend.
 - [docs/orca-backend.md](docs/orca-backend.md) - current setup and limits for the experimental Orca backend.
 - [docs/cmux-backend.md](docs/cmux-backend.md) - current setup, socket security, and limits for the experimental cmux backend.
+- [docs/paseo-backend.md](docs/paseo-backend.md) - current setup, provider limits, and lifecycle behavior for the experimental Paseo backend.
 - [docs/codex-app-backend.md](docs/codex-app-backend.md) - the current blocked Codex App backend boundary and rollout contract.
 - [docs/verification/runtime-backends.md](docs/verification/runtime-backends.md) - active maintainer verification for runtime backend guarantees.
 - [docs/gitlab-merge-watch.md](docs/gitlab-merge-watch.md) - maintainer verification for watching and merging GitLab merge requests on arbitrary instances.

@@ -1220,6 +1220,10 @@ spawn_abort_cleanup() {
       fi
     fi
   fi
+  if [ "${PASEO_DIRECT:-0}" = 1 ]; then
+    PASEO_DIRECT=0
+    fm_backend_paseo_kill "${PASEO_AGENT_ID:-}" "${PASEO_WORKSPACE_ID:-}" >/dev/null 2>&1 || true
+  fi
   if [ "$SPAWN_TASK_LOCK_HELD" = 1 ]; then
     SPAWN_TASK_LOCK_HELD=0
     fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -1538,8 +1542,15 @@ if [ "$RELAUNCH" -eq 0 ]; then
     echo "error: backend=cmux does not support --secondmate spawns yet" >&2
     exit 1
   fi
+  if [ "$BACKEND" = paseo ] && [ "$KIND" = secondmate ]; then
+    echo "error: backend=paseo does not support --secondmate spawns yet" >&2
+    exit 1
+  fi
   if [ "$BACKEND" = orca ]; then
     fm_backend_orca_runtime_check || exit 1
+  fi
+  if [ "$BACKEND" = paseo ]; then
+    fm_backend_paseo_runtime_check || exit 1
   fi
 fi
 SPAWN_TASK_LOCK="$STATE/.spawn-$ID.lock"
@@ -2705,7 +2716,7 @@ else
   WT=""
   BRIEF="$DATA/$ID/brief.md"
 fi
-if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
+if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ] && [ "$BACKEND" != paseo ]; then
   SPAWN_TREEHOUSE_PROJECT_LOCK=$(fm_treehouse_project_lock_path "$PROJ_ABS") || {
     echo "error: could not resolve the shared Treehouse project lock for $PROJ_ABS" >&2
     exit 1
@@ -2805,6 +2816,35 @@ fi
 
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)
 BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"
+
+# Paseo is a worktree-owning backend, so its public run command replaces the
+# treehouse/session setup and the shell launch-delivery path below. The adapter
+# returns the exact agent, workspace, and worktree identities that are later
+# persisted in this task's record.
+PASEO_DIRECT=0
+PASEO_AGENT_ID=
+PASEO_WORKSPACE_ID=
+if [ "$BACKEND" = paseo ] && [ "$RELAUNCH" -eq 0 ]; then
+  if command -v shasum >/dev/null 2>&1; then
+    PASEO_HOME_TAG=$(printf '%s' "$FM_HOME" | shasum -a 256 | cut -c1-12)
+  else
+    PASEO_HOME_TAG=$(printf '%s' "$FM_HOME" | sha256sum | cut -c1-12)
+  fi
+  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "${MODE:-}" "$PASEO_HOME_TAG" \
+    "FM_TASK_ID=$ID" "FIRSTMATE_HOME=$FM_HOME" "FIRSTMATE_STATE=$STATE") || exit 1
+  IFS=$'\t' read -r PASEO_AGENT_ID PASEO_WORKSPACE_ID WT <<EOF
+$PASEO_RESULT
+EOF
+  [ -n "$PASEO_AGENT_ID" ] && [ -n "$PASEO_WORKSPACE_ID" ] && [ -n "$WT" ] || {
+    echo "error: Paseo returned incomplete task identities for $ID" >&2
+    exit 1
+  }
+  T=$PASEO_AGENT_ID
+  WT_TARGET=$T
+  PASEO_DIRECT=1
+  TASK_TMP="/tmp/fm-$ID"
+  (umask 077 && mkdir -p "$TASK_TMP/gotmp") || exit 1
+fi
 
 # PROJ_ABS can still carry a symlinked path component (e.g. macOS's /tmp ->
 # /private/tmp) when it came from the ship/scout branch's logical `pwd` above.
@@ -3839,7 +3879,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
     fi
   fi
   [ "$KIND" = secondmate ] || validate_spawn_worktree "relaunch" "$T"
-elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
+elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ] && [ "$BACKEND" != paseo ]; then
   spawn_send_text_line "$WT_TARGET" 'treehouse get'
 
   # Wait for the treehouse subshell: the pane's cwd moves from the project to the worktree.
@@ -3921,9 +3961,11 @@ elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
     SPAWN_SLOT_CLAIMED=1
   fi
 fi
-if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
+if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ] && [ "$BACKEND" != paseo ]; then
   freshen_spawn_worktree_base "$WT" || exit 1
 fi
+
+if [ "$BACKEND" != paseo ]; then
 
 # Pre-register Claude's workspace trust for the directory this launch starts in,
 # at the first point that directory is known and before any per-task state is
@@ -4389,6 +4431,8 @@ EOF
   esac
 fi
 
+fi
+
 # Delivery posture recorded in meta so fm-teardown's safety check and the
 # validate/merge stages can branch on it. A ship task carries the explicit
 # per-task decision validated above; a secondmate's posture is fixed; a scout
@@ -4452,7 +4496,7 @@ SPAWN_META_PATH=$SPAWN_META_TMP
 preserve_relaunch_meta() {
   awk -F= '
     BEGIN {
-      split("window endpoint_task_id worktree project harness kind mode yolo tasktmp model effort busy_gen spawn_gen traceparent backend herdr_session herdr_workspace_id herdr_tab_id herdr_pane_id zellij_session zellij_tab_id zellij_pane_id orca_worktree_id terminal cmux_workspace_id cmux_surface_id home projects control_relaunch_tx", keys, " ")
+      split("window endpoint_task_id worktree project harness kind mode yolo tasktmp model effort busy_gen spawn_gen traceparent backend herdr_session herdr_workspace_id herdr_tab_id herdr_pane_id zellij_session zellij_tab_id zellij_pane_id orca_worktree_id terminal cmux_workspace_id cmux_surface_id paseo_agent_id paseo_workspace_id home projects control_relaunch_tx", keys, " ")
       for (i in keys) owned[keys[i]] = 1
     }
     !($1 in owned)
@@ -4495,6 +4539,10 @@ preserve_relaunch_meta() {
   if [ "$BACKEND" = cmux ]; then
     echo "cmux_workspace_id=$CMUX_WORKSPACE_ID"
     echo "cmux_surface_id=$CMUX_SURFACE_ID"
+  fi
+  if [ "$BACKEND" = paseo ]; then
+    echo "paseo_agent_id=$PASEO_AGENT_ID"
+    echo "paseo_workspace_id=$PASEO_WORKSPACE_ID"
   fi
   if [ "$KIND" = secondmate ]; then
     echo "home=$PROJ_ABS"
@@ -4596,6 +4644,7 @@ fi
 "$SCRIPT_DIR/fm-home-summary-refresh.sh" --best-effort || true
 [ "$BACKEND" = orca ] && ORCA_ABORT_CLEANUP=0
 
+if [ "$BACKEND" != paseo ]; then
 sq_brief=$(shell_quote "$BRIEF")
 sq_turnend=$(shell_quote "$TURNEND")
 sq_piext=$(shell_quote "$STATE/$ID.pi-ext.ts")
@@ -4909,6 +4958,7 @@ if [ "$KIND" = secondmate ] && [ "${FM_SKIP_SECONDMATE_INHERIT:-0}" != 1 ]; then
       echo "CONFIG_REREAD: secondmate $ID: cleanup failed; pre-relaunch generations were force-cleared where possible (destination=$PROJ_ABS source=$FM_HOME)" >&2
     fi
   fi
+fi
 fi
 
 # This is the commit point: all endpoint and harness delivery that can reject

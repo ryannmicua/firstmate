@@ -3488,6 +3488,11 @@ if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
       || { endpoint_close_refusal "$ID" "$BACKEND" "$T" 0; exit 1; }
   fi
   fm_backend_remove_worktree "$BACKEND" "$ORCA_WORKTREE_ID"
+elif [ "$BACKEND" = paseo ] && [ "$KIND" != secondmate ]; then
+  # Paseo owns the isolated worktree. Do not return it through Treehouse or
+  # delete its branch here; archive the agent and its separately durable
+  # workspace record below.
+  :
 elif [ "$KIND" != secondmate ] && ! teardown_owns_worktree; then
   :
 elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
@@ -3563,6 +3568,9 @@ elif [ "$BACKEND" = herdr ]; then
   else
     echo "warning: herdr session presentation lock path is unavailable; skipping the pane close rather than closing unlocked" >&2
   fi
+elif [ "$BACKEND" = paseo ] && [ "$TEARDOWN_WINDOWLESS" != 1 ]; then
+  fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" paseo_workspace_id)" \
+    || { endpoint_close_refusal "$ID" "$BACKEND" "$T" 0; exit 1; }
 elif [ "$BACKEND" != orca ] && [ "$TEARDOWN_WINDOWLESS" != 1 ]; then
   fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
     || endpoint_close_refusal "$ID" "$BACKEND" "$T" 1 || exit 1
