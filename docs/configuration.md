@@ -422,6 +422,8 @@ Firstmate retains basic home, executable search, terminal, locale, temporary-dir
 Other ambient names must be listed explicitly, including custom credential-store locations, proxy settings, and certificate overrides when required by the selected tools.
 The command shell and worker may still create their own variables.
 Allowed values come from the destination pane at execution time; they are neither copied from the invoking Firstmate process nor written into the launch command.
+For Paseo, allowlisted values are written to a task-scoped mode-0600 file at `state/<task-id>.paseo-env`; when native `--env-file` support is absent, the task receives only its path as `FM_PASEO_ENV_FILE`, and a supporting Paseo version receives that path through the native option instead.
+The file is removed when an aborted spawn has no surviving task record and when the task is retired.
 Listing a name does not provision it in a daemon's environment or transfer credentials to another machine.
 
 Choose the minimum additions for the authentication method actually in use:

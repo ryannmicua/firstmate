@@ -9,12 +9,16 @@ mkdir -p "$FB"
 STATUS="$TMP_ROOT/status"
 printf 'running\n' >"$STATUS"
 LOG="$TMP_ROOT/log"
+ENV_FILE="$TMP_ROOT/paseo.env"
+printf 'OPENAI_API_KEY=super-secret\n' >"$ENV_FILE"
+chmod 600 "$ENV_FILE"
 cat > "$FB/paseo" <<'SH'
 #!/usr/bin/env bash
 printf '%s|%s\n' "${PASEO_AGENT_ID-unset}" "$*" >> "$FM_PASEO_LOG"
 case "$*" in
   "daemon status") exit 0 ;;
   "provider diagnostic claude") exit 1 ;;
+  "run --help") printf '%s\n' '--env <key=value>' ;;
   inspect\ *) printf '{"status":"%s"}\n' "$(cat "$FM_PASEO_STATUS")" ;;
   logs\ *) printf '[{"message":"timeline"}]\n' ;;
   stop\ *) printf 'stopped\n' >> "$FM_PASEO_LOG"; printf 'idle\n' >"$FM_PASEO_STATUS" ;;
@@ -36,9 +40,11 @@ assert_contains "$(fm_backend_paseo_capture agent-test 4)" timeline "Paseo captu
 if fm_backend_paseo_capture agent-test 4 | grep -q 'Paseo status'; then fail "Paseo status leaked into diagnostics"; fi
 fm_backend_paseo_stop_status_proof agent-test 1 0.01
 assert_contains "$(fm_backend_paseo_busy_state agent-test)" idle "Paseo stop has native status proof"
-fm_backend_paseo_create_task task-test "$PWD" "$PWD/README.md" codex default default local home-tag wks-existing A=1 B=2 >/dev/null
+fm_backend_paseo_create_task task-test "$PWD" "$PWD/README.md" codex default default local home-tag wks-existing "$ENV_FILE" A=1 B=2 >/dev/null
 assert_contains "$(cat "$LOG")" '--workspace wks-existing' "Paseo relaunch targets its workspace"
+assert_contains "$(cat "$LOG")" "--env FM_PASEO_ENV_FILE=$ENV_FILE" "Paseo fallback references the restricted env file"
 assert_contains "$(cat "$LOG")" '--env A=1 --env B=2' "Paseo preserves repeated env values"
+assert_not_contains "$(cat "$LOG")" 'super-secret' "Paseo never places secret env values in argv"
 if fm_backend_paseo_send_key agent-test Escape >/dev/null 2>&1; then fail "unsupported Paseo key was accepted"; fi
 fm_backend_paseo_send_key agent-test C-c >/dev/null
 assert_contains "$(cat "$LOG")" agent-test "Paseo control calls reached the stub"
