@@ -1224,6 +1224,10 @@ spawn_abort_cleanup() {
     PASEO_DIRECT=0
     fm_backend_paseo_kill "${PASEO_AGENT_ID:-}" "${PASEO_WORKSPACE_ID:-}" >/dev/null 2>&1 || true
   fi
+  if [ -n "${PASEO_ENV_FILE:-}" ] &&
+    [ ! -e "$STATE/$ID.meta" ] && [ ! -L "$STATE/$ID.meta" ]; then
+    rm -f -- "$PASEO_ENV_FILE" 2>/dev/null || true
+  fi
   if [ "$SPAWN_TASK_LOCK_HELD" = 1 ]; then
     SPAWN_TASK_LOCK_HELD=0
     fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -2836,6 +2840,7 @@ BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"
 PASEO_DIRECT=0
 PASEO_AGENT_ID=
 PASEO_WORKSPACE_ID=${PASEO_WORKSPACE_ID:-}
+PASEO_ENV_FILE=
 PASEO_ENV_ARGS=()
 if [ "$BACKEND" = paseo ]; then
   if command -v shasum >/dev/null 2>&1; then
@@ -2852,11 +2857,27 @@ if [ "$BACKEND" = paseo ]; then
     "COMPACT_ADVISER_DISABLE=1"
   )
   if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
+    PASEO_ENV_FILE="$STATE/$ID.paseo-env"
+    if [ -L "$PASEO_ENV_FILE" ] ||
+      { [ -e "$PASEO_ENV_FILE" ] && { [ ! -f "$PASEO_ENV_FILE" ] || [ ! -O "$PASEO_ENV_FILE" ]; }; }; then
+      echo "error: Paseo launch environment file $PASEO_ENV_FILE is not a private regular file owned by this user" >&2
+      exit 1
+    fi
+    (umask 077 && : >"$PASEO_ENV_FILE" && chmod 600 "$PASEO_ENV_FILE") || {
+      echo "error: could not create the private Paseo launch environment file $PASEO_ENV_FILE" >&2
+      exit 1
+    }
     for paseo_env_name in $LAUNCH_ENV_NAMES; do
       [ "$paseo_env_name" = PASEO_AGENT_ID ] && continue
       paseo_env_value=${!paseo_env_name-}
       [ -v "$paseo_env_name" ] || continue
-      PASEO_ENV_ARGS+=("$paseo_env_name=$paseo_env_value")
+      case "$paseo_env_value" in
+        *$'\n'*|*$'\r'*)
+          echo "error: Paseo launch environment value for $paseo_env_name contains a line break" >&2
+          exit 1
+          ;;
+      esac
+      printf '%s=%s\n' "$paseo_env_name" "$paseo_env_value" >>"$PASEO_ENV_FILE" || exit 1
     done
   fi
   case "$HARNESS" in
@@ -2867,7 +2888,7 @@ if [ "$BACKEND" = paseo ]; then
     opencode*) PASEO_ENV_ARGS+=("OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}") ;;
     gemini) PASEO_ENV_ARGS+=("GEMINI_CLI_TRUST_WORKSPACE=true" "GEMINI_CLI_SYSTEM_SETTINGS_PATH=$STATE/$ID.gemini-settings.json") ;;
   esac
-  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "${MODE:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "${PASEO_ENV_ARGS[@]}") || exit 1
+  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "${MODE:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "$PASEO_ENV_FILE" "${PASEO_ENV_ARGS[@]}") || exit 1
   IFS=$'\t' read -r PASEO_AGENT_ID PASEO_WORKSPACE_ID WT <<EOF
 $PASEO_RESULT
 EOF

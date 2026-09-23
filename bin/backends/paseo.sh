@@ -42,9 +42,9 @@ fm_backend_paseo_provider() { # <firstmate-harness>
   esac
 }
 
-fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <mode> <home-tag> <workspace-id> [env key=value...]
-  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} mode=${7:-} home_tag=${8:-} workspace_id=${9:-}
-  shift 9
+fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <mode> <home-tag> <workspace-id> <env-file> [env key=value...]
+  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} mode=${7:-} home_tag=${8:-} workspace_id=${9:-} env_file=${10:-}
+  shift 10
   local provider default_branch raw json agent workspace worktree
   local -a args
   fm_backend_paseo_runtime_check || return 1
@@ -68,6 +68,13 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
     opencode) args+=(--mode build) ;;
     codex) args+=(--mode auto-review) ;;
   esac
+  if [ -n "$env_file" ]; then
+    if paseo run --help 2>&1 | grep -F -- '--env-file' >/dev/null; then
+      args+=(--env-file "$env_file")
+    else
+      args+=(--env "FM_PASEO_ENV_FILE=$env_file")
+    fi
+  fi
   for env_value in "$@"; do args+=(--env "$env_value"); done
   args+=("$brief")
   raw=$(env -u PASEO_AGENT_ID paseo "${args[@]}" 2>&1) || { printf '%s\n' "$raw" >&2; return 1; }
@@ -121,11 +128,6 @@ fm_backend_paseo_stop_status_proof() { # <agent-id> <timeout> <poll>
 fm_backend_paseo_archive_agent() {
   fm_backend_paseo_tool_check || return 1
   paseo archive "$1" >/dev/null
-}
-
-fm_backend_paseo_visible_capture() {
-  echo "error: Paseo exposes timeline logs, not a verified visible viewport" >&2
-  return 1
 }
 
 fm_backend_paseo_send_text_submit() { # <agent-id> <text> ...
