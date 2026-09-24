@@ -71,7 +71,7 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
         fi
       done
     fi
-    [ -n "$base_ref" ] || base_ref=$(git -C "$source" rev-parse --verify --quiet HEAD^{commit}) || {
+    [ -n "$base_ref" ] || base_ref=$(git -C "$source" rev-parse --verify --quiet 'HEAD^{commit}') || {
       echo "error: could not resolve a valid source base for Paseo task $id" >&2
       return 1
     }
