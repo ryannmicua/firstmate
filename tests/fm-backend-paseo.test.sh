@@ -17,7 +17,13 @@ cat > "$FB/paseo" <<'SH'
 printf '%s|%s\n' "${PASEO_AGENT_ID-unset}" "$*" >> "$FM_PASEO_LOG"
 case "$*" in
   "daemon status") exit 0 ;;
-  "provider diagnostic claude") exit 1 ;;
+  "provider diagnostic claude")
+    case "${FM_PASEO_CLAUDE_DIAGNOSTIC:-failed}" in
+      unavailable) printf 'Status: Unavailable\n' ;;
+      available) printf 'Status: Available\n' ;;
+      *) exit 1 ;;
+    esac
+    ;;
   "run --help")
     if [ "${FM_PASEO_TEST_NATIVE_ENV_FILE:-0}" = 1 ]; then
       printf '%s\n' '--env-file <path>'
@@ -40,6 +46,10 @@ fm_backend_source paseo
 
 assert_contains "$(fm_backend_paseo_provider codex)" codex "Codex maps to Paseo"
 if fm_backend_paseo_provider claude >/dev/null 2>&1; then fail "disabled Claude provider was accepted"; fi
+export FM_PASEO_CLAUDE_DIAGNOSTIC=unavailable
+if fm_backend_paseo_provider claude >/dev/null 2>&1; then fail "semantically unavailable Claude provider was accepted"; fi
+export FM_PASEO_CLAUDE_DIAGNOSTIC=available
+assert_contains "$(fm_backend_paseo_provider claude)" claude "available Claude provider maps to Paseo"
 assert_contains "$(fm_backend_paseo_agent_state agent-test)" unverified "Paseo liveness stays unverified"
 assert_contains "$(fm_backend_paseo_busy_state agent-test)" busy "Paseo running status is busy"
 assert_contains "$(fm_backend_paseo_capture agent-test 4)" timeline "Paseo capture retains timeline logs"
