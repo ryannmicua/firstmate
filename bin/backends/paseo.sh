@@ -112,7 +112,7 @@ fm_backend_paseo_status() {
 fm_backend_paseo_busy_state() {
   case "$(fm_backend_paseo_status "$1" 2>/dev/null || true)" in
     initializing|running|working|busy) printf busy ;;
-    idle|closed|error|completed|failed|canceled|cancelled|stopped|archived) printf idle ;;
+    idle|closed|completed|failed|canceled|cancelled|stopped|archived) printf idle ;;
     *) printf unknown ;;
   esac
 }

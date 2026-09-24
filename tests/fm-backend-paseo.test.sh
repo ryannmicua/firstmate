@@ -52,6 +52,9 @@ export FM_PASEO_CLAUDE_DIAGNOSTIC=available
 assert_contains "$(fm_backend_paseo_provider claude)" claude "available Claude provider maps to Paseo"
 assert_contains "$(fm_backend_paseo_agent_state agent-test)" unverified "Paseo liveness stays unverified"
 assert_contains "$(fm_backend_paseo_busy_state agent-test)" busy "Paseo running status is busy"
+printf 'error\n' >"$STATUS"
+assert_contains "$(fm_backend_paseo_busy_state agent-test)" unknown "Paseo error status is not healthy idle"
+printf 'running\n' >"$STATUS"
 assert_contains "$(fm_backend_paseo_capture agent-test 4)" timeline "Paseo capture retains timeline logs"
 if fm_backend_paseo_capture agent-test 4 | grep -q 'Paseo status'; then fail "Paseo status leaked into diagnostics"; fi
 fm_backend_paseo_stop_status_proof agent-test 1 0.01
