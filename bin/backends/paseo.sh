@@ -28,10 +28,15 @@ fm_backend_paseo_provider() { # <firstmate-harness>
   case "$1" in
     codex|opencode) printf '%s' "$1" ;;
     claude)
-      paseo provider diagnostic claude >/dev/null 2>&1 || {
+      local diagnostic
+      diagnostic=$(paseo provider diagnostic claude 2>&1) || {
         echo "error: Paseo provider claude is not enabled on this host; pass a host diagnostic before using it" >&2
         return 1
       }
+      if printf '%s\n' "$diagnostic" | grep -Eiq '^[[:space:]]*Status:[[:space:]]*(unavailable|disabled)[[:space:]]*$'; then
+        echo "error: Paseo provider claude is not enabled on this host; pass a host diagnostic before using it" >&2
+        return 1
+      fi
       printf claude
       ;;
     pi-signed|muse|rovo|agy|pi|grok|kimi|cursor|gemini|omp)
