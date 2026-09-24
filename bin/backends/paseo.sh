@@ -50,7 +50,7 @@ fm_backend_paseo_provider() { # <firstmate-harness>
 fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <mode> <home-tag> <workspace-id> <env-file> [env key=value...]
   local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} mode=${7:-} home_tag=${8:-} workspace_id=${9:-} env_file=${10:-}
   shift 10
-  local provider default_branch raw json agent workspace worktree
+  local provider base_ref candidate raw json agent workspace worktree
   local -a args
   fm_backend_paseo_runtime_check || return 1
   : "$mode"
@@ -59,11 +59,23 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
     args=(run --background --workspace "$workspace_id" --provider "$provider"
       --label "fm-task=$id" --label "fm-home=$home_tag" --title "fm-$id" --json)
   else
-    default_branch=$(git -C "$source" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)
-    default_branch=${default_branch#origin/}
-    [ -n "$default_branch" ] || default_branch=$(git -C "$source" symbolic-ref --short HEAD 2>/dev/null || true)
-    [ -n "$default_branch" ] || { echo "error: could not resolve the source clone's default branch for Paseo task $id" >&2; return 1; }
-    args=(run --background --new-workspace worktree --base "origin/$default_branch"
+    base_ref=$(git -C "$source" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    if [ -n "$base_ref" ] && ! git -C "$source" rev-parse --verify --quiet "$base_ref^{commit}" >/dev/null; then
+      base_ref=
+    fi
+    if [ -z "$base_ref" ]; then
+      for candidate in main master; do
+        if git -C "$source" rev-parse --verify --quiet "refs/heads/$candidate^{commit}" >/dev/null; then
+          base_ref=$candidate
+          break
+        fi
+      done
+    fi
+    [ -n "$base_ref" ] || base_ref=$(git -C "$source" rev-parse --verify --quiet HEAD^{commit}) || {
+      echo "error: could not resolve a valid source base for Paseo task $id" >&2
+      return 1
+    }
+    args=(run --background --new-workspace worktree --base "$base_ref"
       --worktree-slug "fm-$id" --cwd "$source" --provider "$provider"
       --label "fm-task=$id" --label "fm-home=$home_tag" --title "fm-$id" --json)
   fi
@@ -100,8 +112,8 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
 fm_backend_paseo_capture() { # <agent-id> <lines>
   local id=$1 lines=${2:-40} raw
   fm_backend_paseo_tool_check || return 1
-  raw=$(paseo logs "$id" --tail "$lines" --json) || return 0
-  printf '%s\n' "$raw" | jq -r 'if type == "array" then .[] | if type == "string" then . else (.text // .content // .message // tostring) end else (.text // .content // .message // tostring) end' 2>/dev/null || true
+  raw=$(paseo logs "$id" --tail "$lines" --json) || return 1
+  printf '%s\n' "$raw" | jq -r 'if type == "array" then .[] | if type == "string" then . else (.text // .content // .message // tostring) end else (.text // .content // .message // tostring) end' 2>/dev/null
 }
 
 fm_backend_paseo_status() {
@@ -139,7 +151,7 @@ fm_backend_paseo_archive_agent() {
 fm_backend_paseo_send_text_submit() { # <agent-id> <text> ...
   local id=$1 text=$2
   fm_backend_paseo_tool_check || return 1
-  paseo send "$id" --no-wait "$text"
+  paseo send "$id" --no-wait "$text" >/dev/null
 }
 
 fm_backend_paseo_send_key() { # <agent-id> <key>
