@@ -297,7 +297,7 @@ Both recorded runtime identities now classify the exact `pi-launcher` foreground
 Backend applicability was reviewed across every spawn adapter.
 Tmux needs the exact `pi-launcher`, `pi-signed`, `pi`, and `Pi` process identities for recovery-grade liveness.
 Herdr uses native registered-agent state and needs no process-name branch.
-Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those three retain their existing generic ordinary-launch semantics without a new liveness matcher.
+Zellij and Paseo have no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so these four experimental adapters retain their existing generic ordinary-launch semantics without a new liveness matcher.
 
 The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
 Kimi pointer delivery and OpenCode 1.18.4 busy-queue behavior remain pinned by `tests/fm-kimi-harness.test.sh`, `tests/fm-tmux-submit-busy.test.sh`, and `tests/fm-composer-lib.test.sh`.
@@ -1725,10 +1725,12 @@ The probe was stopped, archived, and its workspace was separately archived.
 paseo --version
 paseo daemon status
 tests/fm-backend-paseo.test.sh
+tests/fm-busy-state.test.sh
+tests/fm-control.test.sh
 ```
 
 Observed version and status were `0.9.1` and `connectedDaemon: reachable`.
-The portable suite covers provider refusal, unverified liveness, unsupported key refusal, and the Paseo control route with a stubbed CLI.
+The portable suites cover provider refusal, native busy status, unverified liveness, unsupported key refusal, and the Paseo control route with a stubbed CLI.
 
 ## cmux
 
