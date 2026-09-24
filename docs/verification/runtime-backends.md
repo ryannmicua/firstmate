@@ -305,7 +305,7 @@ Herdr's Claude idle-native submit confirmation is pinned by `tests/fm-backend-he
 
 ### Cleanup endpoint identity
 
-The cleanup identity boundary was validated on 2026-07-28 with tmux 3.6a and metadata fixtures for every supported backend.
+The cleanup identity boundary was validated on 2026-07-28 with tmux 3.6a and metadata fixtures for every supported backend covered by this evidence.
 
 ```sh
 tests/fm-teardown-endpoint-safety.test.sh
@@ -1719,7 +1719,7 @@ The fake-Orca suite covers readiness, registration, create response parsing, met
 Paseo 0.9.1 was live and reachable on 2026-09-23/24 through the existing daemon.
 A disposable labeled probe used `env -u PASEO_AGENT_ID`, `--background`, and the OpenCode provider.
 The adapter returned all three required identities: agent, workspace, and worktree path.
-The probe was stopped, archived, and its workspace was separately archived.
+The bounded live probe did not cover the full provider, status, control, workspace-archival, or environment-transport matrix; the portable suites below are the current evidence for those paths.
 
 ```sh
 paseo --version
