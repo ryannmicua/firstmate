@@ -17,6 +17,7 @@ Claude is accepted only when `paseo provider diagnostic claude` succeeds on the 
 Absent providers are rejected by name rather than substituted.
 Workers are root agents created with `env -u PASEO_AGENT_ID`.
 Each task records its labeled agent, workspace, and worktree identities.
+When launch-environment filtering is enabled, allowlisted values stay in a task-scoped mode-0600 file and reach the provider worker through a `BASH_ENV` file reference; the values never enter Paseo argv or logs.
 Logs are timeline output, not a verified visible viewport, and agent liveness remains `unverified` because Paseo exposes no worker pid.
 Interrupt maps to `paseo stop`; exit proves the native stopped status and archives the agent if that proof is unavailable. Liveness remains unverified.
 Teardown archives the agent and then its separate workspace record.

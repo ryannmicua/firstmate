@@ -85,15 +85,26 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
     opencode) args+=(--mode build) ;;
     codex) args+=(--mode auto-review) ;;
   esac
+  for env_value in "$@"; do args+=(--env "$env_value"); done
   if [ -n "$env_file" ]; then
-    if paseo run --help 2>&1 | grep -F -- '--env-file' >/dev/null; then
-      args+=(--env-file "$env_file")
-    else
-      echo "error: Paseo CLI has no native --env-file transport; refusing to launch task $id without delivering its allowlisted environment" >&2
+    local env_mode
+    if [ -L "$env_file" ] || [ ! -f "$env_file" ] || [ ! -O "$env_file" ]; then
+      echo "error: Paseo launch environment file $env_file is not a private regular file owned by this user" >&2
       return 1
     fi
+    env_mode=$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file" 2>/dev/null) || {
+      echo "error: could not inspect Paseo launch environment file $env_file" >&2
+      return 1
+    }
+    case "$env_mode" in
+      600|0600) ;;
+      *)
+        echo "error: Paseo launch environment file $env_file must have mode 0600" >&2
+        return 1
+        ;;
+    esac
+    args+=(--env "BASH_ENV=$env_file")
   fi
-  for env_value in "$@"; do args+=(--env "$env_value"); done
   args+=("$brief")
   raw=$(env -u PASEO_AGENT_ID paseo "${args[@]}" 2>&1) || { printf '%s\n' "$raw" >&2; return 1; }
   json=$(printf '%s\n' "$raw" | awk 'found || /^\{/{found=1; print}')

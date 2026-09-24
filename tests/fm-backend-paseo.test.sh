@@ -10,7 +10,7 @@ STATUS="$TMP_ROOT/status"
 printf 'running\n' >"$STATUS"
 LOG="$TMP_ROOT/log"
 ENV_FILE="$TMP_ROOT/paseo.env"
-printf 'OPENAI_API_KEY=super-secret\n' >"$ENV_FILE"
+printf 'export OPENAI_API_KEY=super-secret\n' >"$ENV_FILE"
 chmod 600 "$ENV_FILE"
 cat > "$FB/paseo" <<'SH'
 #!/usr/bin/env bash
@@ -24,13 +24,6 @@ case "$*" in
       *) exit 1 ;;
     esac
     ;;
-  "run --help")
-    if [ "${FM_PASEO_TEST_NATIVE_ENV_FILE:-0}" = 1 ]; then
-      printf '%s\n' '--env-file <path>'
-    else
-      printf '%s\n' '--env <key=value>'
-    fi
-    ;;
   inspect\ *) printf '{"status":"%s"}\n' "$(cat "$FM_PASEO_STATUS")" ;;
   logs\ *)
     [ "${FM_PASEO_LOGS_FAIL:-0}" = 1 ] && exit 1
@@ -42,12 +35,26 @@ case "$*" in
     ;;
   stop\ *) printf 'stopped\n' >> "$FM_PASEO_LOG"; printf 'idle\n' >"$FM_PASEO_STATUS" ;;
   archive\ *) printf 'archived\n' >> "$FM_PASEO_LOG"; printf 'archived\n' >"$FM_PASEO_STATUS" ;;
-  "run "*) printf 'Created workspace wks-test\n{"agentId":"agent-test","cwd":"/tmp/fm-test"}\n' ;;
+  "run "*)
+    env_file=
+    previous=
+    for arg in "$@"; do
+      case "$previous:$arg" in
+        --env:BASH_ENV=*) env_file=${arg#BASH_ENV=} ;;
+      esac
+      previous=$arg
+    done
+    if [ -n "$env_file" ]; then
+      BASH_ENV="$env_file" bash -c '[ "$OPENAI_API_KEY" = super-secret ]' || exit 1
+      printf 'consumed\n' >>"$FM_PASEO_CONSUMED"
+    fi
+    printf 'Created workspace wks-test\n{"agentId":"agent-test","cwd":"/tmp/fm-test"}\n'
+    ;;
 esac
 exit 0
 SH
 chmod +x "$FB/paseo"
-export PATH="$FB:$PATH" FM_PASEO_LOG="$LOG" FM_PASEO_STATUS="$STATUS"
+export PATH="$FB:$PATH" FM_PASEO_LOG="$LOG" FM_PASEO_STATUS="$STATUS" FM_PASEO_CONSUMED="$TMP_ROOT/consumed"
 . "$(dirname "${BASH_SOURCE[0]}")/../bin/fm-backend.sh"
 fm_backend_source paseo
 
@@ -75,17 +82,12 @@ if fm_backend_paseo_send_text_submit agent-test hello >/dev/null 2>&1; then fail
 unset FM_PASEO_SEND_FAIL
 fm_backend_paseo_stop_status_proof agent-test 1 0.01
 assert_contains "$(fm_backend_paseo_busy_state agent-test)" idle "Paseo stop has native status proof"
-export FM_PASEO_TEST_NATIVE_ENV_FILE=1
 fm_backend_paseo_create_task task-test "$PWD" "$PWD/README.md" codex default default local home-tag wks-existing "$ENV_FILE" A=1 B=2 >/dev/null
 assert_contains "$(cat "$LOG")" '--workspace wks-existing' "Paseo relaunch targets its workspace"
-assert_contains "$(cat "$LOG")" "--env-file $ENV_FILE" "Paseo uses its native restricted env-file transport"
+assert_contains "$(cat "$LOG")" "--env BASH_ENV=$ENV_FILE" "Paseo receives the restricted environment reference"
 assert_contains "$(cat "$LOG")" '--env A=1 --env B=2' "Paseo preserves repeated env values"
 assert_not_contains "$(cat "$LOG")" 'super-secret' "Paseo never places secret env values in argv"
-export FM_PASEO_TEST_NATIVE_ENV_FILE=0
-if fm_backend_paseo_create_task rejected-task "$PWD" "$PWD/README.md" codex default default local home-tag wks-existing "$ENV_FILE" A=1 >/dev/null 2>&1; then
-  fail "Paseo launched without a provider-consumed environment transport"
-fi
-assert_not_contains "$(cat "$LOG")" 'rejected-task' "Paseo does not launch after refusing an unsupported env transport"
+assert_contains "$(cat "$FM_PASEO_CONSUMED")" consumed "Paseo provider worker consumed the restricted environment reference"
 
 SOURCE="$TMP_ROOT/source"
 mkdir -p "$SOURCE"

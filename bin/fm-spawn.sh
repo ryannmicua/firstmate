@@ -2964,7 +2964,7 @@ if [ "$BACKEND" = paseo ]; then
           exit 1
           ;;
       esac
-      printf '%s=%s\n' "$paseo_env_name" "$paseo_env_value" >>"$PASEO_ENV_FILE" || exit 1
+      printf 'export %s=%q\n' "$paseo_env_name" "$paseo_env_value" >>"$PASEO_ENV_FILE" || exit 1
     done
   fi
   case "$HARNESS" in
