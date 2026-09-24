@@ -146,6 +146,15 @@ fi
 exit 0
 SH
   chmod +x "$fb/sleep"
+  cat > "$fb/paseo" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  stop) exit 0 ;;
+  inspect) printf '%s\n' '{"status":"idle"}' ;;
+esac
+exit 0
+SH
+  chmod +x "$fb/paseo"
   printf '%s\n' "$fb"
 }
 
@@ -186,6 +195,15 @@ add_task() {
   } > "$home/state/$id.meta"
   printf '%s\n' "fm-$id" > "$dir/fake/windows"
   printf '%s' "$wt" > "$dir/fake/cwd"
+}
+
+add_paseo_task() {
+  local dir=$1 id=$2
+  add_task "$dir" "$id" opencode ship paseo agent-test
+  printf '%s\n' \
+    'paseo_agent_id=agent-test' \
+    'paseo_workspace_id=wks-test' \
+    >> "$dir/home/state/$id.meta"
 }
 
 # run_control <case-dir> <args...>: run fm-control against the case's home with
@@ -841,6 +859,17 @@ test_grok_idle_footer_does_not_confirm_cancellation() {
   pass "fm-control interrupt: grok's idle footer does not confirm cancellation"
 }
 
+test_paseo_exit_sources_adapter() {
+  local dir out rc
+  dir=$(new_case paseo-exit)
+  add_paseo_task "$dir" paseo1
+  out=$(run_control "$dir" paseo1 exit); rc=$?
+  expect_code 0 "$rc" "Paseo exit should load its adapter before native stop proof"$'\n'"$out"
+  assert_contains "$out" "stopped paseo1 harness=opencode backend=paseo" \
+    "Paseo exit should report the native stop proof"
+  pass "fm-control Paseo exit: native stop proof is reachable through the executable control path"
+}
+
 # --- 6. marker non-regression -----------------------------------------------
 
 test_secondmate_control_command_carries_no_marker() {
@@ -920,5 +949,6 @@ test_exit_accepts_agent_stopped_by_busy_interrupt
 test_agent_that_does_not_stop_fails_closed
 test_grok_interrupt_without_acknowledgement_reports_unconfirmed
 test_grok_idle_footer_does_not_confirm_cancellation
+test_paseo_exit_sources_adapter
 test_secondmate_control_command_carries_no_marker
 test_fm_send_still_marks_the_same_secondmate_task

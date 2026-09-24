@@ -337,6 +337,9 @@ fm_control_harness_supported "$HARNESS" \
   || die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
 
 fm_backend_validate "$BACKEND" || exit 1
+if [ "$BACKEND" = paseo ]; then
+  fm_backend_source paseo || exit 1
+fi
 
 # --- shared helpers ---------------------------------------------------------
 
