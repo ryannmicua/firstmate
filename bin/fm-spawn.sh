@@ -2886,7 +2886,6 @@ if [ "$BACKEND" = paseo ]; then
       [ -n "${CLAUDE_CONFIG_DIR:-}" ] && PASEO_ENV_ARGS+=("CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR")
       ;;
     opencode*) PASEO_ENV_ARGS+=("OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}") ;;
-    gemini) PASEO_ENV_ARGS+=("GEMINI_CLI_TRUST_WORKSPACE=true" "GEMINI_CLI_SYSTEM_SETTINGS_PATH=$STATE/$ID.gemini-settings.json") ;;
   esac
   PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "${MODE:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "$PASEO_ENV_FILE" "${PASEO_ENV_ARGS[@]}") || exit 1
   IFS=$'\t' read -r PASEO_AGENT_ID PASEO_WORKSPACE_ID WT <<EOF
