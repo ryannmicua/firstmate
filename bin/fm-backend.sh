@@ -27,6 +27,9 @@
 # marker) with no explicit backend setting - unlike Orca, which stays
 # never-auto-detected because it also owns the task worktree; see
 # docs/cmux-backend.md for its empirical basis.
+# P6 adds bin/backends/paseo.sh, EXPERIMENTAL and explicit-only; Paseo owns the
+# agent and task worktree and requires an already reachable daemon. See
+# docs/paseo-backend.md for its provider and lifecycle limits.
 # Codex App is intentionally not in the known set yet.
 # docs/codex-app-backend.md owns that blocked backend contract.
 #
@@ -34,7 +37,7 @@
 # treats that as `tmux` (fm_backend_of_meta), and fm-spawn.sh does not write
 # `backend=tmux` for a default-backend task, so existing and newly spawned
 # default-path metas stay byte-identical. Only a task spawned on a non-tmux
-# spawn-capable backend, currently herdr, zellij, orca, or cmux, carries an
+# spawn-capable backend, currently herdr, zellij, orca, cmux, or paseo, carries an
 # explicit `backend=` line.
 #
 # Event-source framing (herdr-addendum "Events as the core abstraction"): a
@@ -297,13 +300,13 @@ fm_backend_validate_spawn() {  # <name>
 # docs/configuration.md "Toolchain" and bootstrap's COMMON list). This is the
 # single owner of the per-backend dependency delta, so bootstrap follows the
 # RESOLVED backend instead of demanding an inactive backend's tools. Each set is:
-#   - the session-provider CLI itself (tmux/herdr/zellij/orca/cmux);
-#   - jq, for the JSON-emitting adapters (herdr, zellij, cmux) whose spawn/liveness
+#   - the session-provider CLI itself (tmux/herdr/zellij/orca/cmux/paseo);
+#   - jq, for the JSON-emitting adapters (herdr, zellij, cmux, paseo) whose spawn/liveness
 #     paths parse the backend's JSON output (see each adapter's
 #     tool check, e.g. fm_backend_herdr_tool_check);
 #   - the treehouse worktree provider for every session-provider-only backend
 #     (tmux, herdr, zellij, cmux); orca owns its own task worktree and terminal,
-#     so it drops both treehouse and any other backend's session CLI.
+#     and paseo owns its own task worktree and agent, so both drop treehouse.
 # Prints a single space-separated line and returns 0 for a known backend; returns
 # 1 and prints nothing for an unknown backend.
 fm_backend_required_tools() {  # <backend>
@@ -821,10 +824,9 @@ fm_backend_send_text_submit() {  # <backend> <target> <text> <retries> <enter-sl
 # not do its job and the endpoint may still be live: the caller owns that
 # refusal and must not delete the durable records that are the only thing
 # naming the endpoint (bin/fm-teardown.sh's retain-and-stop path).
-# How much each adapter can prove differs, and no arm ever guesses: tmux
-# resolves a failed close against the window's exact recorded identity, Orca
-# reports a close its missing CLI never attempted, and the remaining arms
-# still report 0 for a close command that failed after being accepted.
+# How much each adapter can prove differs, and no arm ever guesses: each adapter
+# owns its close behavior, and callers retain durable records when the adapter
+# returns nonzero.
 # docs/verification/runtime-backends.md "Endpoint close" is the per-backend
 # record.
 fm_backend_kill() {  # <backend> <target>
@@ -978,7 +980,7 @@ fm_backend_target_exists() {  # <backend> <target> [expected-label]
 # `dead` here (issue #4115) - then maps a positively stopped session server to
 # `missing` only in this recovery-grade view. Zellij remains unverified because
 # its secondmate ghost-tab and agent-process recovery path has not been
-# empirically validated. Orca and cmux do not support secondmate spawns.
+# empirically validated. Orca, cmux, and paseo do not support secondmate spawns.
 fm_backend_agent_state() {  # <backend> <target>
   local backend=$1 target=$2
   fm_backend_source "$backend" || { printf 'unverified'; return 0; }

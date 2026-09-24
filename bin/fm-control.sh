@@ -27,9 +27,12 @@
 #              owned acknowledgement and otherwise reported unconfirmed. Busy
 #              state is never rewritten as proof of the action.
 #   exit       Stop the agent, preserving its terminal endpoint, worktree, and
-#              every uncommitted change. Interrupts first when the task reads
-#              busy, then submits the harness's exit command. Postcondition:
-#              the backend's recovery-grade classifier reports the agent gone.
+#              every uncommitted change where the backend can prove that
+#              outcome. Interrupts first when the task reads busy, then submits
+#              the harness's exit command. Paseo instead uses native stop/status
+#              proof and falls back to archiving the agent when that proof is
+#              unavailable. Postcondition: the backend's recovery-grade
+#              classifier or Paseo's explicit path reports a completed stop.
 #              Already-stopped is success (idempotent). An endpoint that reads
 #              `missing` is put through the control plane's per-backend absence
 #              proof (fm_control_endpoint_absence_verdict) before anything is
@@ -70,7 +73,9 @@
 #              inherits the local copy but none of the conversation; a
 #              secondmate reconciles its own home's records at startup, so its
 #              standing charter is never rewritten.
-#              Records a durable checkpoint and that note, exits the old agent,
+#              Paseo requires native idle status before reusing its recorded
+#              workspace and never claims worker liveness. Records a durable
+#              checkpoint and that note, exits the old agent,
 #              then delegates the launch to its single owner,
 #              bin/fm-spawn.sh --relaunch. A failure before publication keeps
 #              the prior durable record in place and reports the concrete

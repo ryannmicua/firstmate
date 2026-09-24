@@ -1,7 +1,7 @@
 # Paseo Runtime Backend
 
-Paseo is an experimental, explicit-only runtime backend for Codex and OpenCode workers.
-It owns the agent endpoint and isolated task worktree through `paseo run --new-workspace worktree`.
+Paseo is an experimental, explicit-only runtime backend for Codex, OpenCode, and host-diagnostic-gated Claude workers.
+It owns the agent endpoint and isolated task worktree through `paseo run --background --new-workspace worktree`.
 
 ## Setup
 

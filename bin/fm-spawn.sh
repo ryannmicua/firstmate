@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Spawn a direct report: a crewmate in a treehouse or Orca worktree, or a
+# Spawn a direct report: a crewmate in a treehouse, Orca, or Paseo worktree, or a
 # secondmate in its isolated firstmate home.
 # Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>]
 #        fm-spawn.sh <task-id> <project-dir> --scout [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>]
@@ -76,14 +76,15 @@
 #   docs/cmux-backend.md),
 #   then tmux.
 #   Spawn-capable backends are the reference tmux adapter, verified herdr
-#   adapter, and experimental zellij, orca, and cmux adapters. Orca owns both
-#   the task worktree and terminal, so ship/scout Orca spawns do not run
-#   treehouse get; cmux is a session provider only, exactly like herdr/zellij,
-#   so it does. Auto-detected herdr stays silent like tmux; auto-detected cmux
-#   prints a loud stderr notice; zellij and orca are never auto-detected.
+#   adapter, and experimental zellij, orca, cmux, and paseo adapters. Orca owns
+#   both the task worktree and terminal, while Paseo owns the task worktree and
+#   agent, so ship/scout spawns on either do not run treehouse get; cmux is a
+#   session provider only, exactly like herdr/zellij, so it does.
+#   Auto-detected herdr stays silent like tmux; auto-detected cmux prints a loud
+#   stderr notice; zellij, orca, and paseo are never auto-detected.
 #   codex-app is not a known backend yet; docs/codex-app-backend.md owns that
 #   blocked backend contract. Default tmux spawns do not write backend= to meta;
-#   absent backend= means tmux. cmux does not support --secondmate spawns yet.
+#   absent backend= means tmux. cmux and paseo do not support --secondmate spawns yet.
 #   A backend spawn refusal (missing dependency, version gate, unauthenticated
 #   socket, or unsupported secondmate mode) is terminal for that selected backend;
 #   callers must surface it instead of silently retrying another backend.
