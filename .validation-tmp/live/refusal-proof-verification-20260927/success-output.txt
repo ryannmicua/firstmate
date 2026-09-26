@@ -1,0 +1,8 @@
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): Confirm the no-mistakes run is terminal and no active run owns the branch (type TERMINAL paseo-backend-adapter): ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+handed-off paseo-backend-adapter from=firstmate:fm-paseo-backend-adapter to=fm-handoff-paseo-backend-adapter-353502-20260926222006-25421:fm-paseo-backend-adapter harness=codex backend=tmux worktree=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-verification-20260927/success/wt

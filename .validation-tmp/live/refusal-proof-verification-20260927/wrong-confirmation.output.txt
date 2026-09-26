@@ -1,0 +1,1 @@
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): Confirm the no-mistakes run is terminal and no active run owns the branch (type TERMINAL paseo-backend-adapter): error: handoff confirmation did not match; no task files or endpoint were changed

@@ -59,9 +59,9 @@
 #              names, and the task's record rebinds to it; that is how a task
 #              whose terminal was destroyed is reclaimed by the home that owns
 #              it, rather than being stranded with a parked approval nobody can
-#              answer. Reclaim is HERDR-ONLY for the reason `exit` gives above:
-#              a tmux `missing` cannot be proven absent from a task record, so
-#              it refuses.
+#              answer. A tmux `missing` endpoint remains unproven; the
+#              one-task operator-attested `handoff` exception below does not
+#              change that proof limit.
 #              An explicit `default` model or effort clears that
 #              axis for the replacement. With no explicit axis, a secondmate
 #              re-resolves its durable config/secondmate-harness pin (harness
@@ -80,6 +80,12 @@
 #              the prior durable record in place and reports the concrete
 #              state; it never leaves a half-transitioned task claiming to be
 #              running.
+#   handoff   Attended, journaled exception for only the pinned
+#              paseo-backend-adapter task. Requires the pinned endpoint, exact
+#              worktree and HEAD, a note, and both operator confirmations. It
+#              creates one unique tmux session based on operator attestations,
+#              not endpoint-absence proof; see docs/agent-control.md for the
+#              full procedure and safety limits.
 #
 # Teardown and discard are NOT verbs here and never will be. `exit` stops an
 # agent and preserves everything else; removing a worktree, killing an
