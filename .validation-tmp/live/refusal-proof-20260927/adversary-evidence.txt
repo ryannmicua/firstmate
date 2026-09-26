@@ -1,0 +1,8 @@
+=== LIVE ADVERSARIAL CHECK ===
+error: attested handoff requires the original endpoint to read missing; a live, dead, ambiguous, or unreadable endpoint refuses
+old_endpoint_state=codex
+sessions_after_refusal=firstmate
+task_record=unchanged
+brief=unchanged
+worktree_HEAD=unchanged
+tracked_and_untracked_changes=unchanged

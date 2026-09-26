@@ -1,0 +1,1 @@
+unset TRACEPARENT; export COMPACT_ADVISER_DISABLE=1; env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI grok --always-approve "$('/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/bin/fm-operational-input.sh' encode launch-brief < '/tmp/fm-control-relaunch.ZyEsv5/grokauth-24819/home/data/rl9/launch-brief.md')"

@@ -1,0 +1,1 @@
+error: --expect-worktree must match the exact path recorded for the local copy

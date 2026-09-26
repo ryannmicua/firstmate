@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec /usr/bin/tmux -L '20260926220331-248630-b' "$@"

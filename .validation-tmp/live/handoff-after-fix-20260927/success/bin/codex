@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+printf 'codex invoked:' >> '/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/handoff-after-fix-20260927/codex-invocations.log'
+printf ' %q' "$@" >> '/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/handoff-after-fix-20260927/codex-invocations.log'
+printf '\n' >> '/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/handoff-after-fix-20260927/codex-invocations.log'
+exec -a codex /bin/sleep 180

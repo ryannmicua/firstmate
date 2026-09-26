@@ -1,0 +1,1 @@
+error: attested handoff requires the original endpoint to read missing; a live, dead, ambiguous, or unreadable endpoint refuses

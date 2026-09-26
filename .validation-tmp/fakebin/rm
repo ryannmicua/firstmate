@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+args=()
+for arg in "$@"; do
+  case "$arg" in
+    /tmp/fm-*+*) args+=("$arg") ;;
+    /tmp/fm-*) args+=("$TASK_TMP_REDIRECT/${arg#/tmp/}") ;;
+    /tmp/fm-*/*) args+=("$TASK_TMP_REDIRECT/${arg#/tmp/}") ;;
+    *) args+=("$arg") ;;
+  esac
+done
+exec /usr/bin/rm "${args[@]}"

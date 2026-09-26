@@ -1,0 +1,25 @@
+=== conflicting-identity REFUSAL ===
+error: --expect-worktree must match the exact path recorded for the local copy
+before:
+task_meta_sha256=0b5cf0fc18b2078d7931b4e3a93d8e0a615eb25082f256cf09fbce88005ccf6c
+brief_sha256=b794b02c3959a2010bdb3ddbcd8cf8aef42ace03185f2c59188fb5cf92e9d922
+branch=fm/paseo-backend-adapter
+HEAD=ba635bb958c136ff7ede748283c4504818136d6e
+worktree_status= M README.md|?? untracked-handoff.txt|
+README_sha256=2aa5aa152a08f48444c8f11f45bd79c6649ab4d1c0ba2a76676ff4b7a1b0f793
+untracked_sha256=58a15886eeef37d4b6f45550c41b0adfeba0ab835bc2391f7c2d6929395d6074
+state_file=paseo-backend-adapter.meta:0b5cf0fc18b2078d7931b4e3a93d8e0a615eb25082f256cf09fbce88005ccf6c
+sessions=firstmate
+windows=firstmate:sentinel /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-rerun-20260927/conflicting-identity/firstmate sleep
+after:
+task_meta_sha256=0b5cf0fc18b2078d7931b4e3a93d8e0a615eb25082f256cf09fbce88005ccf6c
+brief_sha256=b794b02c3959a2010bdb3ddbcd8cf8aef42ace03185f2c59188fb5cf92e9d922
+branch=fm/paseo-backend-adapter
+HEAD=ba635bb958c136ff7ede748283c4504818136d6e
+worktree_status= M README.md|?? untracked-handoff.txt|
+README_sha256=2aa5aa152a08f48444c8f11f45bd79c6649ab4d1c0ba2a76676ff4b7a1b0f793
+untracked_sha256=58a15886eeef37d4b6f45550c41b0adfeba0ab835bc2391f7c2d6929395d6074
+state_file=paseo-backend-adapter.meta:0b5cf0fc18b2078d7931b4e3a93d8e0a615eb25082f256cf09fbce88005ccf6c
+sessions=firstmate
+windows=firstmate:sentinel /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-rerun-20260927/conflicting-identity/firstmate sleep
+replacement_endpoint=absent; original_fixture_window=firstmate:sentinel
