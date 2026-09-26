@@ -1,0 +1,81 @@
+Command: /bin/bash .validation-tmp/run-live-handoff.sh refusal-proof-verification-20260927
+Product surface: bin/fm-control.sh handoff over real isolated tmux servers
+Fixtures: disposable under .validation-tmp; no shared or default tmux server used.
+
+=== successful guarded handoff ===
+Accepted inputs: STOP paseo-backend-adapter; TERMINAL paseo-backend-adapter
+handed-off paseo-backend-adapter from=firstmate:fm-paseo-backend-adapter to=fm-handoff-paseo-backend-adapter-353502-20260926222006-25421:fm-paseo-backend-adapter harness=codex backend=tmux worktree=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-verification-20260927/success/wt
+replacement_recorded_endpoint=fm-handoff-paseo-backend-adapter-353502-20260926222006-25421:fm-paseo-backend-adapter
+replacement_window_state=fm-paseo-backend-adapter /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-verification-20260927/success/wt codex
+recorded_branch=fm/paseo-backend-adapter
+recorded_HEAD=efa328393f54b23a480f5745946fdf08f11ae35b
+preserved_worktree_status:
+ M README.md
+?? untracked-handoff.txt
+journal_phase=complete
+journal_worker_attestation=stopped
+journal_run_attestation=terminal
+
+=== live original endpoint refusal ===
+=== LIVE ADVERSARIAL CHECK ===
+error: attested handoff requires the original endpoint to read missing; a live, dead, ambiguous, or unreadable endpoint refuses
+old_endpoint_state=codex
+sessions_after_refusal=firstmate
+task_record=unchanged
+brief=unchanged
+worktree_HEAD=unchanged
+tracked_and_untracked_changes=unchanged
+
+=== conflicting worktree identity refusal: full before/after snapshots ===
+=== conflicting-identity REFUSAL ===
+error: --expect-worktree must match the exact path recorded for the local copy
+before:
+task_meta_sha256=2af53ff62795d9ddb1c882eff46155ac1bef8da45ccd67e363d9e05245167bea
+brief_sha256=b794b02c3959a2010bdb3ddbcd8cf8aef42ace03185f2c59188fb5cf92e9d922
+branch=fm/paseo-backend-adapter
+HEAD=185c09251e3394e6c785f84764edc40eb0227f8b
+worktree_status= M README.md|?? untracked-handoff.txt|
+README_sha256=2aa5aa152a08f48444c8f11f45bd79c6649ab4d1c0ba2a76676ff4b7a1b0f793
+untracked_sha256=58a15886eeef37d4b6f45550c41b0adfeba0ab835bc2391f7c2d6929395d6074
+state_file=paseo-backend-adapter.meta:2af53ff62795d9ddb1c882eff46155ac1bef8da45ccd67e363d9e05245167bea
+sessions=firstmate
+windows=firstmate:sentinel /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-verification-20260927/conflicting-identity/firstmate sleep
+after:
+task_meta_sha256=2af53ff62795d9ddb1c882eff46155ac1bef8da45ccd67e363d9e05245167bea
+brief_sha256=b794b02c3959a2010bdb3ddbcd8cf8aef42ace03185f2c59188fb5cf92e9d922
+branch=fm/paseo-backend-adapter
+HEAD=185c09251e3394e6c785f84764edc40eb0227f8b
+worktree_status= M README.md|?? untracked-handoff.txt|
+README_sha256=2aa5aa152a08f48444c8f11f45bd79c6649ab4d1c0ba2a76676ff4b7a1b0f793
+untracked_sha256=58a15886eeef37d4b6f45550c41b0adfeba0ab835bc2391f7c2d6929395d6074
+state_file=paseo-backend-adapter.meta:2af53ff62795d9ddb1c882eff46155ac1bef8da45ccd67e363d9e05245167bea
+sessions=firstmate
+windows=firstmate:sentinel /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-verification-20260927/conflicting-identity/firstmate sleep
+replacement_endpoint=absent; original_fixture_window=firstmate:sentinel
+
+=== wrong confirmation refusal: full before/after snapshots ===
+=== wrong-confirmation REFUSAL ===
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): Confirm the no-mistakes run is terminal and no active run owns the branch (type TERMINAL paseo-backend-adapter): error: handoff confirmation did not match; no task files or endpoint were changed
+before:
+task_meta_sha256=427ab3242b542fd70e637bc1572a7f82872a8563cebbf06f300e285873da1280
+brief_sha256=b794b02c3959a2010bdb3ddbcd8cf8aef42ace03185f2c59188fb5cf92e9d922
+branch=fm/paseo-backend-adapter
+HEAD=185c09251e3394e6c785f84764edc40eb0227f8b
+worktree_status= M README.md|?? untracked-handoff.txt|
+README_sha256=2aa5aa152a08f48444c8f11f45bd79c6649ab4d1c0ba2a76676ff4b7a1b0f793
+untracked_sha256=58a15886eeef37d4b6f45550c41b0adfeba0ab835bc2391f7c2d6929395d6074
+state_file=paseo-backend-adapter.meta:427ab3242b542fd70e637bc1572a7f82872a8563cebbf06f300e285873da1280
+sessions=firstmate
+windows=firstmate:sentinel /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-verification-20260927/wrong-confirmation/firstmate sleep
+after:
+task_meta_sha256=427ab3242b542fd70e637bc1572a7f82872a8563cebbf06f300e285873da1280
+brief_sha256=b794b02c3959a2010bdb3ddbcd8cf8aef42ace03185f2c59188fb5cf92e9d922
+branch=fm/paseo-backend-adapter
+HEAD=185c09251e3394e6c785f84764edc40eb0227f8b
+worktree_status= M README.md|?? untracked-handoff.txt|
+README_sha256=2aa5aa152a08f48444c8f11f45bd79c6649ab4d1c0ba2a76676ff4b7a1b0f793
+untracked_sha256=58a15886eeef37d4b6f45550c41b0adfeba0ab835bc2391f7c2d6929395d6074
+state_file=paseo-backend-adapter.meta:427ab3242b542fd70e637bc1572a7f82872a8563cebbf06f300e285873da1280
+sessions=firstmate
+windows=firstmate:sentinel /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/refusal-proof-verification-20260927/wrong-confirmation/firstmate sleep
+replacement_endpoint=absent; original_fixture_window=firstmate:sentinel

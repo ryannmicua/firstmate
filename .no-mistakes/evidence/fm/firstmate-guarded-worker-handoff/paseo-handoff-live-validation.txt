@@ -1,0 +1,39 @@
+=== LIVE HANDOFF: exact attended operation against real tmux ===
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): Confirm the no-mistakes run is terminal and no active run owns the branch (type TERMINAL paseo-backend-adapter): ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+error: task paseo-backend-adapter's endpoint is in '/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/round2/success/firstmate', not its recorded worktree '/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/round2/success/wt'; refusing to relaunch an agent outside the copy holding its work
+error: the replacement agent for paseo-backend-adapter could not be launched on codex
+error: handoff of paseo-backend-adapter did not confirm a replacement; its original task record and local worktree remain preserved at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3F8JET9SEC9H6AFSR173VCH/.validation-tmp/live/round2/success/wt
+task_record_endpoint=firstmate:fm-paseo-backend-adapter
+journal_phase=failed:launching
+journal_rollback=handoff-record-and-worktree-preserved
+worktree_branch=fm/paseo-backend-adapter
+worktree_HEAD=1babd7a71d8661be7531cd97c4fe218480aab29b
+worktree_status:
+ M README.md
+?? untracked-handoff.txt
+
+=== LIVE ADVERSARIAL: running recorded worker ===
+=== LIVE ADVERSARIAL: running recorded worker ===
+error: attested handoff requires the original endpoint to read missing; a live, dead, ambiguous, or unreadable endpoint refuses
+old_endpoint_state=codex
+sessions_after_refusal=firstmate
+window_after_refusal=fm-paseo-backend-adapter
+task_record=unchanged
+brief=unchanged
+worktree_HEAD=unchanged
+tracked_and_untracked_changes=unchanged
+
+=== LIVE ADVERSARIAL: stale expected HEAD ===
+=== LIVE ADVERSARIAL: stale expected HEAD ===
+error: recorded local copy HEAD '24b3d9efbc48a57a2b85f03251468b4d3fce3ca8' does not match --expect-head '0000000000000000000000000000000000000000'
+recorded_HEAD=24b3d9efbc48a57a2b85f03251468b4d3fce3ca8
+task_record=unchanged
+brief=unchanged
+tracked_and_untracked_changes=unchanged
+replacement_endpoint=not_created
