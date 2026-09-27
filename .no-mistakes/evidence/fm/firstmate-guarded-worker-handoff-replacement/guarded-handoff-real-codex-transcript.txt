@@ -1,0 +1,28 @@
+codex=/home/rgm/.local/bin/codex
+codex version: codex-cli 0.157.1
+SCENARIO: actual Codex CLI starts in a unique handoff session in the recorded worktree
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): Confirm the no-mistakes run is terminal and no active run owns the branch (type TERMINAL paseo-backend-adapter): handed-off paseo-backend-adapter from=firstmate:fm-paseo-backend-adapter to=fm-handoff-paseo-backend-adapter-753194-20260927065254-13384:fm-paseo-backend-adapter harness=codex backend=tmux worktree=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3GK6ZTXCG61C7VX2EQHFNN2/.tmp-live-handoff-codex/fixture/task-worktree
+exit=0
+published endpoint=fm-handoff-paseo-backend-adapter-753194-20260927065254-13384:fm-paseo-backend-adapter
+new session pane cwd=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3GK6ZTXCG61C7VX2EQHFNN2/.tmp-live-handoff-codex/fixture/task-worktree
+recorded backend state=alive; preserved HEAD=bb9ce891a179843dc7ebf4427b889a7273c47ca4 tracked_dirty=yes untracked_file=yes
+handoff journal phase=complete; note copied into replacement instructions=yes
+new tmux pane capture follows:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Ask Codex to do anything
+
+
+  ? for shortcuts

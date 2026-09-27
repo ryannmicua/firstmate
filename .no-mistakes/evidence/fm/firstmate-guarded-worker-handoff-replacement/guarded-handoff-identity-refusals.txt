@@ -1,0 +1,7 @@
+SCENARIO: a mismatched expected HEAD refuses before task mutation or endpoint creation
+error: recorded local copy HEAD '21e4ebf247e2863fbeef4d7adc52854bbecb554e' does not match --expect-head '0000000000000000000000000000000000000000'
+exit=1
+SCENARIO: a second task record claiming the same worktree blocks handoff
+error: task record '/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3GK6ZTXCG61C7VX2EQHFNN2/.tmp-live-handoff-identity/fixture/fm-home/state/other-owner.meta' already claims this endpoint or local copy; refusing a duplicate worker owner
+exit=1
+asserted unchanged: task record and brief remain byte-identical; no tmux session or handoff journal exists

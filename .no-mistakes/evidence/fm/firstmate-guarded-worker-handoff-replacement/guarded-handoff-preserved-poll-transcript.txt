@@ -1,0 +1,15 @@
+registered: state/paseo-backend-adapter.check.sh
+SCENARIO: actual Codex handoff keeps its registered task poll, status history, and local changes
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): Confirm the no-mistakes run is terminal and no active run owns the branch (type TERMINAL paseo-backend-adapter): handed-off paseo-backend-adapter from=firstmate:fm-paseo-backend-adapter to=fm-handoff-paseo-backend-adapter-979554-20260927070328-18317:fm-paseo-backend-adapter harness=codex backend=tmux worktree=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3GK6ZTXCG61C7VX2EQHFNN2/.tmp-live-handoff-preservation/fixture/task-worktree
+exit=0
+endpoint=fm-handoff-paseo-backend-adapter-979554-20260927070328-18317:fm-paseo-backend-adapter cwd=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3GK6ZTXCG61C7VX2EQHFNN2/.tmp-live-handoff-preservation/fixture/task-worktree codex_state=alive
+preserved HEAD=6241d91a12f12e5dd9eb7959575e92a759cd40f3 tracked_dirty=yes untracked=yes registered_check=yes check_trust=yes status_history=yes inbox_message=yes
+check hash=fb99eae951f1adc14d1a4a9a186c21930db2786b3208c94c7d9af382bd1048e5 trust hash=ac16c51bdcf40e824616400e4155b27eb920b2daa9a53a489dad99c3510ec12c journal=complete
+
+
+
+
+› Ask Codex to do anything
+
+
+  ? for shortcuts

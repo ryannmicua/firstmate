@@ -1,0 +1,16 @@
+SCENARIO: a live original endpoint refuses handoff
+error: attested handoff requires the original endpoint to read missing; a live, dead, ambiguous, or unreadable endpoint refuses
+exit=1
+SCENARIO: whitespace-only recovery note refuses handoff
+error: handoff requires --note (or --note-file) so the replacement receives the recovery context
+exit=1
+SCENARIO: wrong worker-stop confirmation refuses handoff
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): error: handoff confirmation did not match; no task files or endpoint were changed
+exit=1
+SCENARIO: wrong terminal-run confirmation refuses handoff
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): Confirm the no-mistakes run is terminal and no active run owns the branch (type TERMINAL paseo-backend-adapter): error: handoff confirmation did not match; no task files or endpoint were changed
+exit=1
+SCENARIO: caller-supplied handoff journal cannot authorize direct spawn
+error: operator-attested handoff must be launched by its active fm-control transaction; refusing to rebind the task
+exit=1
+asserted unchanged: no spawned task session; metadata and instructions untouched for every refusal

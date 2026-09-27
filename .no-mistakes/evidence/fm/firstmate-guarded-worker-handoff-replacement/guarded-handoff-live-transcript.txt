@@ -1,0 +1,20 @@
+SCENARIO: a still-present original endpoint refuses an attended handoff
+error: attested handoff requires the original endpoint to read missing; a live, dead, ambiguous, or unreadable endpoint refuses
+exit=1
+SCENARIO: whitespace-only recovery note refuses before mutation
+error: handoff requires --note (or --note-file) so the replacement receives the recovery context
+exit=1
+SCENARIO: incorrect worker-stop confirmation refuses before mutation
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): error: handoff confirmation did not match; no task files or endpoint were changed
+exit=1
+SCENARIO: direct spawn cannot self-authorize using caller-supplied handoff evidence
+error: operator-attested handoff must be launched by its active fm-control transaction; refusing to rebind the task
+exit=1
+SCENARIO: attended handoff creates one unique tmux endpoint and preserves work
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): Confirm the no-mistakes run is terminal and no active run owns the branch (type TERMINAL paseo-backend-adapter): handed-off paseo-backend-adapter from=firstmate:fm-paseo-backend-adapter to=fm-handoff-paseo-backend-adapter-728767-20260927065041-13147:fm-paseo-backend-adapter harness=codex backend=tmux worktree=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3GK6ZTXCG61C7VX2EQHFNN2/.tmp-live-handoff/fixture/task-worktree
+exit=0
+published endpoint=fm-handoff-paseo-backend-adapter-728767-20260927065041-13147:fm-paseo-backend-adapter
+new session pane cwd=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3GK6ZTXCG61C7VX2EQHFNN2/.tmp-live-handoff/fixture/task-worktree
+preserved HEAD=d4ce8382a3d9bed2b968da972e8bb33f55a0d15c tracked_dirty=yes untracked_file=yes status_history=yes inbox_message=yes
+journal phase=complete confirmations=stopped,terminal
+replacement probe process: isolated codex launch probe started

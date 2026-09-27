@@ -1,0 +1,3 @@
+SCENARIO: actual fm-control CLI rejects a whitespace-only --note-file before resolving or mutating a task
+error: handoff requires --note (or --note-file) so the replacement receives the recovery context
+exit=1

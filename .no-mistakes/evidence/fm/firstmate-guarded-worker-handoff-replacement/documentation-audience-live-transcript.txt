@@ -1,0 +1,8 @@
+SCENARIO: the real audience checker accepts maintained docs/*.txt and ignores retained .validation-tmp evidence
+fm-doc-audience-check: ok surfaces=5 local_links=2
+ADVERSARIAL CHECK: omitting maintained docs/evidence.txt is rejected as unclassified
+fm-doc-audience-check: unclassified: docs/evidence.txt
+exit=1
+ADVERSARIAL CHECK: classifying excluded .validation-tmp/evidence.txt is rejected as out of scope
+fm-doc-audience-check: not tracked/in scope: .validation-tmp/evidence.txt
+exit=1
