@@ -196,8 +196,7 @@ If publication begins but its outcome is ambiguous, the endpoint is retained for
 - An ambiguous or unreadable endpoint state refuses.
   Only a positively classified state acts.
 - `exit`'s composer-empty check, above, is itself a fail-closed boundary that `relaunch` inherits by stopping the old agent through `exit`.
-- `fm-spawn --relaunch` independently refuses unless the endpoint is positively agent-free - either a `dead` endpoint that survives, or a Herdr endpoint proven gone by the absence proof above - so a replacement can never join a live agent.
-  An `alive`, `ambiguous`, or `unreadable` verdict all refuse, and so does any endpoint whose absence is not provable, which on tmux is every `missing`; absence is claimed only from positive evidence of it.
+- `fm-spawn --relaunch` independently enforces the endpoint-state rules above; the operator-attested exception is limited to the [one-task legacy handoff](#the-one-task-attended-legacy-handoff).
   It also requires the shell to be in the recorded worktree: tmux refuses immediately when it is not, while Herdr sends one `cd` to the recorded path and refuses unless a subsequent path read confirms the move.
 - The operator-attested handoff is rejected for every task except `paseo-backend-adapter`, and its launcher accepts only the live transaction journal from that task's `fm-control handoff`.
 

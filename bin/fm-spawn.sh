@@ -3236,7 +3236,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
     # emitted by fm-control's handoff verb. Give the replacement a unique
     # session so a later return of the old endpoint cannot alias the new one.
     SES=$HANDOFF_NEW_SESSION
-    WID=$(fm_backend_tmux_create_handoff_task "$SES" "$W" "$PROJ_ABS") || exit 1
+    WID=$(fm_backend_tmux_create_handoff_task "$SES" "$W" "$WT") || exit 1
     T="$SES:$W"
     WT_TARGET=$WID
     HANDOFF_ENDPOINT_CREATED=1
