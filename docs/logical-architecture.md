@@ -3,6 +3,7 @@
 Firstmate coordinates autonomous work through a supervising agent, delegated workers, explicit authority, and durable records.
 This document describes the system in concepts that do not depend on a particular technology stack.
 It describes behavior that is currently shipped and makes no claim about proposed or in-progress integrations.
+The [supervisor contract](../AGENTS.md) owns binding role, authority, and task rules; this guide explains their stack-independent design.
 The [technical architecture companion](architecture.md) describes how this system is implemented today.
 
 ## Operating model
@@ -74,13 +75,3 @@ A worker's contribution is ready only when its acceptance conditions and deliver
 5. Firstmate reconciles events with current state, supervises stalled or interrupted work, and escalates only the decisions that exceed its authority.
 6. Firstmate checks the required evidence, follows the task's delivery posture, and reports the result and any remaining decision to the captain.
 7. Firstmate retires temporary work only after the outcome is safely delivered or the task is explicitly ended, preserving durable knowledge and unresolved obligations.
-
-## Essential invariants
-
-- Every task has one accountable supervisor and an explicit scope.
-- Authority is bounded, visible, and never inferred from a worker's claim or incidental project content.
-- Project work is isolated from the captain's canonical copy until its authorized delivery step.
-- Durable records outlive conversations and provide enough information to recover interrupted work.
-- Events prompt reconciliation, and completion requires verified outcome evidence.
-- Unanswered decisions remain open until the authorized answer is recorded.
-- Recovery preserves uncertain or unlanded work instead of silently discarding it.

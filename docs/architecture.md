@@ -2,8 +2,9 @@
 
 How firstmate works, in depth.
 
-The [README](../README.md) carries the high-level diagram and a short synopsis.
-This document expands every part of it.
+The [README](../README.md) introduces the product and carries its runtime diagram.
+The [logical architecture](logical-architecture.md) describes roles, authority, delegation, and delivery independently of today's stack.
+This document explains the current implementation and its technical boundaries.
 firstmate's supervisor contract and routing index for conditional procedures is [`AGENTS.md`](../AGENTS.md); this is the human-facing companion.
 
 ## Event-driven supervision
