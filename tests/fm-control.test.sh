@@ -148,9 +148,22 @@ SH
   chmod +x "$fb/sleep"
   cat > "$fb/paseo" <<'SH'
 #!/usr/bin/env bash
+set -u
+D=${FM_FAKE_DIR:?}
 case "${1:-}" in
-  stop) exit 0 ;;
-  inspect) printf '%s\n' '{"status":"idle"}' ;;
+  stop)
+    printf 'stop\n' >> "$D/paseo.log"
+    printf '%s\n' "${FM_FAKE_PASEO_STOP_STATUS:-idle}" > "$D/paseo-status"
+    exit 0 ;;
+  archive)
+    printf 'archive\n' >> "$D/paseo.log"
+    printf 'archived\n' > "$D/paseo-status"
+    printf 'STATUS archived\n'
+    exit 0 ;;
+  inspect)
+    status=$(cat "$D/paseo-status" 2>/dev/null || printf idle)
+    printf '{"status":"%s"}\n' "$status"
+    exit 0 ;;
 esac
 exit 0
 SH
@@ -164,6 +177,7 @@ new_case() {
   mkdir -p "$dir/home/state" "$dir/home/data" "$dir/fake"
   : > "$dir/fake/literal"
   : > "$dir/fake/keys"
+  printf 'idle\n' > "$dir/fake/paseo-status"
   printf 'zsh' > "$dir/fake/command"
   printf 'claude' > "$dir/fake/becomes"
   make_tmux_stub "$dir" >/dev/null
@@ -864,10 +878,12 @@ test_paseo_exit_sources_adapter() {
   dir=$(new_case paseo-exit)
   add_paseo_task "$dir" paseo1
   out=$(run_control "$dir" paseo1 exit); rc=$?
-  expect_code 0 "$rc" "Paseo exit should load its adapter before native stop proof"$'\n'"$out"
-  assert_contains "$out" "stopped paseo1 harness=opencode backend=paseo" \
-    "Paseo exit should report the native stop proof"
-  pass "fm-control Paseo exit: native stop proof is reachable through the executable control path"
+  expect_code 0 "$rc" "Paseo exit should archive an agent left idle by its no-op stop"$'\n'"$out"
+  assert_contains "$out" "archived paseo1 harness=opencode backend=paseo" \
+    "Paseo exit should report the verified archive fallback"
+  [ "$(cat "$dir/fake/paseo.log")" = $'stop\narchive' ] \
+    || fail "Paseo idle exit must stop first, then archive: $(cat "$dir/fake/paseo.log")"
+  pass "fm-control Paseo exit archives an idle agent after stop fails to prove terminal status"
 }
 
 # --- 6. marker non-regression -----------------------------------------------

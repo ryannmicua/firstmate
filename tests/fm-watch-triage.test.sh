@@ -6002,6 +6002,51 @@ test_paused_until_that_passed_is_rechecked_before_the_cadence() {
   pass "a declared wait whose until time has passed is rechecked at once, then held to the cadence"
 }
 
+test_paseo_status_poll_survives_log_capture_failure() {
+  local dir state fakebin log pid
+  dir=$(make_case paseo-log-capture-failure)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  log="$dir/paseo.log"
+  mkdir -p "$dir/project" "$dir/worktree"
+  cat > "$state/paseo-watch.meta" <<EOF
+window=agent-test
+endpoint_task_id=paseo-watch
+worktree=$dir/worktree
+project=$dir/project
+harness=opencode
+kind=ship
+backend=paseo
+paseo_agent_id=agent-test
+paseo_workspace_id=wks-test
+spawn_gen=s1
+EOF
+  cat > "$fakebin/paseo" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FM_PASEO_LOG"
+case "$*" in
+  'logs agent-test --tail 40 --json') exit 1 ;;
+  'inspect agent-test --json') printf '%s\n' '{"status":"running"}' ;;
+  'ls -a -g --json') printf '%s\n' '[]' ;;
+esac
+exit 0
+SH
+  chmod +x "$fakebin/paseo"
+  : > "$log"
+  export FM_PASEO_LOG="$log"
+  watch_bg "$state" "$fakebin" "$dir/watch.out"
+  pid=$!
+  wait_poll_cycle "$state" "$pid" 300 || { reap "$pid"; fail "Paseo watcher did not complete a poll cycle after logs failed"; }
+  reap "$pid"
+  awk '
+    $0 == "logs agent-test --tail 40 --json" { logs_failed = 1; next }
+    logs_failed && $0 == "inspect agent-test --json" { found = 1; exit }
+    END { exit !found }
+  ' "$log" || fail "native Paseo status was not polled after timeline capture failed: $(cat "$log")"
+  [ ! -e "$state/.hash-agent-test" ] || fail "failed Paseo timeline capture incorrectly created a pane hash"
+  pass "Paseo native status polling continues when timeline capture fails, while hash staleness is skipped"
+}
+
 # CI's stock macOS Bash lane sets FM_TEST_ONLY to run just the bash-3.2
 # churn-deferral regression. The rest of this file is not a 3.2 snapshot suite.
 if [ -n "${FM_TEST_ONLY:-}" ]; then
@@ -6140,3 +6185,4 @@ test_afk_one_shot_never_hands_off_captain_held_under_away_record
 test_paused_until_near_future_is_quiet_before_the_cadence
 test_paused_until_wrong_year_is_bounded_by_the_cadence
 test_paused_until_that_passed_is_rechecked_before_the_cadence
+test_paseo_status_poll_survives_log_capture_failure

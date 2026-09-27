@@ -28,32 +28,48 @@ fm_backend_paseo_provider() { # <firstmate-harness>
   case "$1" in
     codex|opencode) printf '%s' "$1" ;;
     claude)
-      local diagnostic
-      diagnostic=$(paseo provider diagnostic claude 2>&1) || {
-        echo "error: Paseo provider claude is not enabled on this host; pass a host diagnostic before using it" >&2
+      local diagnostic providers
+      diagnostic=$(paseo provider diagnostic claude --json 2>&1) || {
+        echo "error: Paseo provider claude is not explicitly enabled by the host diagnostic" >&2
         return 1
       }
-      if printf '%s\n' "$diagnostic" | grep -Eiq '^[[:space:]]*Status:[[:space:]]*(unavailable|disabled)[[:space:]]*$'; then
-        echo "error: Paseo provider claude is not enabled on this host; pass a host diagnostic before using it" >&2
+      if ! printf '%s\n' "$diagnostic" | jq -e '
+        type == "object" and .provider == "claude" and
+        ((has("enabled") | not) or .enabled == true or
+          ((.enabled | type) == "string" and (.enabled | ascii_downcase) == "enabled")) and
+        ((has("status") | not) or
+          ((.status | type) == "string" and ((.status | ascii_downcase) | IN("ready", "available", "enabled")))) and
+        (.diagnostic | type == "string" and
+          (split("\n") | any(test("^[[:space:]]*Status:[[:space:]]*(Ready|Available|Enabled)[[:space:]]*$"; "i"))))
+      ' >/dev/null 2>&1; then
+        echo "error: Paseo provider claude is not explicitly enabled by the host diagnostic" >&2
+        return 1
+      fi
+      providers=$(paseo provider ls --json 2>&1) || {
+        echo "error: Paseo provider claude availability could not be verified" >&2
+        return 1
+      }
+      if ! printf '%s\n' "$providers" | jq -e '
+        type == "array" and
+        ([.[] | select(.provider == "claude" and
+          ((.status | type) == "string") and (.status | ascii_downcase) == "available" and
+          ((.enabled | type) == "string") and (.enabled | ascii_downcase) == "enabled")] | length) == 1
+      ' >/dev/null 2>&1; then
+        echo "error: Paseo provider claude is not enabled and available on this host" >&2
         return 1
       fi
       printf claude
-      ;;
-    pi-signed|muse|rovo|agy|pi|grok|kimi|cursor|gemini|omp)
-      echo "error: Paseo has no supported provider for firstmate harness '$1'" >&2
-      return 1
       ;;
     *) echo "error: Paseo cannot map unknown firstmate harness '$1' to a provider" >&2; return 1 ;;
   esac
 }
 
-fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <mode> <home-tag> <workspace-id> <env-file> [env key=value...]
-  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} mode=${7:-} home_tag=${8:-} workspace_id=${9:-} env_file=${10:-}
-  shift 10
+fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <workspace-id> <env-file> [env key=value...]
+  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} workspace_id=${8:-} env_file=${9:-}
+  shift 9
   local provider base_ref candidate raw json agent workspace worktree
   local -a args
   fm_backend_paseo_runtime_check || return 1
-  : "$mode"
   provider=$(fm_backend_paseo_provider "$harness") || return 1
   if [ -n "$workspace_id" ]; then
     args=(run --background --workspace "$workspace_id" --provider "$provider"
@@ -106,7 +122,7 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
     args+=(--env "BASH_ENV=$env_file")
   fi
   args+=("$brief")
-  raw=$(env -u PASEO_AGENT_ID paseo "${args[@]}" 2>&1) || { printf '%s\n' "$raw" >&2; return 1; }
+  raw=$(env -u PASEO_AGENT_ID -u PASEO_WORKSPACE_ID paseo "${args[@]}" 2>&1) || { printf '%s\n' "$raw" >&2; return 1; }
   json=$(printf '%s\n' "$raw" | awk 'found || /^\{/{found=1; print}')
   agent=$(printf '%s\n' "$json" | jq -r '.agentId // .id // empty' 2>/dev/null)
   workspace=$(printf '%s\n' "$json" | jq -r '.workspaceId // .workspace.id // .workspace // empty' 2>/dev/null)
@@ -140,13 +156,24 @@ fm_backend_paseo_busy_state() {
   esac
 }
 
+fm_backend_paseo_terminal_proof() { # <agent-id>
+  case "$(fm_backend_paseo_status "$1" 2>/dev/null || true)" in
+    closed|archived) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 fm_backend_paseo_stop_status_proof() { # <agent-id> <timeout> <poll>
   local id=$1 timeout=${2:-30} poll=${3:-0.5} elapsed=0 status
   fm_backend_paseo_tool_check || return 1
+  fm_backend_paseo_terminal_proof "$id" && return 0
   paseo stop "$id" >/dev/null 2>&1 || return 1
   while :; do
-    status=$(fm_backend_paseo_busy_state "$id")
-    [ "$status" = idle ] && return 0
+    status=$(fm_backend_paseo_status "$id" 2>/dev/null || true)
+    case "$status" in
+      closed|archived) return 0 ;;
+      idle) return 1 ;;
+    esac
     awk -v e="$elapsed" -v t="$timeout" 'BEGIN{exit !(e < t)}' || break
     sleep "$poll"
     elapsed=$(awk -v e="$elapsed" -v p="$poll" 'BEGIN{printf "%.3f", e + p}')
@@ -156,7 +183,19 @@ fm_backend_paseo_stop_status_proof() { # <agent-id> <timeout> <poll>
 
 fm_backend_paseo_archive_agent() {
   fm_backend_paseo_tool_check || return 1
-  paseo archive "$1" >/dev/null
+  paseo archive "$1" >/dev/null || return 1
+  local timeout=30 poll=0.5 elapsed=0 status
+  while :; do
+    status=$(fm_backend_paseo_status "$1" 2>/dev/null || true)
+    case "$status" in
+      closed|archived) return 0 ;;
+    esac
+    awk -v e="$elapsed" -v t="$timeout" 'BEGIN{exit !(e < t)}' || break
+    sleep "$poll"
+    elapsed=$(awk -v e="$elapsed" -v p="$poll" 'BEGIN{printf "%.3f", e + p}')
+  done
+  echo "error: Paseo archive of agent $1 was not confirmed by native terminal status" >&2
+  return 1
 }
 
 fm_backend_paseo_send_text_submit() { # <agent-id> <text> ...

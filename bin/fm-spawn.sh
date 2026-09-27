@@ -1724,8 +1724,8 @@ if [ "$RELAUNCH" -eq 1 ]; then
     }
     RELAUNCH_REBIND=1
   elif [ "$BACKEND" = paseo ]; then
-    [ "$(fm_backend_paseo_busy_state "$RELAUNCH_TARGET" 2>/dev/null || true)" = idle ] || {
-      echo "error: Paseo task $ID's native status does not prove an agent-free workspace; refusing to launch another agent into it" >&2
+    fm_backend_paseo_terminal_proof "$RELAUNCH_TARGET" || {
+      echo "error: Paseo task $ID's native status does not prove a closed or archived agent; refusing to launch another agent into its workspace" >&2
       exit 1
     }
     RELAUNCH_STATE=dead
@@ -2926,7 +2926,9 @@ BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"
 # persisted in this task's record.
 PASEO_DIRECT=0
 PASEO_AGENT_ID=
-PASEO_WORKSPACE_ID=${PASEO_WORKSPACE_ID:-}
+if [ "$RELAUNCH" -ne 1 ] || [ "$BACKEND" != paseo ]; then
+  PASEO_WORKSPACE_ID=
+fi
 PASEO_ENV_FILE=
 PASEO_ENV_ARGS=()
 if [ "$BACKEND" = paseo ]; then
@@ -2974,7 +2976,7 @@ if [ "$BACKEND" = paseo ]; then
       ;;
     opencode*) PASEO_ENV_ARGS+=("OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}") ;;
   esac
-  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "${MODE:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "$PASEO_ENV_FILE" "${PASEO_ENV_ARGS[@]}") || exit 1
+  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "$PASEO_ENV_FILE" "${PASEO_ENV_ARGS[@]}") || exit 1
   IFS=$'\t' read -r PASEO_AGENT_ID PASEO_WORKSPACE_ID WT <<EOF
 $PASEO_RESULT
 EOF
@@ -5159,10 +5161,15 @@ if [ "$SPAWN_BACKLOG_COMMIT_STATUS" -ne 0 ]; then
     echo "error: task $ID was republished but its backlog item could not be moved to In flight ($FM_BACKLOG_TRANSITION_ERROR); fix the backlog and re-run the relaunch" >&2
   fi
 fi
-trap - HUP INT TERM
 if [ "$SPAWN_BACKLOG_COMMIT_STATUS" -ne 0 ]; then
+  trap - HUP INT TERM
   exit "$SPAWN_BACKLOG_COMMIT_STATUS"
 fi
+# The provider-owned endpoint is now durable: metadata publication and the
+# backlog transition both succeeded. A deferred signal must not let the EXIT
+# cleanup path archive that committed worker/workspace pair.
+PASEO_DIRECT=0
+trap - HUP INT TERM
 if [ -n "$SPAWN_DEFERRED_SIGNAL" ]; then
   case "$SPAWN_DEFERRED_SIGNAL" in
   HUP) SPAWN_DEFERRED_SIGNAL_STATUS=129 ;;
