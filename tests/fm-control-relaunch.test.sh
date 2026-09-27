@@ -697,6 +697,38 @@ test_relaunch_requires_a_note_for_a_ship_task() {
   pass "fm-control relaunch: a ship task refuses without the progress note its replacement needs"
 }
 
+test_relaunch_rejects_whitespace_only_notes() {
+  local dir out rc mode id whitespace before_meta before_brief
+  local -a note_args
+  whitespace=$' \t\n'
+  for mode in note note-file; do
+    id="blank-$mode"
+    dir=$(new_case "blank-note-$mode" "$id")
+    add_ship_task "$dir" "$id" claude
+    before_meta=$(cat "$dir/home/state/$id.meta")
+    before_brief=$(cat "$dir/home/data/$id/brief.md")
+    if [ "$mode" = note ]; then
+      note_args=(--note "$whitespace")
+    else
+      printf '%s' "$whitespace" > "$dir/whitespace-note"
+      note_args=(--note-file "$dir/whitespace-note")
+    fi
+
+    out=$(run_control "$dir" "$id" relaunch "${note_args[@]}"); rc=$?
+    expect_code 1 "$rc" "a ship relaunch with a whitespace-only $mode should refuse"
+    assert_contains "$out" "requires --note" "the refusal should name the missing note"
+    [ "$(cat "$dir/home/state/$id.meta")" = "$before_meta" ] \
+      || fail "a refused whitespace-only $mode relaunch changed task metadata"
+    [ "$(cat "$dir/home/data/$id/brief.md")" = "$before_brief" ] \
+      || fail "a refused whitespace-only $mode relaunch changed task instructions"
+    [ -z "$(cat "$dir/fake/literal")" ] \
+      || fail "a refused whitespace-only $mode relaunch sent lifecycle input"
+    [ "$(cat "$dir/fake/command")" = claude ] \
+      || fail "a refused whitespace-only $mode relaunch stopped the current agent"
+  done
+  pass "fm-control relaunch: whitespace-only --note and --note-file values refuse before mutation"
+}
+
 # --- 2. harness switch -------------------------------------------------------
 
 test_harness_switch_moves_the_record_and_clears_prior_wiring() {
@@ -1881,6 +1913,38 @@ test_operator_attested_handoff_rebinds_only_the_pinned_task_and_keeps_dirty_work
   pass "operator-attested handoff: exact task rebinds once while tracked and untracked work stays intact"
 }
 
+test_operator_attested_handoff_rejects_whitespace_only_notes() {
+  local dir id=paseo-backend-adapter head out rc mode whitespace before_meta before_brief
+  local -a note_args
+  whitespace=$' \t\n'
+  for mode in note note-file; do
+    dir=$(new_case "handoff-blank-note-$mode" "$id")
+    add_legacy_handoff_task "$dir"
+    head=$(git -C "$dir/wt" rev-parse HEAD)
+    before_meta=$(cat "$dir/home/state/$id.meta")
+    before_brief=$(cat "$dir/home/data/$id/brief.md")
+    if [ "$mode" = note ]; then
+      note_args=(--note "$whitespace")
+    else
+      printf '%s' "$whitespace" > "$dir/whitespace-note"
+      note_args=(--note-file "$dir/whitespace-note")
+    fi
+
+    out=$(run_attested_handoff "$dir" "$id" handoff \
+      --expect-endpoint firstmate:fm-paseo-backend-adapter \
+      --expect-worktree "$dir/wt" --expect-head "$head" "${note_args[@]}"); rc=$?
+    expect_code 1 "$rc" "a handoff with a whitespace-only $mode should refuse"
+    assert_contains "$out" "requires --note" "the refusal should name the missing recovery note"
+    [ "$(cat "$dir/home/state/$id.meta")" = "$before_meta" ] \
+      || fail "a refused whitespace-only $mode handoff changed task metadata"
+    [ "$(cat "$dir/home/data/$id/brief.md")" = "$before_brief" ] \
+      || fail "a refused whitespace-only $mode handoff changed task instructions"
+    assert_absent "$dir/fake/created-sessions" \
+      "a refused whitespace-only $mode handoff created a replacement endpoint"
+  done
+  pass "operator-attested handoff: whitespace-only --note and --note-file values refuse before mutation"
+}
+
 test_operator_attested_handoff_refuses_identity_conflicts_without_mutation() {
   local mode dir id=paseo-backend-adapter head out rc before_meta before_brief expect_endpoint expect_wt expect_head
   for mode in endpoint recorded-endpoint worktree path-alias head branch project harness delivery duplicate; do
@@ -2456,6 +2520,7 @@ test_relaunch_serializes_concurrent_durable_metadata_publication
 test_disabled_relaunch_clears_prior_trace_context
 test_relaunch_appends_the_progress_note_to_the_instructions
 test_relaunch_requires_a_note_for_a_ship_task
+test_relaunch_rejects_whitespace_only_notes
 test_harness_switch_moves_the_record_and_clears_prior_wiring
 test_harness_switch_does_not_carry_the_old_profile_axes
 test_harness_switch_resolves_a_prefixed_recorded_harness
@@ -2516,6 +2581,7 @@ test_herdr_rebind_failure_from_a_plain_shell_names_the_real_cause
 test_relaunch_reverifies_an_already_in_flight_item_instead_of_rewriting_it
 test_relaunch_moves_a_drifted_item_back_in_flight
 test_operator_attested_handoff_rebinds_only_the_pinned_task_and_keeps_dirty_work
+test_operator_attested_handoff_rejects_whitespace_only_notes
 test_operator_attested_handoff_refuses_identity_conflicts_without_mutation
 test_operator_attested_handoff_refuses_a_live_endpoint_and_bad_confirmation
 test_operator_attested_handoff_is_not_available_to_other_tasks

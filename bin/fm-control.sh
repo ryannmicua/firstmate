@@ -184,6 +184,10 @@ die() {  # <message>
   exit 1
 }
 
+contains_non_whitespace() {  # <text>
+  [[ "$1" =~ [^[:space:]] ]]
+}
+
 CONTROL_LOCK=
 CONTROL_LOCK_HELD=0
 RELAUNCH_ACTIVE=0
@@ -296,7 +300,7 @@ elif [ "$VERB" = handoff ]; then
     || die "--harness, --model, and --effort apply to 'relaunch' only"
   [ -n "$HANDOFF_EXPECT_ENDPOINT" ] && [ -n "$HANDOFF_EXPECT_WORKTREE" ] && [ -n "$HANDOFF_EXPECT_HEAD" ] \
     || die "handoff requires --expect-endpoint, --expect-worktree, and --expect-head"
-  [ "$NOTE_SET" = 1 ] && [ -n "$NOTE" ] \
+  [ "$NOTE_SET" = 1 ] && contains_non_whitespace "$NOTE" \
     || die "handoff requires --note (or --note-file) so the replacement receives the recovery context"
 else
   [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
@@ -1023,7 +1027,7 @@ do_relaunch() {
       RELAUNCH_BRIEF="$DATA/$ID/brief.md"
       [ -f "$RELAUNCH_BRIEF" ] \
         || die "task $ID has no instructions at $RELAUNCH_BRIEF; refusing to relaunch a worker with nothing to work from"
-      [ "$NOTE_SET" = 1 ] && [ -n "$NOTE" ] \
+      [ "$NOTE_SET" = 1 ] && contains_non_whitespace "$NOTE" \
         || die "relaunch of a $KIND task requires --note (or --note-file): the replacement worker inherits the local copy but none of the conversation, so it must be told what happened"
       ;;
     secondmate)
