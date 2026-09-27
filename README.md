@@ -212,6 +212,7 @@ Firstmate's skills live in two separate places with different audiences:
 
 ## Documentation
 
+- [docs/logical-architecture.md](docs/logical-architecture.md) - the role, authority, task, knowledge, supervision, and delivery model independent of today's technical stack.
 - [docs/architecture.md](docs/architecture.md) - maintainer architecture for the crew, supervision, worktrees, secondmates, and project modes.
 - [docs/configuration.md](docs/configuration.md) - environment variables, `FM_HOME`, runtime backend selection, optional Relay and its X and Discord setup steps, trusted external process-event adapter setup, the files you set, and harness support.
 - [docs/extension-bindings.md](docs/extension-bindings.md) - maintainer architecture for the narrow trusted external `process-event-adapter/1` package, binding, handshake, and evidence boundary.

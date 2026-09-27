@@ -365,6 +365,10 @@
       "audience": "maintainer-verification"
     },
     {
+      "path": "docs/logical-architecture.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/herdr-backend.md",
       "audience": "operator-current"
     },
