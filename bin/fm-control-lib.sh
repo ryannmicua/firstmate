@@ -84,15 +84,17 @@ fm_control_handoff_expected_branch() {  # <task-id>
 # transaction is at its launching phase and carries every identity and
 # operator-attestation field written by fm-control.
 fm_control_handoff_journal_authorizes() {  # <state-dir> <task-id> <tx>
-  local state=$1 id=$2 tx=$3 journal value count
+  local state=$1 id=$2 tx=$3 journal value count expected_endpoint expected_branch
   fm_control_attested_handoff_task_allowed "$id" || return 1
   [ -n "$tx" ] || return 1
+  expected_endpoint=$(fm_control_handoff_expected_endpoint "$id") || return 1
+  expected_branch=$(fm_control_handoff_expected_branch "$id") || return 1
   journal="$state/$id.control-relaunch"
   [ -f "$journal" ] && [ ! -L "$journal" ] || return 1
   for value in v1 "task=$id" phase=launching "relaunch_tx=$tx" \
       handoff=attested-v1 \
-      handoff_expected_endpoint=firstmate:fm-paseo-backend-adapter \
-      handoff_expected_branch=fm/paseo-backend-adapter \
+      "handoff_expected_endpoint=$expected_endpoint" \
+      "handoff_expected_branch=$expected_branch" \
       handoff_worker_attested=stopped \
       handoff_run_attested=terminal; do
     count=$(grep -Fxc -- "$value" "$journal" 2>/dev/null || true)

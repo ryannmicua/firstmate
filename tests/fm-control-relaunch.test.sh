@@ -1945,6 +1945,43 @@ test_operator_attested_handoff_rejects_whitespace_only_notes() {
   pass "operator-attested handoff: whitespace-only --note and --note-file values refuse before mutation"
 }
 
+test_operator_attested_handoff_refuses_a_caller_supplied_journal() {
+  local dir id=paseo-backend-adapter tx=forged-handoff-tx endpoint branch worktree head session out rc before_meta
+  dir=$(new_case handoff-forged-journal "$id")
+  add_legacy_handoff_task "$dir"
+  endpoint=$(fm_control_handoff_expected_endpoint "$id")
+  branch=$(fm_control_handoff_expected_branch "$id")
+  worktree=$(cd "$dir/wt" && pwd -P)
+  head=$(git -C "$dir/wt" rev-parse HEAD)
+  session=fm-handoff-paseo-backend-adapter-forged
+  before_meta=$(cat "$dir/home/state/$id.meta")
+  cat > "$dir/home/state/$id.control-relaunch" <<EOF
+v1
+task=$id
+phase=launching
+relaunch_tx=$tx
+handoff=attested-v1
+handoff_expected_endpoint=$endpoint
+handoff_expected_worktree=$worktree
+handoff_expected_head=$head
+handoff_expected_branch=$branch
+handoff_worker_attested=stopped
+handoff_run_attested=terminal
+handoff_new_session=$session
+EOF
+
+  out=$(FM_CONTROL_HANDOFF_TX="$tx" FM_CONTROL_RELAUNCH_TX="$tx" \
+    run_spawn "$dir" "$id" --relaunch); rc=$?
+  expect_code 1 "$rc" "a direct spawn with caller-supplied handoff evidence should refuse"$'\n'"$out"
+  assert_contains "$out" "must be launched by its active fm-control transaction" \
+    "the refusal should identify the missing control transaction"
+  [ "$(cat "$dir/home/state/$id.meta")" = "$before_meta" ] \
+    || fail "a caller-supplied handoff journal changed task metadata"
+  assert_absent "$dir/fake/created-sessions" \
+    "a caller-supplied handoff journal created a replacement endpoint"
+  pass "operator-attested handoff: direct spawn cannot authorize itself with a journal"
+}
+
 test_operator_attested_handoff_refuses_identity_conflicts_without_mutation() {
   local mode dir id=paseo-backend-adapter head out rc before_meta before_brief expect_endpoint expect_wt expect_head
   for mode in endpoint recorded-endpoint worktree path-alias head branch project harness delivery duplicate; do
@@ -2582,6 +2619,7 @@ test_relaunch_reverifies_an_already_in_flight_item_instead_of_rewriting_it
 test_relaunch_moves_a_drifted_item_back_in_flight
 test_operator_attested_handoff_rebinds_only_the_pinned_task_and_keeps_dirty_work
 test_operator_attested_handoff_rejects_whitespace_only_notes
+test_operator_attested_handoff_refuses_a_caller_supplied_journal
 test_operator_attested_handoff_refuses_identity_conflicts_without_mutation
 test_operator_attested_handoff_refuses_a_live_endpoint_and_bad_confirmation
 test_operator_attested_handoff_is_not_available_to_other_tasks

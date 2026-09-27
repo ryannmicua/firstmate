@@ -1609,6 +1609,10 @@ if [ "$RELAUNCH" -eq 1 ]; then
     exit 1
   }
   if [ -n "${FM_CONTROL_HANDOFF_TX:-}" ]; then
+    [ "$SPAWN_CONTROL_PARENT" = 1 ] || {
+      echo "error: operator-attested handoff must be launched by its active fm-control transaction; refusing to rebind the task" >&2
+      exit 1
+    }
     fm_control_handoff_journal_authorizes "$STATE" "$ID" "$FM_CONTROL_HANDOFF_TX" || {
       echo "error: operator-attested handoff is not authorized by the current control transaction; refusing to rebind the task" >&2
       exit 1
