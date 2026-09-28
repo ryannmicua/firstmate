@@ -1,0 +1,6 @@
+Real Firstmate Paseo adapter lifecycle: Codex/gpt-6-luna, isolated daemon/project/home.
+Existing project: {"projectId":"prj_cc25867e9be04d8f","name":"paseo-live-test","path":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-relaunch-validation/paseo-live-test"}
+Fresh task identities: agent=167ddade-543d-4e58-a327-583ba8c0acdd workspace=wks_ae9e190b0fb51d1c worktree=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-relaunch-validation/worktrees/12wac46o/fm-paseo-live-test-livecodex
+Fresh agent observable state: {"Model":"gpt-6-luna","Status":"running","Cwd":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-relaunch-validation/worktrees/12wac46o/fm-paseo-live-test-livecodex","ParentAgentId":null}
+Error: Agent 167ddad is currently running
+Use --force to archive a running agent (it will interrupt the active run), or stop it first with: paseo agent stop. Use paseo agent delete to hard-delete it.

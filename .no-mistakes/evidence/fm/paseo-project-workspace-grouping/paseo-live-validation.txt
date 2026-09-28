@@ -1,0 +1,23 @@
+Paseo live validation (CLI 0.9.2, Codex only)
+
+Disposable local daemon:
+- `paseo --home <worktree>/.tmp/paseo-live/home daemon run`
+- daemon status: `localDaemon=running`, `connectedDaemon=reachable`, listen `127.0.0.1:16767`
+- `paseo project create --json <disposable git source>` => project `prj_78741a9e298ef871`, `kind=git`
+
+Task workspace separation:
+- Paseo rejected `--base HEAD`: `Base branch cannot be HEAD when creating a Paseo worktree`.
+- With the source commit hash as `--base`, two actual `workspace create --isolation worktree --project <existing id> --mode branch-off --new-branch <unique slug> --worktree-slug <unique slug> --json` calls returned:
+  - `wks_5b1005bad3fc7a82`, branch/slug `fm-liveprobe-task-a`, cwd `<isolated Paseo home>/worktrees/3fz8beru/fm-liveprobe-task-a`
+  - `wks_d3e74dea918e7fff`, branch/slug `fm-liveprobe-task-b`, cwd `<isolated Paseo home>/worktrees/3fz8beru/fm-liveprobe-task-b`
+- `workspace ls --json` returned both under project `source`, isolation `worktree`; `git worktree list --porcelain` showed distinct registered paths and branches.
+
+Unsafe reuse refusal (Firstmate adapter against the live disposable daemon):
+- Called `fm_backend_paseo_create_task` with workspace A's ID and workspace B's recorded path.
+- Output: `error: Paseo workspace wks_5b1005bad3fc7a82 resolves to <...>/fm-liveprobe-task-a, not its recorded worktree <...>/fm-liveprobe-task-b; refusing unsafe reuse`; exit 1.
+- `workspace ls --json | jq length` remained `2`; no agent run or workspace mutation occurred.
+
+Cleanup:
+- `workspace archive` reported both IDs as `archived`.
+- `workspace ls --json` returned `[]`; `git worktree list --porcelain` contained only the disposable source checkout.
+- `project delete --json` returned the disposable project ID and `removedWorkspaceIds: []`.

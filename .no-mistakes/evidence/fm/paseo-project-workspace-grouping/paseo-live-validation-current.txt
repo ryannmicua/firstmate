@@ -1,0 +1,18 @@
+Current live Paseo check: real CLI and daemon; isolated home, port, and empty Codex home.
+Paseo CLI version: 0.9.2
+Before start: {"home":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/paseo-home","configuredListen":"127.0.0.1:18768","localDaemon":"stopped","connectedDaemon":"not_probed"}
+After start: {"home":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/paseo-home","listen":"127.0.0.1:18768","localDaemon":"running","connectedDaemon":"reachable"}
+Created existing project: {"projectId":"prj_4d99336d710695f0","name":"paseo-live-test","path":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/paseo-live-test","kind":"git"}
+Two distinct task workspaces observed from live Paseo:
+[{"workspaceId":"wks_1000bab4ce2d6a1f","project":"paseo-live-test","isolation":"worktree","cwd":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/worktrees/3bnvzsd3/fm-paseo-live-test-b"},{"workspaceId":"wks_4e0c2a916db3dd87","project":"paseo-live-test","isolation":"worktree","cwd":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/worktrees/3bnvzsd3/fm-paseo-live-test-a"}]
+Git branches: fm-paseo-live-test-a (/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/worktrees/3bnvzsd3/fm-paseo-live-test-a), fm-paseo-live-test-b (/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/worktrees/3bnvzsd3/fm-paseo-live-test-b)
+Firstmate adapter validated workspace A: id=wks_4e0c2a916db3dd87 path=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/worktrees/3bnvzsd3/fm-paseo-live-test-a project=paseo-live-test
+Firstmate adapter refused mismatched reuse: error: Paseo workspace wks_4e0c2a916db3dd87 resolves to /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/worktrees/3bnvzsd3/fm-paseo-live-test-a, not its recorded worktree /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/worktrees/3bnvzsd3/fm-paseo-live-test-b; refusing unsafe reuse
+Archiving only workspaces and project created by this check:
+{"workspaceId":"wks_4e0c2a916db3dd87","status":"archived"}
+{"workspaceId":"wks_1000bab4ce2d6a1f","status":"archived"}
+{"projectId":"prj_4d99336d710695f0","removedWorkspaceIds":[]}
+Live workspace list after archive: []
+stopped: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/paseo-home
+Isolated daemon after teardown: {"home":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-test-validation/paseo-home","localDaemon":"stopped"}
+Cleanup complete: only this check’s workspaces and project were archived/deleted.

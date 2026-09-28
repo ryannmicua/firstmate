@@ -1,0 +1,9 @@
+Live Firstmate adapter spawn attempt: Codex/gpt-6-luna with isolated empty HOME and CODEX_HOME; no operator credentials copied or inherited.
+Isolated Paseo endpoint: 127.0.0.1:18769; Codex home: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-codex-validation/codex-home
+Created only live-test project id=prj_dd27256091d11dc9
+Firstmate adapter exit status: 0
+db83cf5c-e460-42a3-a220-9d144e0b25de	wks_259b7ac95ac2697e	/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-codex-validation/worktrees/3e0u2g0f/fm-paseo-live-test-livecodex
+Created live-test workspaces after run attempt: [{"workspaceId":"wks_259b7ac95ac2697e","project":"paseo-live-test","isolation":"worktree","cwd":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-codex-validation/worktrees/3e0u2g0f/fm-paseo-live-test-livecodex"}]
+Created live-test agents after run attempt: [{"agentId":"db83cf5c-e460-42a3-a220-9d144e0b25de","status":"running","workspaceId":null,"title":null,"labels":null}]
+stopped: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-codex-validation/paseo-home
+Isolated daemon after teardown: {"home":"/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3KV22CTM5DY2RJE46FTN36V/.paseo-live-codex-validation/paseo-home","localDaemon":"stopped"}
