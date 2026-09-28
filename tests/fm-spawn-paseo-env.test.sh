@@ -23,6 +23,7 @@ case "$1 ${2:-}" in
   "run --background")
     printf '%s\n' "$@" >> "$FM_TEST_PASEO_ARGS"
     if [ -n "${FM_TEST_PASEO_ABORT_MODE:-}" ]; then
+      printf 'running\n' > "$FM_TEST_PASEO_STATUS"
       if [ "${FM_TEST_PASEO_ABORT_MODE:-}" = dirty ]; then
         : > "$FM_TEST_PASEO_WT/.paseo-uncommitted"
       fi
@@ -33,9 +34,21 @@ case "$1 ${2:-}" in
       printf '{"agentId":"agent-paseo-env","workspaceId":"workspace-paseo-env","worktreePath":"%s"}\n' "$FM_TEST_PASEO_WT"
     fi
     ;;
-  archive\ *) printf 'archive|%s\n' "$*" >> "$FM_TEST_PASEO_ARGS" ;;
-  "workspace archive") printf 'workspace_archive|%s\n' "$*" >> "$FM_TEST_PASEO_ARGS" ;;
-  inspect\ *) printf '%s\n' '{"status":"archived"}' ;;
+  stop\ *)
+    printf 'stop|%s\n' "$*" >> "$FM_TEST_PASEO_ARGS"
+    [ "${FM_TEST_PASEO_STOP_FAIL:-0}" = 1 ] && exit 1
+    printf 'closed\n' > "$FM_TEST_PASEO_STATUS"
+    ;;
+  archive\ *)
+    printf 'archive|%s\n' "$*" >> "$FM_TEST_PASEO_ARGS"
+    [ "${FM_TEST_PASEO_ARCHIVE_FAIL:-0}" = 1 ] && exit 1
+    printf 'archived\n' > "$FM_TEST_PASEO_STATUS"
+    ;;
+  "workspace archive")
+    printf 'workspace_archive|%s\n' "$*" >> "$FM_TEST_PASEO_ARGS"
+    [ "${FM_TEST_PASEO_WORKSPACE_ARCHIVE_FAIL:-0}" = 1 ] && exit 1
+    ;;
+  inspect\ *) printf '{"status":"%s"}\n' "$(cat "$FM_TEST_PASEO_STATUS")" ;;
   *) exit 1 ;;
 esac
 SH
@@ -54,7 +67,9 @@ assert_no_grep 'FM_TEST_UNSET=' "$PASEO_ARGS" "Paseo received an unset allowlist
 assert_grep "paseo_agent_id=agent-paseo-env" "$HOME_DIR/state/$ID.meta" "successful Paseo spawn did not publish its agent identity"
 
 run_abort_case() {
-  local label=$1 worktree_kind=$2 dirty=$3 id home project worktree returned_worktree agent workspace task_tmp out status
+  local label=$1 worktree_kind=$2 dirty=$3
+  local id home project worktree returned_worktree agent workspace task_tmp status_file out status
+  local stop_fail=0 archive_fail=0 workspace_archive_fail=0
   id="paseo-abort-$label-$$-$RANDOM"
   home="$TMP_ROOT/$id-home"
   project="$TMP_ROOT/$id-project"
@@ -63,6 +78,12 @@ run_abort_case() {
   agent="agent-$id"
   workspace="workspace-$id"
   task_tmp="/tmp/fm-$id"
+  status_file="$TMP_ROOT/$id-paseo-status"
+  case "$label" in
+    stop-failed) stop_fail=1 ;;
+    archive-failed) archive_fail=1 ;;
+    workspace-archive-failed) workspace_archive_fail=1 ;;
+  esac
   printf '%s\n' "$task_tmp" >> "$FM_TEST_CLEANUP_REGISTRY"
   fm_test_spawn_home "$home" codex
   fm_git_worktree "$project" "$worktree" "$id"
@@ -74,10 +95,14 @@ run_abort_case() {
 
   out=$(FM_TEST_PASEO_ABORT_MODE="$label" \
     FM_TEST_PASEO_ARGS="$PASEO_ARGS" \
+    FM_TEST_PASEO_STATUS="$status_file" \
     FM_TEST_PASEO_WT="$returned_worktree" \
     FM_TEST_PASEO_AGENT="$agent" \
     FM_TEST_PASEO_WORKSPACE="$workspace" \
     FM_TEST_PASEO_TASK_TMP="$task_tmp" \
+    FM_TEST_PASEO_STOP_FAIL="$stop_fail" \
+    FM_TEST_PASEO_ARCHIVE_FAIL="$archive_fail" \
+    FM_TEST_PASEO_WORKSPACE_ARCHIVE_FAIL="$workspace_archive_fail" \
     fm_test_run_spawn "$home" "$worktree" "$FAKEBIN_DIR" \
       "$id" "$project" --mode no-mistakes --yolo off --backend paseo --harness codex)
   status=$?
@@ -99,14 +124,37 @@ run_abort_case() {
       assert_no_grep "archive|archive $agent" "$PASEO_ARGS" "uninspectable abort archived the Paseo agent"
       assert_no_grep "workspace_archive|workspace archive $workspace" "$PASEO_ARGS" "uninspectable abort archived the Paseo workspace"
       ;;
+    stop-failed)
+      assert_contains "$out" "agent $agent and workspace $workspace" "unconfirmed stop did not report both Paseo identities"
+      assert_contains "$out" 'agent stop could not be confirmed' "unconfirmed stop did not explain why the workspace was retained"
+      assert_grep "stop|stop $agent" "$PASEO_ARGS" "abort cleanup did not try to stop the running Paseo agent"
+      assert_no_grep "archive|archive $agent" "$PASEO_ARGS" "abort cleanup archived an agent whose stop could not be confirmed"
+      ;;
+    archive-failed)
+      assert_contains "$out" "agent $agent and workspace $workspace" "archive failure did not report both Paseo identities"
+      assert_contains "$out" 'archiving could not be confirmed' "archive failure did not explain why the workspace was retained"
+      assert_grep "stop|stop $agent" "$PASEO_ARGS" "archive failure path did not stop the Paseo agent first"
+      assert_grep "archive|archive $agent" "$PASEO_ARGS" "archive failure path did not attempt to archive the Paseo agent"
+      assert_no_grep "workspace_archive|workspace archive $workspace" "$PASEO_ARGS" "agent archive failure still archived the Paseo workspace"
+      ;;
+    workspace-archive-failed)
+      assert_contains "$out" "agent $agent and workspace $workspace" "workspace archive failure did not report both Paseo identities"
+      assert_contains "$out" 'archiving could not be confirmed' "workspace archive failure did not explain why cleanup was incomplete"
+      assert_grep "archive|archive $agent" "$PASEO_ARGS" "workspace archive failure path did not archive the agent"
+      assert_grep "workspace_archive|workspace archive $workspace" "$PASEO_ARGS" "workspace archive failure path did not attempt workspace archival"
+      ;;
     clean)
+      assert_grep "stop|stop $agent" "$PASEO_ARGS" "clean worktree abort did not stop the Paseo agent"
       assert_grep "archive|archive $agent" "$PASEO_ARGS" "clean worktree abort did not archive the Paseo agent"
-      assert_grep "workspace_archive|workspace archive $workspace" "$PASEO_ARGS" "clean worktree abort did not archive the Paseo workspace: $out; calls: $(cat "$PASEO_ARGS")"
+      assert_grep "workspace_archive|workspace archive $workspace" "$PASEO_ARGS" "clean worktree abort did not archive the Paseo workspace"
       ;;
   esac
 }
 
 run_abort_case dirty git 1
 run_abort_case uninspectable uninspectable 0
+run_abort_case stop-failed git 0
+run_abort_case archive-failed git 0
+run_abort_case workspace-archive-failed git 0
 run_abort_case clean git 0
-pass "Paseo forwards set and empty allowlisted values while omitting unset values"
+pass "Paseo environment forwarding and abort cleanup preserve workspaces safely"

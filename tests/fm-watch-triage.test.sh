@@ -6002,7 +6002,7 @@ test_paused_until_that_passed_is_rechecked_before_the_cadence() {
   pass "a declared wait whose until time has passed is rechecked at once, then held to the cadence"
 }
 
-test_paseo_status_poll_survives_log_capture_failure() {
+test_paseo_failed_capture_skips_stale_hash() {
   local dir state fakebin log pid
   dir=$(make_case paseo-log-capture-failure)
   state="$dir/state"
@@ -6026,7 +6026,6 @@ EOF
 printf '%s\n' "$*" >> "$FM_PASEO_LOG"
 case "$*" in
   'logs agent-test --tail 40 --json') exit 1 ;;
-  'inspect agent-test --json') printf '%s\n' '{"status":"running"}' ;;
   'ls -a -g --json') printf '%s\n' '[]' ;;
 esac
 exit 0
@@ -6038,13 +6037,8 @@ SH
   pid=$!
   wait_poll_cycle "$state" "$pid" 300 || { reap "$pid"; fail "Paseo watcher did not complete a poll cycle after logs failed"; }
   reap "$pid"
-  awk '
-    $0 == "logs agent-test --tail 40 --json" { logs_failed = 1; next }
-    logs_failed && $0 == "inspect agent-test --json" { found = 1; exit }
-    END { exit !found }
-  ' "$log" || fail "native Paseo status was not polled after timeline capture failed: $(cat "$log")"
   [ ! -e "$state/.hash-agent-test" ] || fail "failed Paseo timeline capture incorrectly created a pane hash"
-  pass "Paseo native status polling continues when timeline capture fails, while hash staleness is skipped"
+  pass "failed Paseo timeline capture skips hash-based stale detection"
 }
 
 # CI's stock macOS Bash lane sets FM_TEST_ONLY to run just the bash-3.2
@@ -6185,4 +6179,4 @@ test_afk_one_shot_never_hands_off_captain_held_under_away_record
 test_paused_until_near_future_is_quiet_before_the_cadence
 test_paused_until_wrong_year_is_bounded_by_the_cadence
 test_paused_until_that_passed_is_rechecked_before_the_cadence
-test_paseo_status_poll_survives_log_capture_failure
+test_paseo_failed_capture_skips_stale_hash

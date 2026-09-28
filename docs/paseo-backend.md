@@ -22,7 +22,8 @@ When launch-environment filtering is enabled, set allowlisted values are passed 
 These values are visible in process listings on the host running the Paseo daemon.
 Logs are timeline output, not a verified visible viewport, and agent liveness remains `unverified` because Paseo exposes no worker pid.
 Interrupt maps to `paseo stop`; exit accepts only a native `closed` or `archived` status as stop proof, otherwise archives the agent and verifies terminal status.
-After a successful Paseo run, an aborted Firstmate spawn archives the agent and workspace only when Git proves the worktree clean; dirty or uninspectable worktrees are retained with their IDs and a reason for manual reconciliation.
+After a successful Paseo run, an aborted Firstmate spawn confirms the agent is stopped before checking Git and archives the agent and workspace only when the worktree is clean.
+Dirty or uninspectable worktrees are retained; stop, status, or archive failures are reported with both IDs and a reason for manual reconciliation.
 If `paseo run` fails after reporting a created workspace, Firstmate reports its ID and leaves that workspace for manual reconciliation.
 Teardown archives the agent and then its separate workspace record.
 

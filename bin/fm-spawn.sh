@@ -1236,19 +1236,19 @@ spawn_abort_cleanup() {
   fi
   if [ "${PASEO_DIRECT:-0}" = 1 ]; then
     PASEO_DIRECT=0
-    if [ -z "${WT:-}" ] || [ ! -d "$WT" ]; then
+    if ! fm_backend_paseo_stop_status_proof "${PASEO_AGENT_ID:-}" >/dev/null 2>&1; then
+      paseo_cleanup_reason="Paseo agent stop could not be confirmed"
+    elif [ -z "${WT:-}" ] || [ ! -d "$WT" ]; then
       paseo_cleanup_reason="worktree path is unavailable"
-    elif paseo_worktree_status=$(git -C "$WT" status --porcelain --untracked-files=all 2>/dev/null); then
-      if [ -n "$paseo_worktree_status" ]; then
-        paseo_cleanup_reason="worktree contains uncommitted or untracked changes"
-      else
-        fm_backend_paseo_kill "${PASEO_AGENT_ID:-}" "${PASEO_WORKSPACE_ID:-}" >/dev/null 2>&1 || true
-      fi
-    else
+    elif ! paseo_worktree_status=$(git -C "$WT" status --porcelain --untracked-files=all 2>/dev/null); then
       paseo_cleanup_reason="worktree status could not be inspected"
+    elif [ -n "$paseo_worktree_status" ]; then
+      paseo_cleanup_reason="worktree contains uncommitted or untracked changes"
+    elif ! fm_backend_paseo_kill "${PASEO_AGENT_ID:-}" "${PASEO_WORKSPACE_ID:-}" >/dev/null 2>&1; then
+      paseo_cleanup_reason="Paseo agent or workspace archiving could not be confirmed"
     fi
     if [ -n "$paseo_cleanup_reason" ]; then
-      printf 'error: retaining Paseo agent %s and workspace %s after aborted spawn: %s; manually reconcile worktree %s\n' \
+      printf 'error: Paseo cleanup incomplete for agent %s and workspace %s after aborted spawn: %s; manually reconcile worktree %s\n' \
         "${PASEO_AGENT_ID:-unknown}" "${PASEO_WORKSPACE_ID:-unknown}" \
         "$paseo_cleanup_reason" "${WT:-unknown}" >&2
     fi
