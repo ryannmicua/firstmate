@@ -103,7 +103,9 @@ fm_backend_paseo_project_for_source() { # <source-clone> [--allow-missing]
     printf '%s\n' "$listing" >&2
     return 1
   fi
-  while IFS=$'\t' read -r project_id project_name project_path; do
+  while IFS= read -r -d '' project_id &&
+        IFS= read -r -d '' project_name &&
+        IFS= read -r -d '' project_path; do
     [ -n "$project_id" ] && [ -n "$project_name" ] && [ -n "$project_path" ] || continue
     project_path_real=$(fm_backend_paseo_canonical_directory "$project_path" 2>/dev/null) || continue
     if [ "$project_path_real" = "$source_path" ]; then
@@ -111,7 +113,7 @@ fm_backend_paseo_project_for_source() { # <source-clone> [--allow-missing]
       selected_id=$project_id
       selected_name=$project_name
     fi
-  done < <(printf '%s\n' "$listing" | jq -r '.[] | [(.projectId // .id // ""), (.name // ""), (.path // "")] | @tsv' 2>/dev/null)
+  done < <(printf '%s\n' "$listing" | jq -j '.[] | ((.projectId // .id // "") | tostring), "\u0000", ((.name // "") | tostring), "\u0000", ((.path // "") | tostring), "\u0000"' 2>/dev/null)
   if [ "$matches" -ne 1 ]; then
     if [ "$matches" -eq 0 ]; then
       [ "$allow_missing" = --allow-missing ] && return 2

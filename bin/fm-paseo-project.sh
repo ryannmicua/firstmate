@@ -44,7 +44,7 @@ registry="$DATA/projects.md"
   printf 'error: project %s is not registered; registry is missing at %s\n' "$PROJECT_NAME" "$registry" >&2
   exit 1
 }
-registry_matches=$(awk -v name="$PROJECT_NAME" '$1 == "-" && $2 == name { count++ } END { print count + 0 }' "$registry")
+registry_matches=$(PROJECT_NAME="$PROJECT_NAME" awk '$1 == "-" && $2 == ENVIRON["PROJECT_NAME"] { count++ } END { print count + 0 }' "$registry")
 if [ "$registry_matches" -eq 0 ]; then
   printf 'error: project %s is not registered in %s\n' "$PROJECT_NAME" "$registry" >&2
   exit 1

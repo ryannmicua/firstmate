@@ -59,6 +59,29 @@ assert_equals 1 "$(grep -c '^project create ' "$LOG" || true)" "Paseo project cr
 assert_contains "$(cat "$TMP_ROOT/noop.out")" 'already matches registered project alpha' "one existing Paseo match was not a no-op"
 assert_equals 1 "$(grep -c '^project create ' "$LOG" || true)" "one existing match caused another Paseo create"
 
+BACKSLASH_PROJECT='foo\bar'
+mkdir -p "$PROJECTS/$BACKSLASH_PROJECT"
+printf '%s\n' "- $BACKSLASH_PROJECT - Backslash project (added 2026-01-01)" >> "$DATA/projects.md"
+backslash_real=$(cd -P "$PROJECTS/$BACKSLASH_PROJECT" && pwd -P)
+jq --arg path "$backslash_real" \
+  '. + [{projectId:"backslash-existing",name:"backslash-existing",path:$path}]' "$PROJECTS_JSON" > "$PROJECTS_JSON.tmp"
+mv "$PROJECTS_JSON.tmp" "$PROJECTS_JSON"
+"$HELPER" "$BACKSLASH_PROJECT" > "$TMP_ROOT/backslash-existing.out"
+assert_contains "$(cat "$TMP_ROOT/backslash-existing.out")" 'already matches registered project foo\bar' \
+  "a matching Paseo project with a backslash path was not reused"
+assert_equals 1 "$(grep -c '^project create ' "$LOG" || true)" "a matching backslash path caused another Paseo create"
+
+jq 'map(select(.projectId != "backslash-existing"))' "$PROJECTS_JSON" > "$PROJECTS_JSON.tmp"
+mv "$PROJECTS_JSON.tmp" "$PROJECTS_JSON"
+"$HELPER" "$BACKSLASH_PROJECT" > "$TMP_ROOT/backslash-create.out"
+assert_contains "$(cat "$TMP_ROOT/backslash-create.out")" 'created Paseo project foo\bar' \
+  "post-create verification failed for a backslash path"
+assert_equals 2 "$(grep -c '^project create ' "$LOG" || true)" "a missing backslash path was not created exactly once"
+"$HELPER" "$BACKSLASH_PROJECT" > "$TMP_ROOT/backslash-noop.out"
+assert_contains "$(cat "$TMP_ROOT/backslash-noop.out")" 'already matches registered project foo\bar' \
+  "a newly created backslash path was not reused"
+assert_equals 2 "$(grep -c '^project create ' "$LOG" || true)" "a newly created backslash path caused another Paseo create"
+
 jq --arg path "$(cd -P "$PROJECTS/alpha" && pwd -P)" \
   '. + [{projectId:"duplicate",name:"alpha-copy",path:$path}]' "$PROJECTS_JSON" > "$PROJECTS_JSON.tmp"
 mv "$PROJECTS_JSON.tmp" "$PROJECTS_JSON"
@@ -66,7 +89,7 @@ if "$HELPER" alpha > /dev/null 2> "$TMP_ROOT/duplicate.err"; then
   fail "multiple Paseo matches were accepted"
 fi
 assert_contains "$(cat "$TMP_ROOT/duplicate.err")" '2 Paseo projects match' "ambiguous Paseo refusal did not name the duplicate count"
-assert_equals 1 "$(grep -c '^project create ' "$LOG" || true)" "ambiguous matches triggered Paseo project creation"
+assert_equals 2 "$(grep -c '^project create ' "$LOG" || true)" "ambiguous matches triggered Paseo project creation"
 
 if "$HELPER" orphan > /dev/null 2> "$TMP_ROOT/unregistered.err"; then
   fail "an unregistered local project was accepted"
@@ -96,10 +119,10 @@ assert_equals "$before" "$(wc -l < "$LOG" | tr -d '[:space:]')" "non-Paseo add p
 printf 'paseo\n' > "$CONFIG/backend"
 "$HELPER" --if-selected alpha > "$TMP_ROOT/paseo-add.out"
 assert_contains "$(cat "$TMP_ROOT/paseo-add.out")" 'created Paseo project alpha' "Paseo-selected add path did not create its project"
-assert_equals 2 "$(grep -c '^project create ' "$LOG" || true)" "Paseo-selected add path did not create exactly one project"
+assert_equals 3 "$(grep -c '^project create ' "$LOG" || true)" "Paseo-selected add path did not create exactly one project"
 
 FM_BACKEND=tmux "$HELPER" --if-selected alpha > "$TMP_ROOT/env-override.out"
 assert_contains "$(cat "$TMP_ROOT/env-override.out")" 'runtime backend for new tasks is tmux' "FM_BACKEND did not override config/backend during add"
-assert_equals 2 "$(grep -c '^project create ' "$LOG" || true)" "non-Paseo FM_BACKEND override created a Paseo project"
+assert_equals 3 "$(grep -c '^project create ' "$LOG" || true)" "non-Paseo FM_BACKEND override created a Paseo project"
 
 pass "Paseo project registration is idempotent, registry-bound, path-bound, ambiguity-safe, and backend-conditional for add"
