@@ -1,0 +1,20 @@
+Scenario: add under selected Paseo backend
+created Paseo project first-added (project-0) for registered project first-added at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3M4GM3PQ5J0TRE97DRQAA0R/.tmp-paseo-validation/manual/home/projects/first-added
+persisted project=first-added path=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3M4GM3PQ5J0TRE97DRQAA0R/.tmp-paseo-validation/manual/home/projects/first-added
+
+Scenario: add while tmux is selected
+skip: runtime backend for new tasks is tmux; no Paseo project was created
+Paseo CLI calls before=3 after=3
+
+Scenario: explicit request for existing Firstmate project while tmux is selected
+created Paseo project existing (project-1) for registered project existing at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3M4GM3PQ5J0TRE97DRQAA0R/.tmp-paseo-validation/manual/home/projects/existing
+Paseo project existing (project-1) already matches registered project existing at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3M4GM3PQ5J0TRE97DRQAA0R/.tmp-paseo-validation/manual/home/projects/existing
+persisted project=existing path=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3M4GM3PQ5J0TRE97DRQAA0R/.tmp-paseo-validation/manual/home/projects/existing
+
+Scenario: ambiguous matches refuse creation
+error: 2 Paseo projects match source path /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3M4GM3PQ5J0TRE97DRQAA0R/.tmp-paseo-validation/manual/home/projects/existing; refusing ambiguous project reuse
+Paseo creates after ambiguity: 2
+
+Scenario: a path containing a backslash is matched losslessly
+Paseo project foo\bar (backslash-existing) already matches registered project foo\bar at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M3M4GM3PQ5J0TRE97DRQAA0R/.tmp-paseo-validation/manual/home/projects/foo\bar
+Total Paseo creates: 2
