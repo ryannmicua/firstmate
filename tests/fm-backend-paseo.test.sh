@@ -9,9 +9,6 @@ mkdir -p "$FB"
 STATUS="$TMP_ROOT/status"
 printf 'running\n' >"$STATUS"
 LOG="$TMP_ROOT/log"
-ENV_FILE="$TMP_ROOT/paseo.env"
-printf 'export OPENAI_API_KEY=super-secret\n' >"$ENV_FILE"
-chmod 600 "$ENV_FILE"
 cat > "$FB/paseo" <<'SH'
 #!/usr/bin/env bash
 printf 'agent=%s workspace=%s|%s\n' "${PASEO_AGENT_ID-unset}" "${PASEO_WORKSPACE_ID-unset}" "$*" >> "$FM_PASEO_LOG"
@@ -47,25 +44,13 @@ case "$*" in
   archive\ *) printf 'archived\n' >> "$FM_PASEO_LOG"; printf 'archived\n' >"$FM_PASEO_STATUS" ;;
   workspace\ archive\ *) printf 'workspace-archived\n' >> "$FM_PASEO_LOG" ;;
   "run "*)
-    env_file=
-    previous=
-    for arg in "$@"; do
-      case "$previous:$arg" in
-        --env:BASH_ENV=*) env_file=${arg#BASH_ENV=} ;;
-      esac
-      previous=$arg
-    done
-    if [ -n "$env_file" ]; then
-      BASH_ENV="$env_file" bash -c '[ "$OPENAI_API_KEY" = super-secret ]' || exit 1
-      printf 'consumed\n' >>"$FM_PASEO_CONSUMED"
-    fi
     printf 'Created workspace wks-test\n{"agentId":"agent-test","cwd":"/tmp/fm-test"}\n'
     ;;
 esac
 exit 0
 SH
 chmod +x "$FB/paseo"
-export PATH="$FB:$PATH" FM_PASEO_LOG="$LOG" FM_PASEO_STATUS="$STATUS" FM_PASEO_CONSUMED="$TMP_ROOT/consumed"
+export PATH="$FB:$PATH" FM_PASEO_LOG="$LOG" FM_PASEO_STATUS="$STATUS"
 . "$(dirname "${BASH_SOURCE[0]}")/../bin/fm-backend.sh"
 fm_backend_source paseo
 
@@ -105,13 +90,14 @@ printf 'idle\n' >"$STATUS"
 fm_backend_paseo_archive_agent agent-test
 assert_contains "$(fm_backend_paseo_busy_state agent-test)" idle "Paseo archive leaves a native terminal status"
 export PASEO_AGENT_ID=parent-agent PASEO_WORKSPACE_ID=parent-workspace
-fm_backend_paseo_create_task task-test "$PWD" "$PWD/README.md" codex default default home-tag wks-existing "$ENV_FILE" A=1 B=2 >/dev/null
+fm_backend_paseo_create_task task-test "$PWD" "$PWD/README.md" codex default default home-tag wks-existing A=1 B=2 >/dev/null
 assert_contains "$(cat "$LOG")" '--workspace wks-existing' "Paseo relaunch targets its workspace"
 assert_contains "$(cat "$LOG")" 'agent=unset workspace=unset|run' "Paseo workers are independent roots without the caller workspace"
-assert_contains "$(cat "$LOG")" "--env BASH_ENV=$ENV_FILE" "Paseo receives the restricted environment reference"
 assert_contains "$(cat "$LOG")" '--env A=1 --env B=2' "Paseo preserves repeated env values"
-assert_not_contains "$(cat "$LOG")" 'super-secret' "Paseo never places secret env values in argv"
-assert_contains "$(cat "$FM_PASEO_CONSUMED")" consumed "Paseo provider worker consumed the restricted environment reference"
+assert_not_contains "$(cat "$LOG")" 'BASH_ENV=' "Paseo does not rely on a shell environment file"
+assert_not_contains "$(cat "$LOG")" '--mode auto-review' "Codex does not receive a forced review mode"
+fm_backend_paseo_create_task opencode-test "$PWD" "$PWD/README.md" opencode default default home-tag wks-existing >/dev/null
+assert_contains "$(cat "$LOG")" '--mode build' "OpenCode retains its build mode"
 
 SOURCE="$TMP_ROOT/source"
 fresh_run=
@@ -124,7 +110,7 @@ git -C "$SOURCE" add file
 git -C "$SOURCE" commit -qm base
 git -C "$SOURCE" branch -M main
 git -C "$SOURCE" checkout -qb feature
-fm_backend_paseo_create_task fresh-task "$SOURCE" "$PWD/README.md" codex default default home-tag '' '' >/dev/null
+fm_backend_paseo_create_task fresh-task "$SOURCE" "$PWD/README.md" codex default default home-tag '' >/dev/null
 fresh_run=$(grep '|run .*fm-fresh-task' "$LOG" | tail -n 1)
 assert_contains "$(cat "$LOG")" '--base main' "Paseo fresh spawn uses the local default branch, not the feature branch"
 assert_contains "$(cat "$LOG")" '--new-workspace worktree' "Paseo fresh spawn owns a new isolated worktree"

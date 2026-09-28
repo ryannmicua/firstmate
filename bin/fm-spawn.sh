@@ -263,8 +263,10 @@
 #   blank lines and lines beginning with # are ignored. Invalid input refuses
 #   before launch, as do path inspection errors such as inaccessible config
 #   directories. An empty file retains only the operational floor below.
-#   Names are read once per spawn; values are expanded in the destination pane,
-#   not copied from the invoking process or written into the launch text.
+#   Names are read once per spawn; shell-backed launches expand values in the
+#   destination pane, not from the invoking process or from launch text.
+#   Paseo reads allowlisted values from the launching process and passes them
+#   as provider environment arguments; docs/paseo-backend.md owns its visibility.
 #   Unset names stay unset and empty values stay empty.
 #   The fixed operational floor is HOME PATH USER LOGNAME SHELL TERM COLORTERM
 #   LANG LC_ALL LC_CTYPE TMPDIR TMP TEMP GOTMPDIR, plus backend identity/routing:
@@ -1236,9 +1238,9 @@ spawn_abort_cleanup() {
     PASEO_DIRECT=0
     fm_backend_paseo_kill "${PASEO_AGENT_ID:-}" "${PASEO_WORKSPACE_ID:-}" >/dev/null 2>&1 || true
   fi
-  if [ -n "${PASEO_ENV_FILE:-}" ] &&
+  if [ -n "${PASEO_LEGACY_ENV_FILE:-}" ] &&
     [ ! -e "$STATE/$ID.meta" ] && [ ! -L "$STATE/$ID.meta" ]; then
-    rm -f -- "$PASEO_ENV_FILE" 2>/dev/null || true
+    rm -f -- "$PASEO_LEGACY_ENV_FILE" 2>/dev/null || true
   fi
   if [ "$SPAWN_TASK_LOCK_HELD" = 1 ]; then
     SPAWN_TASK_LOCK_HELD=0
@@ -2929,9 +2931,11 @@ PASEO_AGENT_ID=
 if [ "$RELAUNCH" -ne 1 ] || [ "$BACKEND" != paseo ]; then
   PASEO_WORKSPACE_ID=
 fi
-PASEO_ENV_FILE=
+PASEO_LEGACY_ENV_FILE=
 PASEO_ENV_ARGS=()
 if [ "$BACKEND" = paseo ]; then
+  # Keep abort cleanup for environment files produced by earlier Paseo launches.
+  PASEO_LEGACY_ENV_FILE="$STATE/$ID.paseo-env"
   if command -v shasum >/dev/null 2>&1; then
     PASEO_HOME_TAG=$(printf '%s' "$FM_HOME" | shasum -a 256 | cut -c1-12)
   else
@@ -2946,16 +2950,6 @@ if [ "$BACKEND" = paseo ]; then
     "COMPACT_ADVISER_DISABLE=1"
   )
   if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
-    PASEO_ENV_FILE="$STATE/$ID.paseo-env"
-    if [ -L "$PASEO_ENV_FILE" ] ||
-      { [ -e "$PASEO_ENV_FILE" ] && { [ ! -f "$PASEO_ENV_FILE" ] || [ ! -O "$PASEO_ENV_FILE" ]; }; }; then
-      echo "error: Paseo launch environment file $PASEO_ENV_FILE is not a private regular file owned by this user" >&2
-      exit 1
-    fi
-    (umask 077 && : >"$PASEO_ENV_FILE" && chmod 600 "$PASEO_ENV_FILE") || {
-      echo "error: could not create the private Paseo launch environment file $PASEO_ENV_FILE" >&2
-      exit 1
-    }
     for paseo_env_name in $LAUNCH_ENV_NAMES; do
       [ "$paseo_env_name" = PASEO_AGENT_ID ] && continue
       paseo_env_value=${!paseo_env_name-}
@@ -2966,7 +2960,7 @@ if [ "$BACKEND" = paseo ]; then
           exit 1
           ;;
       esac
-      printf 'export %s=%q\n' "$paseo_env_name" "$paseo_env_value" >>"$PASEO_ENV_FILE" || exit 1
+      PASEO_ENV_ARGS+=("$paseo_env_name=$paseo_env_value")
     done
   fi
   case "$HARNESS" in
@@ -2976,7 +2970,7 @@ if [ "$BACKEND" = paseo ]; then
       ;;
     opencode*) PASEO_ENV_ARGS+=("OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}") ;;
   esac
-  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "$PASEO_ENV_FILE" "${PASEO_ENV_ARGS[@]}") || exit 1
+  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "${PASEO_ENV_ARGS[@]}") || exit 1
   IFS=$'\t' read -r PASEO_AGENT_ID PASEO_WORKSPACE_ID WT <<EOF
 $PASEO_RESULT
 EOF

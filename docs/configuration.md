@@ -421,11 +421,10 @@ Firstmate retains basic home, executable search, terminal, locale, temporary-dir
 [`fm-spawn.sh --help`](../bin/fm-spawn.sh) owns the exact retained names and parsing mechanics.
 Other ambient names must be listed explicitly, including custom credential-store locations, proxy settings, and certificate overrides when required by the selected tools.
 The command shell and worker may still create their own variables.
-For session-provider backends, allowed values come from the destination pane at execution time; they are neither copied from the invoking Firstmate process nor written into the launch command.
-When launch-environment filtering is enabled for Paseo, allowlisted values are read from the launching environment, written as shell exports to a task-scoped mode-0600 file at `state/<task-id>.paseo-env`, and passed to the provider worker through the file path in `BASH_ENV`.
-The file path is the only allowlisted-environment value in the Paseo launch arguments; Bash-backed provider work consumes the file without exposing its contents in argv or logs.
-The file is removed when an aborted spawn has no surviving task record and when the task is retired.
-Listing a name does not provision it in a daemon's environment or transfer credentials to another machine.
+For terminal session-provider backends, allowed values come from the destination pane at execution time; they are neither copied from the invoking Firstmate process nor written into the launch command.
+When launch-environment filtering is enabled for Paseo, allowlisted values are read from the launching environment and passed to Paseo as individual `--env NAME=value` arguments.
+The values are visible in process listings on the host running the Paseo daemon.
+An allowlisted name with no value in the launching environment is omitted and transfers nothing.
 
 Choose the minimum additions for the authentication method actually in use:
 

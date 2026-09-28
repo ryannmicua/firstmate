@@ -64,9 +64,9 @@ fm_backend_paseo_provider() { # <firstmate-harness>
   esac
 }
 
-fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <workspace-id> <env-file> [env key=value...]
-  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} workspace_id=${8:-} env_file=${9:-}
-  shift 9
+fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <workspace-id> [env key=value...]
+  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} workspace_id=${8:-}
+  shift 8
   local provider base_ref candidate raw json agent workspace worktree
   local -a args
   fm_backend_paseo_runtime_check || return 1
@@ -99,28 +99,8 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
   [ -n "$effort" ] && [ "$effort" != default ] && args+=(--thinking "$effort")
   case "$provider" in
     opencode) args+=(--mode build) ;;
-    codex) args+=(--mode auto-review) ;;
   esac
   for env_value in "$@"; do args+=(--env "$env_value"); done
-  if [ -n "$env_file" ]; then
-    local env_mode
-    if [ -L "$env_file" ] || [ ! -f "$env_file" ] || [ ! -O "$env_file" ]; then
-      echo "error: Paseo launch environment file $env_file is not a private regular file owned by this user" >&2
-      return 1
-    fi
-    env_mode=$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file" 2>/dev/null) || {
-      echo "error: could not inspect Paseo launch environment file $env_file" >&2
-      return 1
-    }
-    case "$env_mode" in
-      600|0600) ;;
-      *)
-        echo "error: Paseo launch environment file $env_file must have mode 0600" >&2
-        return 1
-        ;;
-    esac
-    args+=(--env "BASH_ENV=$env_file")
-  fi
   args+=("$brief")
   raw=$(env -u PASEO_AGENT_ID -u PASEO_WORKSPACE_ID paseo "${args[@]}" 2>&1) || { printf '%s\n' "$raw" >&2; return 1; }
   json=$(printf '%s\n' "$raw" | awk 'found || /^\{/{found=1; print}')
