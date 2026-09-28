@@ -17,11 +17,11 @@ Claude is accepted only when its host diagnostic has a recognized positive statu
 Absent providers are rejected by name rather than substituted.
 Workers are root agents created with `env -u PASEO_AGENT_ID`.
 Each fresh task must match exactly one registered Paseo project by the physical path of its source checkout, and Firstmate refuses to create a project when that match is absent or ambiguous.
-Firstmate creates one worktree workspace with its own branch and a unique home-and-task slug under that project, then starts the agent with `paseo run --workspace`.
+Firstmate uses `paseo workspace create --path` to create one worktree workspace from that checkout, with its own branch and a unique home-and-task slug, then starts the agent with `paseo run --workspace`.
 The agent receives the task's unique `fm-task` label and the Firstmate home's `fm-home` label, while task metadata records the returned agent identity and the validated workspace and worktree identities.
 Relaunch requires the same registered source project, a matching worktree workspace, and the recorded worktree path, then reuses that workspace without creating another one.
 Paseo can answer an existing-workspace run with `Using workspace <id>` and no `workspaceId` JSON field, so Firstmate retains the workspace identity it validated before the run.
-Firstmate does not use `--cwd` to select a task worktree when running an existing workspace.
+The selected workspace is passed through `--workspace`; Firstmate does not pass `--cwd` to `paseo run`.
 When filtering is enabled, Firstmate passes eligible set allowlisted values to Paseo through individual `--env NAME=value` flags; these arguments are visible in process listings on the daemon host ([full forwarding contract](configuration.md#worker-launch-environment-configlaunch-env-allowlist)).
 Logs are timeline output, not a verified visible viewport, and agent liveness remains `unverified` because Paseo exposes no worker pid.
 Interrupt maps to `paseo stop`; exit accepts only a native `closed` or `archived` status as stop proof, otherwise archives the agent and verifies terminal status.
