@@ -1145,7 +1145,7 @@ parse_orca_worktree_result() {
 }
 
 spawn_abort_cleanup() {
-  local status=$? paseo_worktree_status= paseo_cleanup_reason=
+  local status=$? paseo_worktree_status='' paseo_cleanup_reason=''
   if [ "$RELAUNCH_REPLACEMENT_PENDING" = 1 ] &&
     [ "$SPAWN_META_PUBLISH_STARTED" = 1 ] &&
     [ -n "$SPAWN_META_TMP" ] &&

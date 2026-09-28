@@ -56,7 +56,7 @@ SH
 chmod +x "$FAKEBIN_DIR/paseo"
 
 unset FM_TEST_UNSET
-out=$(BASH_COMPAT=3.2 FM_TEST_SET=present FM_TEST_EMPTY= \
+out=$(BASH_COMPAT=3.2 FM_TEST_SET=present FM_TEST_EMPTY='' \
   FM_TEST_PASEO_ARGS="$PASEO_ARGS" FM_TEST_PASEO_WT="$WT_DIR" \
   fm_test_run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" \
   "$ID" "$PROJ_DIR" --mode no-mistakes --yolo off --backend paseo --harness codex)
