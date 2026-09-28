@@ -24,9 +24,10 @@ case "$1 ${2:-}" in
     printf '%s\n' "$@" >> "$FM_TEST_PASEO_ARGS"
     if [ -n "${FM_TEST_PASEO_ABORT_MODE:-}" ]; then
       printf 'running\n' > "$FM_TEST_PASEO_STATUS"
-      if [ "${FM_TEST_PASEO_ABORT_MODE:-}" = dirty ]; then
-        : > "$FM_TEST_PASEO_WT/.paseo-uncommitted"
-      fi
+      case "${FM_TEST_PASEO_ABORT_MODE:-}" in
+        dirty) : > "$FM_TEST_PASEO_WT/.paseo-uncommitted" ;;
+        ignored) : > "$FM_TEST_PASEO_WT/.env" ;;
+      esac
       : > "$FM_TEST_PASEO_TASK_TMP"
       printf '{"agentId":"%s","workspaceId":"%s","worktreePath":"%s"}\n' \
         "$FM_TEST_PASEO_AGENT" "$FM_TEST_PASEO_WORKSPACE" "$FM_TEST_PASEO_WT"
@@ -87,6 +88,11 @@ run_abort_case() {
   printf '%s\n' "$task_tmp" >> "$FM_TEST_CLEANUP_REGISTRY"
   fm_test_spawn_home "$home" codex
   fm_git_worktree "$project" "$worktree" "$id"
+  if [ "$label" = ignored ]; then
+    printf '%s\n' '.env' > "$worktree/.gitignore"
+    git -C "$worktree" add .gitignore
+    git -C "$worktree" -c user.name=Firstmate -c user.email=tests@invalid commit --quiet -m 'ignore test env'
+  fi
   fm_test_spawn_brief "$home" "$id"
   if [ "$worktree_kind" = uninspectable ]; then
     returned_worktree="$TMP_ROOT/$id-non-git"
@@ -113,10 +119,21 @@ run_abort_case() {
   case "$label" in
     dirty)
       assert_contains "$out" "agent $agent and workspace $workspace" "dirty abort did not report both Paseo identities"
-      assert_contains "$out" 'uncommitted or untracked changes' "dirty abort did not explain why the workspace was retained"
+      assert_contains "$out" 'uncommitted, untracked, or ignored files' "dirty abort did not explain why the workspace was retained"
       assert_present "$worktree/.paseo-uncommitted" "dirty abort removed the worktree change"
       assert_no_grep "archive|archive $agent" "$PASEO_ARGS" "dirty abort archived the Paseo agent"
       assert_no_grep "workspace_archive|workspace archive $workspace" "$PASEO_ARGS" "dirty abort archived the Paseo workspace"
+      ;;
+    ignored)
+      assert_contains "$out" "agent $agent and workspace $workspace" "ignored-file abort did not report both Paseo identities"
+      assert_contains "$out" 'uncommitted, untracked, or ignored files' "ignored-file abort did not explain why the workspace was retained"
+      assert_present "$worktree/.env" "ignored-file abort removed the ignored worktree file"
+      status=$(git -C "$worktree" status --porcelain --untracked-files=all)
+      assert_equals '' "$status" "ignored-file fixture should appear clean to ordinary Git status"
+      status=$(git -C "$worktree" status --porcelain --untracked-files=all --ignored)
+      assert_contains "$status" '!! .env' "ignored-file fixture was not reported by Git's ignored status"
+      assert_no_grep "archive|archive $agent" "$PASEO_ARGS" "ignored-file abort archived the Paseo agent"
+      assert_no_grep "workspace_archive|workspace archive $workspace" "$PASEO_ARGS" "ignored-file abort archived the Paseo workspace"
       ;;
     uninspectable)
       assert_contains "$out" "agent $agent and workspace $workspace" "uninspectable abort did not report both Paseo identities"
@@ -152,6 +169,7 @@ run_abort_case() {
 }
 
 run_abort_case dirty git 1
+run_abort_case ignored git 0
 run_abort_case uninspectable uninspectable 0
 run_abort_case stop-failed git 0
 run_abort_case archive-failed git 0

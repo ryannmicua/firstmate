@@ -1240,10 +1240,10 @@ spawn_abort_cleanup() {
       paseo_cleanup_reason="Paseo agent stop could not be confirmed"
     elif [ -z "${WT:-}" ] || [ ! -d "$WT" ]; then
       paseo_cleanup_reason="worktree path is unavailable"
-    elif ! paseo_worktree_status=$(git -C "$WT" status --porcelain --untracked-files=all 2>/dev/null); then
+    elif ! paseo_worktree_status=$(git -C "$WT" status --porcelain --untracked-files=all --ignored 2>/dev/null); then
       paseo_cleanup_reason="worktree status could not be inspected"
     elif [ -n "$paseo_worktree_status" ]; then
-      paseo_cleanup_reason="worktree contains uncommitted or untracked changes"
+      paseo_cleanup_reason="worktree contains uncommitted, untracked, or ignored files"
     elif ! fm_backend_paseo_kill "${PASEO_AGENT_ID:-}" "${PASEO_WORKSPACE_ID:-}" >/dev/null 2>&1; then
       paseo_cleanup_reason="Paseo agent or workspace archiving could not be confirmed"
     fi
