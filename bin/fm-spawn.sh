@@ -1145,7 +1145,7 @@ parse_orca_worktree_result() {
 }
 
 spawn_abort_cleanup() {
-  local status=$?
+  local status=$? paseo_worktree_status= paseo_cleanup_reason=
   if [ "$RELAUNCH_REPLACEMENT_PENDING" = 1 ] &&
     [ "$SPAWN_META_PUBLISH_STARTED" = 1 ] &&
     [ -n "$SPAWN_META_TMP" ] &&
@@ -1236,7 +1236,22 @@ spawn_abort_cleanup() {
   fi
   if [ "${PASEO_DIRECT:-0}" = 1 ]; then
     PASEO_DIRECT=0
-    fm_backend_paseo_kill "${PASEO_AGENT_ID:-}" "${PASEO_WORKSPACE_ID:-}" >/dev/null 2>&1 || true
+    if [ -z "${WT:-}" ] || [ ! -d "$WT" ]; then
+      paseo_cleanup_reason="worktree path is unavailable"
+    elif paseo_worktree_status=$(git -C "$WT" status --porcelain --untracked-files=all 2>/dev/null); then
+      if [ -n "$paseo_worktree_status" ]; then
+        paseo_cleanup_reason="worktree contains uncommitted or untracked changes"
+      else
+        fm_backend_paseo_kill "${PASEO_AGENT_ID:-}" "${PASEO_WORKSPACE_ID:-}" >/dev/null 2>&1 || true
+      fi
+    else
+      paseo_cleanup_reason="worktree status could not be inspected"
+    fi
+    if [ -n "$paseo_cleanup_reason" ]; then
+      printf 'error: retaining Paseo agent %s and workspace %s after aborted spawn: %s; manually reconcile worktree %s\n' \
+        "${PASEO_AGENT_ID:-unknown}" "${PASEO_WORKSPACE_ID:-unknown}" \
+        "$paseo_cleanup_reason" "${WT:-unknown}" >&2
+    fi
   fi
   if [ -n "${PASEO_LEGACY_ENV_FILE:-}" ] &&
     [ ! -e "$STATE/$ID.meta" ] && [ ! -L "$STATE/$ID.meta" ]; then

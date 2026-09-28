@@ -44,6 +44,10 @@ case "$*" in
   archive\ *) printf 'archived\n' >> "$FM_PASEO_LOG"; printf 'archived\n' >"$FM_PASEO_STATUS" ;;
   workspace\ archive\ *) printf 'workspace-archived\n' >> "$FM_PASEO_LOG" ;;
   "run "*)
+    if [ "${FM_PASEO_RUN_FAIL:-0}" = 1 ]; then
+      printf 'Created workspace wks-partial\nPaseo run failed after workspace creation\n'
+      exit 1
+    fi
     printf 'Created workspace wks-test\n{"agentId":"agent-test","cwd":"/tmp/fm-test"}\n'
     ;;
 esac
@@ -110,6 +114,11 @@ git -C "$SOURCE" add file
 git -C "$SOURCE" commit -qm base
 git -C "$SOURCE" branch -M main
 git -C "$SOURCE" checkout -qb feature
+if FM_PASEO_RUN_FAIL=1 fm_backend_paseo_create_task partial-run "$SOURCE" "$PWD/README.md" codex default default home-tag '' >/dev/null 2>"$TMP_ROOT/run-failure"; then
+  fail "Paseo run failure after workspace creation was accepted"
+fi
+assert_contains "$(cat "$TMP_ROOT/run-failure")" 'workspace wks-partial' "Paseo run failure did not report its created workspace"
+assert_not_contains "$(cat "$LOG")" 'workspace archive wks-partial' "Paseo auto-archived a partially created workspace"
 fm_backend_paseo_create_task fresh-task "$SOURCE" "$PWD/README.md" codex default default home-tag '' >/dev/null
 fresh_run=$(grep '|run .*fm-fresh-task' "$LOG" | tail -n 1)
 assert_contains "$(cat "$LOG")" '--base main' "Paseo fresh spawn uses the local default branch, not the feature branch"

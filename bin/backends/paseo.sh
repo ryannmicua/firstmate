@@ -67,7 +67,7 @@ fm_backend_paseo_provider() { # <firstmate-harness>
 fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <workspace-id> [env key=value...]
   local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} workspace_id=${8:-}
   shift 8
-  local provider base_ref candidate raw json agent workspace worktree
+  local provider base_ref candidate raw json agent workspace worktree run_status reported_workspace
   local -a args
   fm_backend_paseo_runtime_check || return 1
   provider=$(fm_backend_paseo_provider "$harness") || return 1
@@ -102,11 +102,26 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
   esac
   for env_value in "$@"; do args+=(--env "$env_value"); done
   args+=("$brief")
-  raw=$(env -u PASEO_AGENT_ID -u PASEO_WORKSPACE_ID paseo "${args[@]}" 2>&1) || { printf '%s\n' "$raw" >&2; return 1; }
+  if raw=$(env -u PASEO_AGENT_ID -u PASEO_WORKSPACE_ID paseo "${args[@]}" 2>&1); then
+    run_status=0
+  else
+    run_status=$?
+  fi
+  reported_workspace=$(printf '%s\n' "$raw" | sed -n 's/.*Created workspace \([^[:space:]]*\).*/\1/p' | tail -n 1)
+  if [ "$run_status" -ne 0 ]; then
+    if [ -n "$reported_workspace" ]; then
+      printf 'error: Paseo run failed for task %s after creating workspace %s; workspace retained for manual reconciliation\n' \
+        "$id" "$reported_workspace" >&2
+    else
+      printf 'error: Paseo run failed for task %s\n' "$id" >&2
+    fi
+    printf '%s\n' "$raw" >&2
+    return 1
+  fi
   json=$(printf '%s\n' "$raw" | awk 'found || /^\{/{found=1; print}')
   agent=$(printf '%s\n' "$json" | jq -r '.agentId // .id // empty' 2>/dev/null)
   workspace=$(printf '%s\n' "$json" | jq -r '.workspaceId // .workspace.id // .workspace // empty' 2>/dev/null)
-  [ -n "$workspace" ] || workspace=$(printf '%s\n' "$raw" | sed -n 's/.*Created workspace \([^[:space:]]*\).*/\1/p' | tail -n 1)
+  [ -n "$workspace" ] || workspace=$reported_workspace
   worktree=$(printf '%s\n' "$json" | jq -r '.worktreePath // .worktree // .cwd // empty' 2>/dev/null)
   [ -n "$agent" ] && [ -n "$workspace" ] && [ -n "$worktree" ] || {
     echo "error: Paseo did not return agent id, workspace id, and worktree path for task $id" >&2
