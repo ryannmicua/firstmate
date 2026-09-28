@@ -1,0 +1,4 @@
+adapter_runtime_check=ready
+paseo_cli=0.9.2
+daemonVersion: 0.9.1
+connectedDaemon: reachable
