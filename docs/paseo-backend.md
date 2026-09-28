@@ -17,11 +17,11 @@ Claude is accepted only when its host diagnostic has a recognized positive statu
 Absent providers are rejected by name rather than substituted.
 Workers are root agents created with `env -u PASEO_AGENT_ID`.
 Each task records its labeled agent, workspace, and worktree identities.
-When launch-environment filtering is enabled, each allowlisted value is passed to Paseo as its own `--env NAME=value` argument.
+When launch-environment filtering is enabled, set allowlisted values are passed to Paseo as individual `--env NAME=value` arguments.
+`PASEO_AGENT_ID` is Paseo-owned and is never forwarded, and values containing CR or LF are rejected to protect daemon environment parsing.
 These values are visible in process listings on the host running the Paseo daemon.
 Logs are timeline output, not a verified visible viewport, and agent liveness remains `unverified` because Paseo exposes no worker pid.
 Interrupt maps to `paseo stop`; exit accepts only a native `closed` or `archived` status as stop proof, otherwise archives the agent and verifies terminal status.
-Liveness remains unverified because Paseo exposes no worker pid through the CLI.
 Teardown archives the agent and then its separate workspace record.
 
 ## Verification

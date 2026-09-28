@@ -422,9 +422,10 @@ Firstmate retains basic home, executable search, terminal, locale, temporary-dir
 Other ambient names must be listed explicitly, including custom credential-store locations, proxy settings, and certificate overrides when required by the selected tools.
 The command shell and worker may still create their own variables.
 For terminal session-provider backends, allowed values come from the destination pane at execution time; they are neither copied from the invoking Firstmate process nor written into the launch command.
-When launch-environment filtering is enabled for Paseo, allowlisted values are read from the launching environment and passed to Paseo as individual `--env NAME=value` arguments.
+When launch-environment filtering is enabled for Paseo, set allowlisted values are read from the launching environment and passed to Paseo as individual `--env NAME=value` arguments.
+`PASEO_AGENT_ID` is Paseo-owned and never forwarded, and values containing CR or LF are rejected to protect daemon environment parsing.
 The values are visible in process listings on the host running the Paseo daemon.
-An allowlisted name with no value in the launching environment is omitted and transfers nothing.
+An allowlisted name that is unset in the launching environment is omitted; an empty-but-set value is passed as `NAME=`.
 
 Choose the minimum additions for the authentication method actually in use:
 
