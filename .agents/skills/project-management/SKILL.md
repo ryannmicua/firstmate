@@ -59,6 +59,9 @@ Clone into `projects/<name>` and add the registry entry only after the destinati
 A `no-mistakes` or `no-mistakes-prod-only` project must have an `origin` remote and must complete the initialization procedure below, because a conditional policy's product-facing work runs the pipeline while its internal-only work still takes the direct PR.
 A `direct-PR` project needs an `origin` remote but skips no-mistakes initialization.
 A `local-only` project may have no remote and skips no-mistakes initialization.
+After the clone and registry entry both succeed, run `bin/fm-paseo-project.sh --if-selected <name>`.
+It resolves the runtime backend for new tasks using the contract in [`docs/configuration.md`](../../../docs/configuration.md), and skips cleanly unless that backend is Paseo.
+If Paseo project creation fails, report the failure and keep the successful clone and registry entry.
 
 ## Create a project
 
@@ -69,6 +72,14 @@ After remote creation succeeds, clone it locally, add the registry entry, and in
 
 For a purely `local-only` project, create a local Git repository under its unused `projects/<name>` path, add the registry entry, and make no GitHub call.
 The captain's request to create that local project authorizes this local initialization, but it does not authorize an unmentioned remote repository.
+After the new checkout and registry entry both succeed, run `bin/fm-paseo-project.sh --if-selected <name>`.
+If Paseo project creation fails, report the failure and keep the successful checkout and registry entry.
+
+## Register a project in Paseo on request
+
+When asked to create a Paseo project for an existing Firstmate project, run `bin/fm-paseo-project.sh <name>`.
+This explicit request works regardless of the selected runtime backend.
+The helper requires one registry entry and a checkout under the active home's `projects/` directory, reuses one Paseo project already matching the physical checkout path, creates one when none matches, and refuses ambiguous matches.
 
 ## Initialize
 
