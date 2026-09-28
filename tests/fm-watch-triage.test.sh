@@ -6025,7 +6025,7 @@ EOF
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$FM_PASEO_LOG"
 case "$*" in
-  'logs agent-test --tail 40 --json') exit 1 ;;
+  'logs agent-test --tail 40') exit 1 ;;
   'ls -a -g --json') printf '%s\n' '[]' ;;
 esac
 exit 0
