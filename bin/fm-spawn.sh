@@ -2953,7 +2953,7 @@ if [ "$BACKEND" = paseo ]; then
     for paseo_env_name in $LAUNCH_ENV_NAMES; do
       [ "$paseo_env_name" = PASEO_AGENT_ID ] && continue
       paseo_env_value=${!paseo_env_name-}
-      [ -v "$paseo_env_name" ] || continue
+      [ "${!paseo_env_name+x}" = x ] || continue
       case "$paseo_env_value" in
         *$'\n'*|*$'\r'*)
           echo "error: Paseo launch environment value for $paseo_env_name contains a line break" >&2
