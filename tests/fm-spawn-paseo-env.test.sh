@@ -68,7 +68,7 @@ assert_no_grep 'FM_TEST_UNSET=' "$PASEO_ARGS" "Paseo received an unset allowlist
 assert_grep "paseo_agent_id=agent-paseo-env" "$HOME_DIR/state/$ID.meta" "successful Paseo spawn did not publish its agent identity"
 
 run_abort_case() {
-  local label=$1 worktree_kind=$2 dirty=$3
+  local label=$1 worktree_kind=$2
   local id home project worktree returned_worktree agent workspace task_tmp status_file out status
   local stop_fail=0 archive_fail=0 workspace_archive_fail=0
   id="paseo-abort-$label-$$-$RANDOM"
@@ -168,11 +168,11 @@ run_abort_case() {
   esac
 }
 
-run_abort_case dirty git 1
-run_abort_case ignored git 0
-run_abort_case uninspectable uninspectable 0
-run_abort_case stop-failed git 0
-run_abort_case archive-failed git 0
-run_abort_case workspace-archive-failed git 0
-run_abort_case clean git 0
+run_abort_case dirty git
+run_abort_case ignored git
+run_abort_case uninspectable uninspectable
+run_abort_case stop-failed git
+run_abort_case archive-failed git
+run_abort_case workspace-archive-failed git
+run_abort_case clean git
 pass "Paseo environment forwarding and abort cleanup preserve workspaces safely"

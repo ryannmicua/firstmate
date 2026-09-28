@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Portable contract tests for the Paseo adapter.
 set -u
+# shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-backend-paseo-tests)
@@ -55,6 +56,7 @@ exit 0
 SH
 chmod +x "$FB/paseo"
 export PATH="$FB:$PATH" FM_PASEO_LOG="$LOG" FM_PASEO_STATUS="$STATUS"
+# shellcheck source=bin/fm-backend.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../bin/fm-backend.sh"
 fm_backend_source paseo
 
