@@ -132,10 +132,9 @@ fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model>
 }
 
 fm_backend_paseo_capture() { # <agent-id> <lines>
-  local id=$1 lines=${2:-40} raw
+  local id=$1 lines=${2:-40}
   fm_backend_paseo_tool_check || return 1
-  raw=$(paseo logs "$id" --tail "$lines" --json) || return 1
-  printf '%s\n' "$raw" | jq -r 'if type == "array" then .[] | if type == "string" then . else (.text // .content // .message // tostring) end else (.text // .content // .message // tostring) end' 2>/dev/null
+  paseo logs "$id" --tail "$lines"
 }
 
 fm_backend_paseo_status() {

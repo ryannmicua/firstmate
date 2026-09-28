@@ -34,7 +34,7 @@ case "$*" in
   inspect\ *) printf '{"status":"%s"}\n' "$(cat "$FM_PASEO_STATUS")" ;;
   logs\ *)
     [ "${FM_PASEO_LOGS_FAIL:-0}" = 1 ] && exit 1
-    [ "${FM_PASEO_LOGS_EMPTY:-0}" = 1 ] && printf '[]\n' || printf '[{"message":"timeline"}]\n'
+    [ "${FM_PASEO_LOGS_EMPTY:-0}" = 1 ] && exit 0 || printf 'Paseo transcript: timeline\n'
     ;;
   send\ *)
     [ "${FM_PASEO_SEND_FAIL:-0}" = 1 ] && exit 1
