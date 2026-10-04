@@ -1585,18 +1585,27 @@ EOF
   printf '%s\n' "$joined" | LC_ALL=C awk '{$1=$1; printf "%s", $0}'
 }
 
-# fm_composer_screen_has_exact_repeated_text: whether the selected composer
-# contains one or more exact copies of <text>, separated by one normalized
-# space. This is for recovering this process's own already-typed reminder;
-# anything else remains ordinary user input and must not be submitted.
-fm_composer_screen_has_exact_repeated_text() {  # <caps> <screen> <text>
+# fm_composer_screen_holds_only_text: whether the selected composer holds
+# nothing but one or more copies of <text>. This lets a caller recognize its
+# own already-typed line and submit it again; any other content is someone's
+# input and must never be submitted.
+# Whitespace is ignored on both sides because a harness wraps long input at
+# its own column, breaking a long token mid-word, and the extracted rows
+# rejoin with a space the typed text never had (verified live on codex-cli
+# 0.160.0 with a wrapped inbox path). Copies typed back to back without an
+# Enter between them also join with no separator at all.
+fm_composer_screen_holds_only_text() {  # <caps> <screen> <text>
   local caps=$1 screen=$2 expected=$3 remaining
+  fm_composer_normalize_spaces_var expected
+  expected=${expected//[[:space:]]/}
   [ -n "$expected" ] || return 1
   remaining=$(fm_composer_extract_selected_content "$caps" "$screen") || return 1
-  while :; do
-    [ "$remaining" = "$expected" ] && return 0
+  fm_composer_normalize_spaces_var remaining
+  remaining=${remaining//[[:space:]]/}
+  [ -n "$remaining" ] || return 1
+  while [ -n "$remaining" ]; do
     case "$remaining" in
-      "$expected "*) remaining=${remaining#"$expected "} ;;
+      "$expected"*) remaining=${remaining#"$expected"} ;;
       *) return 1 ;;
     esac
   done

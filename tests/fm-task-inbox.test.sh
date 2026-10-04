@@ -19,13 +19,14 @@
 #      spacing holds, a spent budget escalates exactly once, and an
 #      acknowledgement resets the ladder for the next message.
 #   5. A real fm-watch.sh subprocess re-rings the doorbell for an unhandled
-#      aged message on an idle pane WITHOUT waking firstmate, waits on a busy
-#      pane unless its exact doorbell is already pending, stays silent on a
-#      healthy/empty inbox, surfaces unwritable ladder
+#      aged message on an idle pane WITHOUT waking firstmate, resubmits its own
+#      stuck doorbell with Enter only, waits on a busy pane without spending
+#      the attempt budget (one Enter per message for its own stuck doorbell),
+#      stays silent on a healthy/empty inbox, surfaces unwritable ladder
 #      bookkeeping only while its record remains unhandled, and emits exactly
 #      one stale wake once the ring budget is spent.
-#   6. Empty, own, repeated-own, foreign, and busy composers exercise the ring's
-#      submit or protect behavior through its callable interface.
+#   6. Empty, own (wrapped, doubled, or left by a swallowed send), foreign, and
+#      working-pane composers exercise the ring through its callable interface.
 #   7. Dead panes: the doorbell line is a shell no-op when executed by a bare
 #      shell, the ring skips an agent the backend classifies dead, and the
 #      watcher surfaces such a record exactly once instead of re-ringing.
@@ -55,8 +56,9 @@ inbox_lib() {  # <state> <function> [args...]
 }
 
 # A fake tmux for the watcher cases: capture-pane replays FM_FAKE_TMUX_CAPTURE,
-# display-message yields a numeric cursor row, and every literal send-keys is
-# logged to FM_SEND_LOG so a doorbell ring is observable. With
+# display-message yields a numeric cursor row, every literal send-keys is
+# logged to FM_SEND_LOG so a doorbell ring is observable, and every named key
+# is logged to FM_KEY_LOG. With
 # FM_FAKE_TMUX_AGENT set, the inventory lists window fm-t1 and its
 # #{pane_current_command} answers with that value, so `zsh` makes
 # fm_backend_tmux_agent_state read the pane as a dead bare shell.
@@ -82,6 +84,8 @@ case "${1:-}" in
       if [ -n "${FM_ACK_RECORD:-}" ] && [ -f "$FM_ACK_RECORD" ]; then
         mv "$FM_ACK_RECORD" "${FM_ACK_RECORD%/*}/handled/"
       fi
+    else
+      printf '%s\n' "${1:-}" >> "${FM_KEY_LOG:-/dev/null}"
     fi
     exit 0 ;;
   display-message)
@@ -249,88 +253,123 @@ test_doorbell_rejects_terminal_controls() {
   pass "inbox: terminal-control paths are rejected without typing"
 }
 
+# Drive fm_task_inbox_ring through stub backend primitives. The capture is
+# read from a file the stubs rewrite, so a pressed Enter can clear the
+# composer (FM_TEST_CLEAR_ON_KEY=1) and a submit whose Enter the harness
+# swallowed can leave its line behind (FM_TEST_SUBMIT_LEAVES=1).
+# Every typed line and pressed key is appended to <actions>.
+ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint]
+  FM_TEST_LIB="$ROOT/bin/fm-task-inbox-lib.sh" FM_TEST_ACTIONS="$2" FM_TEST_CAPTURE="$3" \
+    bash -c '
+      . "$FM_TEST_LIB"
+      fm_backend_agent_state() { printf alive; }
+      fm_backend_busy_state() { printf "%s" "${FM_TEST_BUSY:-unknown}"; }
+      fm_backend_composer_state() { printf "%s" "${FM_TEST_COMPOSER:-empty}"; }
+      fm_backend_capture() { cat "$FM_TEST_CAPTURE"; }
+      fm_backend_send_key() {
+        printf "key:%s\n" "$3" >> "$FM_TEST_ACTIONS"
+        [ "${FM_TEST_CLEAR_ON_KEY:-0}" != 1 ] || printf "› \n" > "$FM_TEST_CAPTURE"
+      }
+      fm_backend_send_text_submit() {
+        printf "typed:%s\n" "$3" >> "$FM_TEST_ACTIONS"
+        if [ "${FM_TEST_SUBMIT_LEAVES:-0}" = 1 ]; then
+          printf "› %s\n\n" "$3" > "$FM_TEST_CAPTURE"
+          printf unknown
+        else
+          printf empty
+        fi
+      }
+      fm_task_inbox_ring tmux sess:fm-t1 "$1" fm-t1 "${2:-}"
+    ' _ "$1" "${4:-}"
+}
+
 test_ring_recovers_only_its_own_pending_doorbell() {
-  local dir state rec line rc actions out
+  local dir state rec line rc actions cap wrapped joined
   dir="$TMP_ROOT/pending-doorbell"; state="$dir/state"
   mkdir -p "$state"
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
-  actions="$dir/actions"; : > "$actions"
-  rc=0
-  FM_TEST_LIB="$ROOT/bin/fm-task-inbox-lib.sh" FM_TEST_CAPTURE='› ' \
-    FM_TEST_ACTIONS="$actions" FM_TEST_INITIAL=empty FM_TEST_BUSY=idle \
-    bash -c '
-      . "$FM_TEST_LIB"
-      fm_backend_agent_state() { printf alive; }
-      fm_backend_busy_state() { printf "%s" "$FM_TEST_BUSY"; }
-      fm_backend_composer_state() { printf "%s" "$FM_TEST_INITIAL"; }
-      fm_backend_capture() { printf "%s" "$FM_TEST_CAPTURE"; }
-      fm_backend_send_key() { printf "key:%s\n" "$3" >> "$FM_TEST_ACTIONS"; }
-      fm_backend_send_text_submit() { printf "typed:%s\n" "$3" >> "$FM_TEST_ACTIONS"; printf empty; }
-      fm_task_inbox_ring herdr lab:w1:p1 "$1" test-pane idle
-    ' _ "$rec" || rc=$?
-  [ "$rc" = 0 ] || fail "an empty composer should receive the doorbell, rc=$rc"
-  [ "$(grep -c '^typed:' "$actions")" = 1 ] || fail "an empty composer should be typed exactly once"
-  ! grep -q '^key:' "$actions" || fail "an empty composer should use normal submit machinery"
+  actions="$dir/actions"; cap="$dir/capture"
 
-  : > "$actions"
-  out=$(FM_TEST_ROOT="$ROOT" FM_TEST_LIB="$ROOT/bin/fm-task-inbox-lib.sh" \
-    FM_TEST_CAPTURE="› $line" FM_TEST_ACTIONS="$actions" FM_TEST_INITIAL=pending \
-    FM_TEST_BUSY=idle FM_TEST_CLEAR_ON_KEY=1 bash -c '
-      . "$FM_TEST_LIB"
-      fm_backend_agent_state() { printf alive; }
-      fm_backend_busy_state() { printf "%s" "$FM_TEST_BUSY"; }
-      fm_backend_composer_state() {
-        if [ -e "$FM_TEST_ACTIONS.cleared" ]; then printf empty; else printf "%s" "$FM_TEST_INITIAL"; fi
-      }
-      fm_backend_capture() { printf "%s" "$FM_TEST_CAPTURE"; }
-      fm_backend_send_key() {
-        printf "key:%s\n" "$3" >> "$FM_TEST_ACTIONS"
-        [ "$FM_TEST_CLEAR_ON_KEY" != 1 ] || : > "$FM_TEST_ACTIONS.cleared"
-      }
-      fm_backend_send_text_submit() { printf "typed:%s\n" "$3" >> "$FM_TEST_ACTIONS"; printf empty; }
-      fm_task_inbox_ring herdr lab:w1:p1 "$1" test-pane idle
-    ' _ "$rec") || rc=$?
-  rc=${rc:-0}
-  [ "$rc" = 0 ] || fail "an exact pending doorbell should recover by submitting its existing line, rc=$rc"
-  [ "$(cat "$actions")" = key:Enter ] || fail "own-line recovery should press Enter once and never type again: $(cat "$actions")"
-  rm -f "$actions.cleared"
+  # An empty composer gets the ordinary type-and-submit path, busy or not:
+  # the send-time ring must keep steering a working worker.
+  for busy in idle busy unknown; do
+    : > "$actions"; printf '› \n' > "$cap"
+    rc=0
+    FM_TEST_BUSY=$busy ring_with_stubs "$rec" "$actions" "$cap" || rc=$?
+    [ "$rc" = 0 ] || fail "an empty composer ($busy pane) should receive the doorbell, rc=$rc"
+    [ "$(cat "$actions")" = "typed:$line" ] \
+      || fail "an empty composer ($busy pane) should be typed exactly once: $(cat "$actions")"
+  done
 
-  : > "$actions"
+  # The doorbell wrapped at the harness's column, mid-token, the way live
+  # codex-cli 0.160.0 broke a long inbox path. Assert the divergence first:
+  # the extracted rows rejoin with a space the typed line never had.
+  wrapped=$(printf '› %s\n  %s\n\n  model footer\n' "${line:0:57}" "${line:57}")
+  joined=$(FM_TEST_LIB="$ROOT/bin/fm-composer-lib.sh" bash -c '. "$FM_TEST_LIB"; fm_composer_extract_selected_content "styled=0" "$1"' _ "$wrapped")
+  [ -n "$joined" ] && [ "$joined" != "$line" ] \
+    || fail "the wrapped fixture must rejoin differently from the typed line to exercise wrapping: [$joined]"
+  : > "$actions"; printf '%s\n' "$wrapped" > "$cap"
   rc=0
-  FM_TEST_LIB="$ROOT/bin/fm-task-inbox-lib.sh" FM_TEST_CAPTURE="› $line $line" \
-    FM_TEST_ACTIONS="$actions" FM_TEST_INITIAL=pending FM_TEST_BUSY=busy \
-    FM_TEST_CLEAR_ON_KEY=0 bash -c '
-      . "$FM_TEST_LIB"
-      fm_backend_agent_state() { printf alive; }
-      fm_backend_busy_state() { printf "%s" "$FM_TEST_BUSY"; }
-      fm_backend_composer_state() { printf "%s" "$FM_TEST_INITIAL"; }
-      fm_backend_capture() { printf "%s" "$FM_TEST_CAPTURE"; }
-      fm_backend_send_key() { printf "key:%s\n" "$3" >> "$FM_TEST_ACTIONS"; }
-      fm_backend_send_text_submit() { printf "typed:%s\n" "$3" >> "$FM_TEST_ACTIONS"; printf empty; }
-      fm_task_inbox_ring herdr lab:w1:p1 "$1" test-pane busy
-    ' _ "$rec" || rc=$?
-  [ "$rc" = 0 ] || fail "a doubled own reminder queued during a working turn should count as delivered, rc=$rc"
-  [ "$(grep -c '^key:Enter$' "$actions")" = 3 ] || fail "doubled own text should receive the bounded Enter-only retry budget"
-  ! grep -q '^typed:' "$actions" || fail "own-line recovery retyped over the pending reminder"
+  FM_TEST_COMPOSER=pending FM_TEST_CLEAR_ON_KEY=1 ring_with_stubs "$rec" "$actions" "$cap" idle || rc=$?
+  [ "$rc" = 0 ] || fail "a wrapped own doorbell should be resubmitted, rc=$rc"
+  [ "$(cat "$actions")" = key:Enter ] || fail "own-line recovery should press Enter once and never type: $(cat "$actions")"
 
-  : > "$actions"
+  # The stuck shape is recognized whatever the composer verdict says: live
+  # codex leaves the cursor on the blank row the swallowed Enter inserted,
+  # which the cursor-anchored classifier reads as unknown.
+  : > "$actions"; printf '› %s\n\n' "$line" > "$cap"
   rc=0
-  FM_TEST_LIB="$ROOT/bin/fm-task-inbox-lib.sh" FM_TEST_CAPTURE="› $line please keep this draft" \
-    FM_TEST_ACTIONS="$actions" FM_TEST_INITIAL=pending FM_TEST_BUSY=idle \
-    FM_TEST_CLEAR_ON_KEY=0 bash -c '
-      . "$FM_TEST_LIB"
-      fm_backend_agent_state() { printf alive; }
-      fm_backend_busy_state() { printf "%s" "$FM_TEST_BUSY"; }
-      fm_backend_composer_state() { printf "%s" "$FM_TEST_INITIAL"; }
-      fm_backend_capture() { printf "%s" "$FM_TEST_CAPTURE"; }
-      fm_backend_send_key() { printf "key:%s\n" "$3" >> "$FM_TEST_ACTIONS"; }
-      fm_backend_send_text_submit() { printf "typed:%s\n" "$3" >> "$FM_TEST_ACTIONS"; printf empty; }
-      fm_task_inbox_ring herdr lab:w1:p1 "$1" test-pane idle
-    ' _ "$rec" || rc=$?
+  FM_TEST_COMPOSER=unknown FM_TEST_CLEAR_ON_KEY=1 ring_with_stubs "$rec" "$actions" "$cap" || rc=$?
+  [ "$rc" = 0 ] || fail "an own doorbell under an unknown verdict should be resubmitted, rc=$rc"
+  [ "$(cat "$actions")" = key:Enter ] || fail "an unknown-verdict own doorbell was retyped: $(cat "$actions")"
+
+  # Two copies typed back to back join with no separator; a working pane
+  # gets exactly one Enter and its still-visible line counts as queued.
+  : > "$actions"; printf '› %s%s\n' "$line" "$line" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending ring_with_stubs "$rec" "$actions" "$cap" busy || rc=$?
+  [ "$rc" = 0 ] || fail "a doubled own doorbell on a working pane should count as queued, rc=$rc"
+  [ "$(cat "$actions")" = key:Enter ] || fail "a working pane should get exactly one Enter and no typing: $(cat "$actions")"
+
+  # On a pane not known to be working, a doorbell that never clears gets the
+  # bounded Enter retries and reports that it is still sitting there.
+  : > "$actions"; printf '› %s\n' "$line" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending ring_with_stubs "$rec" "$actions" "$cap" idle || rc=$?
+  [ "$rc" = 2 ] || fail "an own doorbell that never clears should report undelivered, rc=$rc"
+  [ "$(cat "$actions")" = $'key:Enter\nkey:Enter\nkey:Enter' ] \
+    || fail "a stuck own doorbell should get three Enters and no typing: $(cat "$actions")"
+
+  # A send whose Enter the harness swallowed is recovered at once.
+  : > "$actions"; printf '› \n' > "$cap"
+  rc=0
+  FM_TEST_SUBMIT_LEAVES=1 ring_with_stubs "$rec" "$actions" "$cap" || rc=$?
+  [ "$rc" = 2 ] || fail "a swallowed send that never clears should report undelivered, rc=$rc"
+  [ "$(cat "$actions")" = "typed:$line"$'\nkey:Enter\nkey:Enter\nkey:Enter' ] \
+    || fail "a swallowed send should be typed once, then Enter-only: $(cat "$actions")"
+  : > "$actions"; printf '› \n' > "$cap"
+  rc=0
+  FM_TEST_SUBMIT_LEAVES=1 FM_TEST_CLEAR_ON_KEY=1 ring_with_stubs "$rec" "$actions" "$cap" || rc=$?
+  [ "$rc" = 0 ] || fail "a swallowed send cleared by the recovery Enter should succeed, rc=$rc"
+  [ "$(cat "$actions")" = "typed:$line"$'\n'key:Enter ] \
+    || fail "a swallowed send should be recovered by one Enter: $(cat "$actions")"
+
+  # Foreign text sharing the composer is never submitted or altered.
+  : > "$actions"; printf '› %s please keep this draft\n' "$line" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending ring_with_stubs "$rec" "$actions" "$cap" idle || rc=$?
   [ "$rc" = 1 ] || fail "foreign text sharing the composer should stay skipped, rc=$rc"
   [ ! -s "$actions" ] || fail "foreign composer text was submitted or altered: $(cat "$actions")"
-  pass "inbox: empty, exact, doubled, foreign, and working-turn composer states use safe doorbell recovery"
+
+  # The watcher's working-pane mode never types; with nothing of its own
+  # pending it reports that distinctly.
+  : > "$actions"; printf '› \n' > "$cap"
+  rc=0
+  ring_with_stubs "$rec" "$actions" "$cap" busy || rc=$?
+  [ "$rc" = 4 ] || fail "working-pane mode without a pending doorbell should return 4, rc=$rc"
+  [ ! -s "$actions" ] || fail "working-pane mode typed or pressed keys: $(cat "$actions")"
+  pass "inbox: own doorbells are resubmitted with Enter only (wrapped, doubled, or swallowed at send), foreign text is protected, and working panes are never typed into"
 }
 
 # fm_task_inbox_ring against a backend whose agent classifies dead or missing:
@@ -619,21 +658,77 @@ test_watcher_rerings_idle_pane_quietly() {
 }
 
 test_watcher_waits_on_busy_pane() {
-  local dir state out log pid rec
+  local dir state out log keys pid rec
   dir=$(setup_watch_case busywait)
-  state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; : > "$log"
+  state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; keys="$dir/keys.log"; : > "$log"; : > "$keys"
   printf 'some output\nBUSYTOKEN active\n' > "$dir/busy.capture"
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   age_path "$rec"
+  # A budget of one would escalate at once if a busy poll spent an attempt.
   watch_bg "$state" "$dir/fakebin" "$out" \
-    FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
-    FM_BUSY_REGEX=BUSYTOKEN FM_TASK_INBOX_RING_MAX=99
+    FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
+    FM_BUSY_REGEX=BUSYTOKEN FM_TASK_INBOX_RING_MAX=1
   pid=$!
   sleep 4
+  kill -0 "$pid" 2>/dev/null || fail "a busy pane spent the ring budget and escalated:"$'\n'"$(cat "$out")"
   kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
-  [ ! -s "$log" ] || fail "a busy pane should wait, not ring:"$'\n'"$(cat "$log")"
+  [ ! -s "$log" ] && [ ! -s "$keys" ] \
+    || fail "a busy pane should wait, not ring:"$'\n'"$(cat "$log" "$keys")"
+  [ ! -e "$state/t1.inbox/.ring-state" ] || fail "a busy wait spent a ladder attempt: $(cat "$state/t1.inbox/.ring-state")"
   [ ! -s "$state/.wake-queue" ] || fail "a busy wait queued a wake:"$'\n'"$(cat "$state/.wake-queue")"
-  pass "watcher: a busy pane just waits - the record is durable and no doorbell is typed"
+  pass "watcher: a busy pane just waits - the record is durable, no doorbell is typed, and no attempt is spent"
+}
+
+test_watcher_busy_pane_gets_one_enter_for_its_stuck_doorbell() {
+  local dir state out log keys pid rec line i=0
+  dir=$(setup_watch_case busy-stuck)
+  state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; keys="$dir/keys.log"; : > "$log"; : > "$keys"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
+  age_path "$rec"
+  printf 'some output\nBUSYTOKEN active\n› %s\n' "$line" > "$dir/busy.capture"
+  watch_bg "$state" "$dir/fakebin" "$out" \
+    FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
+    FM_BUSY_REGEX=BUSYTOKEN FM_TASK_INBOX_RING_MAX=1
+  pid=$!
+  while [ "$i" -lt 100 ]; do
+    [ -s "$keys" ] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  sleep 3
+  kill -0 "$pid" 2>/dev/null || fail "a busy pane's stuck doorbell escalated:"$'\n'"$(cat "$out")"
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+  [ "$(cat "$keys")" = Enter ] || fail "a busy pane's own stuck doorbell should get exactly one Enter, got:"$'\n'"$(cat "$keys")"
+  [ ! -s "$log" ] || fail "a busy pane was typed into:"$'\n'"$(cat "$log")"
+  [ ! -e "$state/t1.inbox/.ring-state" ] || fail "the busy Enter spent a ladder attempt: $(cat "$state/t1.inbox/.ring-state")"
+  pass "watcher: a busy pane's own stuck doorbell gets one Enter per message without typing or spending an attempt"
+}
+
+test_watcher_resubmits_stuck_doorbell_on_idle_pane() {
+  local dir state out log keys pid rec line i=0
+  dir=$(setup_watch_case idle-stuck)
+  state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; keys="$dir/keys.log"; : > "$log"; : > "$keys"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
+  age_path "$rec"
+  printf '› %s\n\n' "$line" > "$dir/stuck.capture"
+  watch_bg "$state" "$dir/fakebin" "$out" \
+    FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_FAKE_TMUX_CAPTURE="$dir/stuck.capture" \
+    FM_TASK_INBOX_RING_MAX=99
+  pid=$!
+  while [ "$i" -lt 100 ]; do
+    [ -s "$keys" ] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  kill -0 "$pid" 2>/dev/null || fail "resubmitting a stuck doorbell woke firstmate:"$'\n'"$(cat "$out")"
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+  grep -qx Enter "$keys" || fail "the watcher never pressed Enter on its own stuck doorbell"
+  [ ! -s "$log" ] || fail "the watcher retyped over its own stuck doorbell:"$'\n'"$(cat "$log")"
+  pass "watcher: an idle pane's own stuck doorbell is resubmitted with Enter only"
 }
 
 test_watcher_quiet_on_healthy_inbox() {
@@ -799,6 +894,8 @@ test_fire_and_forget_records_never_enter_the_ladder
 test_ring_ladder_policy
 test_watcher_rerings_idle_pane_quietly
 test_watcher_waits_on_busy_pane
+test_watcher_busy_pane_gets_one_enter_for_its_stuck_doorbell
+test_watcher_resubmits_stuck_doorbell_on_idle_pane
 test_watcher_quiet_on_healthy_inbox
 test_watcher_ack_silences_unwritable_ladder
 test_watcher_surfaces_unwritable_ladder

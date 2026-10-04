@@ -30,6 +30,8 @@
 #   <task>.inbox/.ring-state   watcher re-ring ladder: "<msg>\t<count>\t<epoch>"
 #   <task>.inbox/.escalated    oldest-message name already surfaced as stale,
 #                              so later polls suppress another escalation
+#   <task>.inbox/.busy-enter   oldest-message name whose pending doorbell
+#                              already got its one Enter on a busy pane
 #
 # Record format (fm_task_inbox_write / fm_task_inbox_body):
 #   schema=fm-task-inbox.v1
@@ -45,15 +47,16 @@
 # on .seq.lock; the worst racing outcome is ordering, never loss.
 #
 # Re-ring ladder (fm_task_inbox_due_action): an unhandled message older than
-# the configured grace is due one delivery attempt per grace period.
-# An attempt may ring, retry Enter on this exact pending doorbell, or be skipped
-# to protect other proven pending composer text.
-# After FM_TASK_INBOX_RING_MAX attempts without an acknowledgement it escalates.
-# The caller owns recovery-grade endpoint checks, while a busy pane may retry
-# only its exact pending doorbell.
-# A positively dead or missing endpoint skips delivery and the ladder and
-# escalates directly.
-# This library owns only the schedule and escalation marker.
+# FM_TASK_INBOX_GRACE_SECS is due one delivery attempt per grace period; an
+# attempt may ring, resubmit this inbox's own doorbell left in the composer by
+# a swallowed Enter (Enter only, never retyped), or be skipped to protect other
+# proven pending composer text. After FM_TASK_INBOX_RING_MAX attempts without
+# an acknowledgement it escalates. The caller owns the busy and recovery-grade
+# endpoint checks: a busy pane is never typed into and consumes no attempt,
+# though its own pending doorbell gets one Enter per message
+# (fm_task_inbox_claim_busy_enter), while a positively dead or missing endpoint
+# skips delivery and the ladder and escalates directly. This library owns only
+# the schedule and the escalation and busy-Enter markers.
 # If attempt bookkeeping cannot be persisted while the record remains unhandled,
 # the caller surfaces that failure instead of retrying silently; a concurrently
 # removed inbox is a quiet no-op. Escalation deliberately queues the wake before
@@ -71,7 +74,6 @@
 # Tunables (env):
 #   FM_TASK_INBOX_GRACE_SECS   default 90; delivery-attempt grace and spacing
 #   FM_TASK_INBOX_RING_MAX     default 3; delivery attempts before escalation
-#   FM_TASK_INBOX_PENDING_ENTER_RETRIES default 3; Enter-only recovery attempts
 
 _FM_TASK_INBOX_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Each dependency is a canonical lint root in its own right. Keep them as
@@ -275,57 +277,104 @@ fm_task_inbox_doorbell_line() {  # <record-path>
     "$quoted" "$quoted"
 }
 
+# Whether a captured <screen>'s composer holds nothing but copies of this
+# record's own doorbell line: the residue of a ring whose Enter the harness
+# swallowed. Live codex-cli 0.160.0 turns an Enter that arrives in the same
+# input read as the typed line into a newline, leaving the doorbell in the
+# composer (verified in tmux, idle and mid-turn).
+# The doorbell line is constant per inbox, so a copy left by an earlier ring
+# is recognized too; any other composer content is someone's input.
+fm_task_inbox_screen_holds_doorbell() {  # <screen> <record-path>
+  local screen=$1 line caps
+  line=$(fm_task_inbox_doorbell_line "$2") || return 1
+  caps=$(printf 'styled=0\ncursor=0\nidentity=0\nrows=40')
+  fm_composer_screen_holds_only_text "$caps" "$screen" "$line"
+}
+
+# Whether the target's composer currently holds only this record's doorbell.
+_fm_task_inbox_doorbell_pending() {  # <backend> <target> <record-path> [expected-label]
+  local screen
+  screen=$(fm_backend_capture "$1" "$2" 40 "${4:-}" 2>/dev/null) || return 1
+  fm_task_inbox_screen_holds_doorbell "$screen" "$3"
+}
+
+# Delivery-busy for the shared queued-Enter verdict: the caller's semantic
+# hint when it has one, else the backend's native state, else the rendered
+# busy footer that bin/fm-tmux-lib.sh's submit core also reads.
+_fm_task_inbox_busy_state() {  # <backend> <target> [expected-label] [hint]
+  local busy screen
+  case "${4:-}" in
+    busy|idle) printf '%s' "$4"; return 0 ;;
+  esac
+  busy=$(fm_backend_busy_state "$1" "$2" 2>/dev/null) || busy=unknown
+  case "$busy" in
+    busy|idle) printf '%s' "$busy"; return 0 ;;
+  esac
+  screen=$(fm_backend_capture "$1" "$2" 40 "${3:-}" 2>/dev/null) || { printf 'unknown'; return 0; }
+  if printf '%s\n' "$screen" | grep -v '^[[:space:]]*$' | tail -12 | fm_busy_lines_match; then
+    printf 'busy'
+  else
+    printf 'unknown'
+  fi
+}
+
+# Submit a doorbell already sitting in the composer by pressing Enter only,
+# never typing again. A working pane gets exactly one Enter: some harnesses
+# keep a queued line visible until the turn ends, and another Enter there
+# would queue a duplicate. Otherwise Enter is retried, bounded, until the
+# composer no longer holds the doorbell.
+# Returns 0 once the composer no longer holds it, or when it is still visible
+# on a working pane (fm_composer_queued_enter_verdict: accepted and queued),
+# and 2 when no Enter could be sent or the doorbell is still pending on a pane
+# not known to be working.
+_fm_task_inbox_enter_pending_doorbell() {  # <backend> <target> <record-path> <label> <busy>
+  local backend=$1 target=$2 rec=$3 label=$4 busy=$5 attempt=0 attempts=3 sent=0
+  [ "$busy" != busy ] || attempts=1
+  while [ "$attempt" -lt "$attempts" ]; do
+    fm_backend_send_key "$backend" "$target" Enter "$label" 2>/dev/null && sent=1
+    sleep 0.4
+    _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label" || return 0
+    attempt=$((attempt + 1))
+  done
+  [ "$sent" -eq 1 ] || return 2
+  [ "$(fm_composer_queued_enter_verdict pending "$busy")" = empty ] && return 0
+  return 2
+}
+
 # Ring the doorbell, best-effort, after checking endpoint liveness and the
 # composer state.
-# An exact pending copy of this constant line is ours, so retries press Enter
-# only and use the shared queued-Enter verdict for a visibly working worker.
-# Any other proven pending composer remains untouched and is retried by the
-# watcher later.
-# Empty, pending-unproven, and unknown composers use the backend submit path;
-# ambiguous shapes remain advisory so a harness the classifier cannot read is
-# not starved of steering.
+# A composer holding only this inbox's doorbell is submitted again with Enter
+# only, never retyped. Any other proven pending composer stays untouched and
+# is retried by the watcher later. Empty, pending-unproven, and unknown
+# composers get the backend's type-and-submit path; ambiguous shapes remain
+# advisory so a harness the classifier cannot read is not starved of steering.
+# When that submit is not confirmed and the doorbell is left sitting in the
+# composer, the same Enter-only recovery runs at once.
+# A <busy-hint> of busy or idle is the caller's semantic verdict for the pane.
+# busy is the watcher's working-pane mode: it only recovers a doorbell already
+# in the composer and never types into a working agent.
 # Returns 0 when submitted or queued, 1 when a composer is protected, 2 when
-# sending failed, or 3 when the endpoint is positively dead or missing.
-# No return value is delivery proof; the acknowledgement move is the only
-# delivery signal.
-fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
-  local backend=$1 target=$2 rec=$3 label=${4:-} busy_hint=${5:-} line cstate verdict busy
-  local cap caps retries=${FM_TASK_INBOX_PENDING_ENTER_RETRIES:-3} attempt sent=0
+# sending failed or the doorbell is still sitting unsubmitted, 3 when the
+# endpoint is positively dead or missing, or 4 in busy mode when no doorbell
+# was pending. No return value is delivery proof; the acknowledgement move is
+# the only delivery signal.
+fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [busy-hint]
+  local backend=$1 target=$2 rec=$3 label=${4:-} hint=${5:-} line cstate verdict
   case "$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || true)" in
     dead|missing) return 3 ;;
   esac
   if ! line=$(fm_task_inbox_doorbell_line "$rec"); then
     return 2
   fi
-  case "$busy_hint" in
-    busy|idle|unknown) busy=$busy_hint ;;
-    *) busy=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null) || busy=unknown ;;
-  esac
+  if _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
+    _fm_task_inbox_enter_pending_doorbell "$backend" "$target" "$rec" "$label" \
+      "$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint")"
+    return
+  fi
+  [ "$hint" != busy ] || return 4
   cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || cstate=unknown
   case "$cstate" in
-    pending)
-      cap=$(fm_backend_capture "$backend" "$target" 40 "$label" 2>/dev/null) || return 1
-      caps=$(printf 'styled=0\ncursor=0\nidentity=0\nrows=40')
-      fm_composer_screen_has_exact_repeated_text "$caps" "$cap" "$line" || return 1
-      case "$retries" in ''|*[!0-9]*) retries=3 ;; esac
-      [ "$retries" -gt 0 ] || retries=1
-      [ "$retries" -le 5 ] || retries=5
-      for ((attempt = 0; attempt < retries; attempt++)); do
-        if fm_backend_send_key "$backend" "$target" Enter "$label" 2>/dev/null; then
-          sent=1
-        fi
-        sleep 0.2
-        cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || cstate=unknown
-        [ "$cstate" != empty ] || return 0
-      done
-      [ "$sent" -eq 1 ] || return 2
-      verdict=$(fm_composer_queued_enter_verdict "$cstate" "$busy")
-      [ "$verdict" = empty ] && return 0
-      return 1
-      ;;
-  esac
-  case "$busy" in
-    busy) return 1 ;;
+    pending) return 1 ;;
   esac
   # Accepted residual race: terminal input and Enter are separate delivery
   # steps, so an agent exiting after the liveness check could leave a bare
@@ -334,9 +383,15 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
   if ! verdict=$(fm_backend_send_text_submit "$backend" "$target" "$line" 1 0.4 0.3 "$label" 2>/dev/null); then
     return 2
   fi
-  # The verdict is read only to report a failed keystroke; every other value
-  # (empty, pending, unknown, ...) is deliberately ignored, never proof.
+  # The verdict is read only to report a failed keystroke and to look for a
+  # swallowed Enter; it is never delivery proof.
   [ "$verdict" != send-failed ] || return 2
+  [ "$verdict" != empty ] || return 0
+  if _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
+    _fm_task_inbox_enter_pending_doorbell "$backend" "$target" "$rec" "$label" \
+      "$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint")"
+    return
+  fi
   return 0
 }
 
@@ -381,7 +436,7 @@ fm_task_inbox_due_action() {  # <state-dir> <task-id>
   local dir oldest base now grace max ladder rec_base count last
   dir=$(fm_task_inbox_dir "$1" "$2")
   if ! oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2"); then
-    rm -f "$dir/.ring-state" "$dir/.escalated" 2>/dev/null || true
+    rm -f "$dir/.ring-state" "$dir/.escalated" "$dir/.busy-enter" 2>/dev/null || true
     printf 'quiet'
     return 0
   fi
@@ -448,6 +503,19 @@ EOF
     [ -d "$dir" ] || return 0
     return 1
   fi
+}
+
+# Claim the one Enter a busy pane's pending doorbell may get for <record>.
+# Succeeds once per message; a later message, or a failed marker write, never
+# claims, so an unwritable inbox degrades to waiting for the idle pane rather
+# than pressing Enter on every poll.
+fm_task_inbox_claim_busy_enter() {  # <state-dir> <task-id> <record-path>
+  local dir base
+  dir=$(fm_task_inbox_dir "$1" "$2")
+  base=${3##*/}
+  [ -d "$dir" ] || return 1
+  [ "$(cat "$dir/.busy-enter" 2>/dev/null || true)" != "$base" ] || return 1
+  { printf '%s\n' "$base" > "$dir/.busy-enter"; } 2>/dev/null
 }
 
 # Mark the current oldest as escalated after its stale wake is durably queued,

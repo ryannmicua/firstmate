@@ -441,9 +441,11 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
 # Steering-inbox loss detection, one cheap check per recorded window per poll.
 # Quiet when healthy: an absent, empty, or handled inbox costs one directory
 # glob and produces nothing. When the ladder (fm_task_inbox_due_action, the
-# policy owner) reports a due action, a busy pane just waits - the record is
-# durable and the worker will reach a turn boundary - an idle pane gets one
-# delivery attempt, and a spent attempt budget surfaces as an ordinary stale
+# policy owner) reports a due action, a busy pane waits without spending an
+# attempt - the record is durable and the worker will reach a turn boundary -
+# except that its own doorbell stuck in the composer gets one Enter per
+# message; an idle pane gets one delivery attempt, and a spent attempt budget
+# surfaces as an ordinary stale
 # wake for stuck-crewmate-recovery, and a pane whose agent is positively dead
 # or missing skips the ladder altogether: it is never typed into and surfaces
 # as that same stale wake exactly once. If the attempt's ladder write fails while
@@ -455,7 +457,7 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
 # too: their pane-staleness exemption is about quiet panes being healthy,
 # while an unacknowledged instruction past the ladder is a stuck steer.
 inbox_steer_check() {  # <window> <task>
-  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state busy_hint=idle
+  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
   [ "$verb" != quiet ] || return 0
@@ -477,13 +479,25 @@ inbox_steer_check() {  # <window> <task>
   esac
   tail40=$(fm_backend_capture "$backend" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
   if window_is_busy "$w" "$tail40"; then
-    busy_hint=busy
+    # A working pane is never typed into and spends no attempt. Its own
+    # doorbell left in the composer by a swallowed Enter gets one Enter per
+    # message, so a harness that queues mid-turn input still sees the steer.
     [ "$verb" = ring ] || return 0
+    fm_task_inbox_screen_holds_doorbell "$tail40" "$rec" || return 0
+    fm_task_inbox_claim_busy_enter "$STATE" "$task" "$rec" || return 0
+    ring_rc=0
+    fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" busy || ring_rc=$?
+    if [ "$ring_rc" -eq 3 ]; then
+      inbox_steer_escalate_unavailable "$w" "$task" "$rec"
+      return 0
+    fi
+    triage_log "steer-inbox busy Enter on pending doorbell: $task ${rec##*/} result=$ring_rc"
+    return 0
   fi
   case "$verb" in
     ring)
       ring_rc=0
-      fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" "$busy_hint" || ring_rc=$?
+      fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" idle || ring_rc=$?
       if [ "$ring_rc" -eq 3 ]; then
         inbox_steer_escalate_unavailable "$w" "$task" "$rec"
         return 0
