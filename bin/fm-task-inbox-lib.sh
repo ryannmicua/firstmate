@@ -348,10 +348,34 @@ _fm_task_inbox_busy_state() {  # <backend> <target> [expected-label] [hint] [har
 # on a working pane (fm_composer_queued_enter_verdict: accepted and queued),
 # and 2 when an Enter was sent but the doorbell is still pending on a pane not
 # known to be working. Internal status 5 means no Enter was successfully sent.
-_fm_task_inbox_enter_pending_doorbell() {  # <backend> <target> <record-path> <label> <busy>
-  local backend=$1 target=$2 rec=$3 label=$4 busy=$5 attempt=0 attempts=3 sent=0
+_fm_task_inbox_enter_pending_doorbell() {  # <backend> <target> <record-path> <label> <busy> <harness> <claim-state> <claim-task> <busy-result-var>
+  local backend=$1 target=$2 rec=$3 label=$4 busy=$5 harness=$6 claim_state=$7 claim_task=$8 busy_result_var=$9
+  local attempt=0 attempts=3 sent=0 claimed=0
+  if [ "$busy" = busy ] && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
+    fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" || return 4
+    claimed=1
+  fi
   [ "$busy" != busy ] || attempts=1
   while [ "$attempt" -lt "$attempts" ]; do
+    if [ "$attempt" -gt 0 ]; then
+      busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" '' "$harness")
+      if [ "$busy" = busy ]; then
+        [ -z "$busy_result_var" ] || printf -v "$busy_result_var" '%s' busy
+        if [ "$sent" -eq 1 ] \
+           && [ "$(fm_composer_queued_enter_verdict pending "$busy")" = empty ]; then
+          if [ "$claimed" = 0 ] && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
+            fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" >/dev/null 2>&1 || :
+          fi
+          return 0
+        fi
+        if [ "$sent" -eq 0 ] && [ "$claimed" = 0 ] \
+           && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
+          fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" || return 4
+          claimed=1
+        fi
+        attempts=$((attempt + 1))
+      fi
+    fi
     fm_backend_send_key "$backend" "$target" Enter "$label" 2>/dev/null && sent=1
     sleep 0.4
     if ! _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
@@ -360,7 +384,12 @@ _fm_task_inbox_enter_pending_doorbell() {  # <backend> <target> <record-path> <l
     fi
     attempt=$((attempt + 1))
   done
-  [ "$sent" -eq 1 ] || return 5
+  if [ "$sent" -ne 1 ]; then
+    if [ "$claimed" = 1 ]; then
+      _fm_task_inbox_release_busy_enter "$claim_state" "$claim_task" "$rec" || true
+    fi
+    return 5
+  fi
   [ "$(fm_composer_queued_enter_verdict pending "$busy")" = empty ] && return 0
   return 2
 }
@@ -399,7 +428,7 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [bus
     busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint" "$harness")
     [ -z "$busy_result_var" ] || printf -v "$busy_result_var" '%s' "$busy"
     _fm_task_inbox_recover_pending_doorbell "$backend" "$target" "$rec" "$label" \
-      "$busy" "$claim_state" "$claim_task"
+      "$busy" "$claim_state" "$claim_task" "$harness" "$busy_result_var"
     return
   fi
   [ "$hint" != busy ] || return 4
@@ -422,7 +451,7 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [bus
     busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint" "$harness")
     [ -z "$busy_result_var" ] || printf -v "$busy_result_var" '%s' "$busy"
     _fm_task_inbox_recover_pending_doorbell "$backend" "$target" "$rec" "$label" \
-      "$busy" "$claim_state" "$claim_task"
+      "$busy" "$claim_state" "$claim_task" "$harness" "$busy_result_var"
     return
   fi
   return 0
@@ -470,12 +499,6 @@ fm_task_inbox_due_action() {  # <state-dir> <task-id>
   dir=$(fm_task_inbox_dir "$1" "$2")
   if ! oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2"); then
     rm -f "$dir/.ring-state" "$dir/.escalated" 2>/dev/null || true
-    if [ -d "$dir" ] && fm_task_inbox_lock_acquire "$dir/.busy-enter.lock"; then
-      if ! fm_task_inbox_oldest_unhandled "$1" "$2" >/dev/null; then
-        rm -f "$dir/.busy-enter" 2>/dev/null || true
-      fi
-      fm_lock_release "$dir/.busy-enter.lock" || true
-    fi
     printf 'quiet'
     return 0
   fi
@@ -577,21 +600,12 @@ _fm_task_inbox_release_busy_enter() {  # <state-dir> <task-id> <record-path>
   fm_lock_release "$lock" || true
 }
 
-_fm_task_inbox_recover_pending_doorbell() {  # <backend> <target> <record-path> <label> <busy> <claim-state> <claim-task>
-  local backend=$1 target=$2 rec=$3 label=$4 busy=$5 claim_state=$6 claim_task=$7
-  local claimed=0 rc=0
-  if [ "$busy" = busy ] && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
-    fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" || return 4
-    claimed=1
-  fi
+_fm_task_inbox_recover_pending_doorbell() {  # <backend> <target> <record-path> <label> <busy> <claim-state> <claim-task> <harness> <busy-result-var>
+  local backend=$1 target=$2 rec=$3 label=$4 busy=$5 claim_state=$6 claim_task=$7 harness=$8 busy_result_var=$9
+  local rc=0
   _fm_task_inbox_enter_pending_doorbell "$backend" "$target" "$rec" "$label" \
-    "$busy" || rc=$?
-  if [ "$rc" = 5 ]; then
-    if [ "$claimed" = 1 ]; then
-      _fm_task_inbox_release_busy_enter "$claim_state" "$claim_task" "$rec" || true
-    fi
-    return 2
-  fi
+    "$busy" "$harness" "$claim_state" "$claim_task" "$busy_result_var" || rc=$?
+  [ "$rc" != 5 ] || return 2
   return "$rc"
 }
 

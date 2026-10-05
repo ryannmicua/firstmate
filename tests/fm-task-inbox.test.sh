@@ -274,8 +274,22 @@ ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint] [harness] [
   FM_TEST_LIB="$ROOT/bin/fm-task-inbox-lib.sh" FM_TEST_ACTIONS="$2" FM_TEST_CAPTURE="$3" \
     bash -c '
       . "$FM_TEST_LIB"
+      busy_calls=0
+      busy_values=()
+      if [ -n "${FM_TEST_BUSY_SEQUENCE:-}" ]; then
+        IFS=, read -r -a busy_values <<< "$FM_TEST_BUSY_SEQUENCE"
+      fi
       fm_backend_agent_state() { printf alive; }
-      fm_backend_busy_state() { printf "%s" "${FM_TEST_BUSY:-unknown}"; }
+      fm_backend_busy_state() {
+        if [ "${#busy_values[@]}" -gt 0 ]; then
+          local index=$busy_calls
+          [ "$index" -lt "${#busy_values[@]}" ] || index=$((${#busy_values[@]} - 1))
+          busy_calls=$((busy_calls + 1))
+          printf "%s" "${busy_values[$index]}"
+        else
+          printf "%s" "${FM_TEST_BUSY:-unknown}"
+        fi
+      }
       fm_backend_composer_state() { printf "%s" "${FM_TEST_COMPOSER:-empty}"; }
       fm_backend_capture() { cat "$FM_TEST_CAPTURE"; }
       fm_backend_send_key() {
@@ -292,12 +306,34 @@ ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint] [harness] [
           printf empty
         fi
       }
-      fm_task_inbox_ring tmux sess:fm-t1 "$1" fm-t1 "${2:-}" "${3:-unknown}" "${4:-}" "${5:-}"
+      busy_result=unknown
+      ring_rc=0
+      fm_task_inbox_ring tmux sess:fm-t1 "$1" fm-t1 "${2:-}" "${3:-unknown}" "${4:-}" "${5:-}" \
+        "${FM_TEST_BUSY_RESULT_FILE:+busy_result}" || ring_rc=$?
+      [ -z "${FM_TEST_BUSY_RESULT_FILE:-}" ] || printf '%s' "$busy_result" > "$FM_TEST_BUSY_RESULT_FILE"
+      exit "$ring_rc"
     ' _ "$1" "${4:-}" "${5:-unknown}" "${6:-}" "${7:-}"
 }
 
+make_bordered_doorbell() {  # <text> <split-index>
+  local text=$1 split_at=$2 width rule first rows remainder chunk padding i
+  width=$((split_at + 3))
+  rule=
+  for ((i = 0; i < width; i++)); do rule+='─'; done
+  first=$(printf '%-*s' "$width" "› ${text:0:split_at} ")
+  rows="│${first}│"
+  remainder=${text:split_at}
+  while [ -n "$remainder" ]; do
+    chunk=${remainder:0:$((width - 2))}
+    remainder=${remainder:${#chunk}}
+    padding=$(printf '%-*s' "$width" " $chunk ")
+    rows+=$'\n'"│${padding}│"
+  done
+  printf '╭%s╮\n%s\n╰%s╯\n' "$rule" "$rows" "$rule"
+}
+
 test_ring_recovers_only_its_own_pending_doorbell() {
-  local dir state rec line rc actions cap wrapped joined space_state compact_state space_rec compact_rec space_line compact_line prefix split
+  local dir state rec line rc actions cap wrapped joined space_state compact_state space_rec compact_rec space_line compact_line prefix split space_split
   dir="$TMP_ROOT/pending-doorbell"; state="$dir/state"
   mkdir -p "$state"
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
@@ -354,6 +390,23 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   [ "$(cat "$actions")" = $'key:Enter\nkey:Enter\nkey:Enter' ] \
     || fail "a stuck own doorbell should get three Enters and no typing: $(cat "$actions")"
 
+  : > "$actions"; printf '› %s\n' "$line" > "$cap"
+  rc=0
+  FM_TEST_BUSY_SEQUENCE=busy FM_TEST_BUSY_RESULT_FILE="$dir/busy-result" \
+    FM_TEST_COMPOSER=pending ring_with_stubs "$rec" "$actions" "$cap" idle codex "$state" t1 || rc=$?
+  [ "$rc" = 0 ] && [ "$(cat "$actions")" = key:Enter ] \
+    || fail "a newly working pane should stop own-doorbell retries after one Enter, rc=$rc actions=$(cat "$actions")"
+  [ "$(cat "$dir/busy-result")" = busy ] \
+    || fail "a pane that becomes busy during recovery should be reported as busy"
+  [ "$(cat "$state/t1.inbox/.busy-enter")" = "${rec##*/}" ] \
+    || fail "a pane that becomes busy during recovery should claim the sent Enter"
+  : > "$actions"
+  rc=0
+  FM_TEST_COMPOSER=pending ring_with_stubs "$rec" "$actions" "$cap" busy codex "$state" t1 || rc=$?
+  [ "$rc" = 4 ] && [ ! -s "$actions" ] \
+    || fail "a later busy poll should not queue the already-sent doorbell again, rc=$rc actions=$(cat "$actions")"
+  rm -f "$state/t1.inbox/.busy-enter"
+
   # A send whose Enter the harness swallowed is recovered at once.
   : > "$actions"; printf '› \n' > "$cap"
   rc=0
@@ -396,6 +449,7 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   prefix=${space_line%%run\ box*}
   [ "$prefix" != "$space_line" ] || fail "the space-path fixture did not contain run box"
   split=$((${#prefix} + 4))
+  space_split=$split
   wrapped=$(printf '› %s\n%s\n' "${space_line:0:split}" "${space_line:split}")
   : > "$actions"; printf '%s\n' "$wrapped" > "$cap"
   rc=0
@@ -411,6 +465,33 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   FM_TEST_COMPOSER=pending ring_with_stubs "$space_rec" "$actions" "$cap" idle || rc=$?
   [ "$rc" = 1 ] || fail "a space-aliased foreign doorbell should stay protected, rc=$rc"
   [ ! -s "$actions" ] || fail "a space-aliased foreign doorbell was submitted: $(cat "$actions")"
+
+  local bordered
+  bordered=$(make_bordered_doorbell "$space_line" "$space_split")
+  : > "$actions"; printf '%s' "$bordered" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending FM_TEST_CLEAR_ON_KEY=1 ring_with_stubs "$space_rec" "$actions" "$cap" idle || rc=$?
+  [ "$rc" = 0 ] && [ "$(cat "$actions")" = key:Enter ] \
+    || fail "a bordered wrapped own doorbell should preserve its boundary space, rc=$rc actions=$(cat "$actions")"
+
+  bordered=$(make_bordered_doorbell "$compact_line" "$space_split")
+  : > "$actions"; printf '%s' "$bordered" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending FM_TEST_CLEAR_ON_KEY=1 ring_with_stubs "$compact_rec" "$actions" "$cap" idle || rc=$?
+  [ "$rc" = 0 ] && [ "$(cat "$actions")" = key:Enter ] \
+    || fail "a bordered wrapped compact-path doorbell should be recognized, rc=$rc actions=$(cat "$actions")"
+  : > "$actions"; printf '%s' "$bordered" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending ring_with_stubs "$space_rec" "$actions" "$cap" idle || rc=$?
+  [ "$rc" = 1 ] && [ ! -s "$actions" ] \
+    || fail "a bordered wrapped foreign doorbell must retain its path-space distinction, rc=$rc actions=$(cat "$actions")"
+
+  bordered=$(make_bordered_doorbell "$space_line" "$space_split")
+  : > "$actions"; printf '%s' "$bordered" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending ring_with_stubs "$compact_rec" "$actions" "$cap" idle || rc=$?
+  [ "$rc" = 1 ] && [ ! -s "$actions" ] \
+    || fail "a bordered wrapped foreign spaced-path doorbell must stay distinct, rc=$rc actions=$(cat "$actions")"
 
   : > "$actions"; printf 'Working...\n› %s\n' "$line" > "$cap"
   rc=0

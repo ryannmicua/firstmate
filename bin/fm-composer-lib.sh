@@ -1558,6 +1558,10 @@ EOF
         fi
         ;;
       box)
+        if [ "$row_preserve" = 1 ]; then
+          case "$content" in ' '*) content=${content# } ;; esac
+          content=${content% }
+        fi
         if [ "$prompt_row" -lt 0 ] \
            && fm_composer_leading_prompt_glyph_var glyph "$content"; then
           prompt_row=$row
@@ -1617,19 +1621,39 @@ EOF
 # type-and-submit by design.
 # Spaces remain significant, including at captured row boundaries.
 fm_composer_screen_holds_only_text() {  # <caps> <screen> <text>
-  local caps=$1 screen=$2 expected=$3 remaining
+  local caps=$1 screen=$2 expected=$3 remaining plain shape row row_len pos expected_len expected_pos char expected_char padding offset=0
   fm_composer_normalize_spaces_var expected
   [ -n "$expected" ] || return 1
+  plain=$(printf '%s\n' "$screen" | fm_composer_strip_ansi)
+  _fm_composer_scan_screen "$plain" '' 1
+  _fm_composer_select_cursorless "$plain" || return 1
+  shape=$FM_COMPOSER_SELECTED_KIND
   remaining=$(fm_composer_extract_selected_content "$caps" "$screen" 1) || return 1
   fm_composer_normalize_spaces_var remaining
-  remaining=${remaining//$'\n'/}
   [ -n "$remaining" ] || return 1
-  while [ -n "$remaining" ]; do
-    case "$remaining" in
-      "$expected"*) remaining=${remaining#"$expected"} ;;
-      *) return 1 ;;
-    esac
-  done
+  expected_len=${#expected}
+  while IFS= read -r row; do
+    row_len=${#row}
+    pos=0
+    while [ "$pos" -lt "$row_len" ]; do
+      expected_pos=$((offset % expected_len))
+      char=${row:pos:1}
+      expected_char=${expected:expected_pos:1}
+      if [ "$char" = "$expected_char" ]; then
+        offset=$((offset + 1))
+        pos=$((pos + 1))
+      elif [ "$shape" = box ] && [ "$expected_pos" = 0 ] && [ "$char" = ' ' ]; then
+        padding=${row:pos}
+        [ -z "${padding// /}" ] || return 1
+        break
+      else
+        return 1
+      fi
+    done
+  done <<EOF
+$remaining
+EOF
+  [ "$offset" -gt 0 ] && [ "$((offset % expected_len))" = 0 ]
 }
 
 fm_composer_classify_screen() {  # <caps> <screen> [cursor_row] [identity]
