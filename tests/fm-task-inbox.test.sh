@@ -98,6 +98,16 @@ case "${1:-}" in
     done
     printf 'fakepane\n'; exit 0 ;;
   capture-pane)
+    if [ -n "${FM_FAKE_TMUX_CAPTURE_COUNT_FILE:-}" ]; then
+      capture_count=$(cat "$FM_FAKE_TMUX_CAPTURE_COUNT_FILE" 2>/dev/null || printf '0')
+      case "$capture_count" in ''|*[!0-9]*) capture_count=0 ;; esac
+      capture_count=$((capture_count + 1))
+      printf '%s\n' "$capture_count" > "$FM_FAKE_TMUX_CAPTURE_COUNT_FILE"
+      if [ -n "${FM_FAKE_TMUX_CAPTURE_FAIL_AFTER:-}" ] \
+         && [ "$capture_count" -gt "$FM_FAKE_TMUX_CAPTURE_FAIL_AFTER" ]; then
+        exit 1
+      fi
+    fi
     if [ -n "${FM_FAKE_TMUX_CAPTURE:-}" ] && [ -f "$FM_FAKE_TMUX_CAPTURE" ]; then
       cat "$FM_FAKE_TMUX_CAPTURE"
     else
@@ -305,7 +315,7 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   # The doorbell wrapped at the harness's column, mid-token, the way live
   # codex-cli 0.160.0 broke a long inbox path. Assert the divergence first:
   # the extracted rows rejoin with a space the typed line never had.
-  wrapped=$(printf '› %s\n  %s\n\n  model footer\n' "${line:0:57}" "${line:57}")
+  wrapped=$(printf '› %s\n%s\n\n  model footer\n' "${line:0:57}" "${line:57}")
   joined=$(FM_TEST_LIB="$ROOT/bin/fm-composer-lib.sh" bash -c '. "$FM_TEST_LIB"; fm_composer_extract_selected_content "styled=0" "$1"' _ "$wrapped")
   [ -n "$joined" ] && [ "$joined" != "$line" ] \
     || fail "the wrapped fixture must rejoin differently from the typed line to exercise wrapping: [$joined]"
@@ -371,14 +381,20 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   compact_line=$(inbox_lib "$compact_state" fm_task_inbox_doorbell_line "$compact_rec")
   [ "${space_line//[[:space:]]/}" = "${compact_line//[[:space:]]/}" ] \
     || fail "the path-alias fixture must differ only by a space"
-  prefix=${space_line%%instruction*}; split=$((${#prefix} + 5))
-  wrapped=$(printf '› %s\n  %s\n' "${space_line:0:split}" "${space_line:split}")
+  prefix=${space_line%%run\ box*}
+  [ "$prefix" != "$space_line" ] || fail "the space-path fixture did not contain run box"
+  split=$((${#prefix} + 4))
+  wrapped=$(printf '› %s\n%s\n' "${space_line:0:split}" "${space_line:split}")
   : > "$actions"; printf '%s\n' "$wrapped" > "$cap"
   rc=0
   FM_TEST_COMPOSER=pending FM_TEST_CLEAR_ON_KEY=1 ring_with_stubs "$space_rec" "$actions" "$cap" idle || rc=$?
   [ "$rc" = 0 ] && [ "$(cat "$actions")" = key:Enter ] \
     || fail "a wrapped doorbell should retain literal path spaces and be resubmitted, rc=$rc actions=$(cat "$actions")"
-  : > "$actions"; printf '› %s\n' "$compact_line" > "$cap"
+  prefix=${compact_line%%runbox*}
+  [ "$prefix" != "$compact_line" ] || fail "the compact-path fixture did not contain runbox"
+  split=$((${#prefix} + 3))
+  wrapped=$(printf '› %s\n%s\n' "${compact_line:0:split}" "${compact_line:split}")
+  : > "$actions"; printf '%s\n' "$wrapped" > "$cap"
   rc=0
   FM_TEST_COMPOSER=pending ring_with_stubs "$space_rec" "$actions" "$cap" idle || rc=$?
   [ "$rc" = 1 ] || fail "a space-aliased foreign doorbell should stay protected, rc=$rc"
@@ -728,6 +744,64 @@ test_watcher_busy_pane_gets_one_enter_for_its_stuck_doorbell() {
   pass "watcher: a busy pane's own stuck doorbell gets one Enter per message without typing or spending an attempt"
 }
 
+test_watcher_unknown_codex_busy_doorbell_gets_one_enter() {
+  local dir state out log keys pid rec line i=0
+  dir=$(setup_watch_case codex-unknown-busy)
+  state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; keys="$dir/keys.log"; : > "$log"; : > "$keys"
+  fm_write_meta "$state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=codex"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
+  age_path "$rec"
+  printf 'esc to interrupt\n› %s\n' "$line" > "$dir/busy.capture"
+  watch_bg "$state" "$dir/fakebin" "$out" \
+    FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
+    FM_TASK_INBOX_RING_MAX=99
+  pid=$!
+  while [ "$i" -lt 100 ]; do
+    [ -s "$keys" ] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  sleep 3
+  kill -0 "$pid" 2>/dev/null || fail "unknown Codex busy state exited the watcher:"$'\n'"$(cat "$out")"
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+  [ "$(cat "$keys")" = Enter ] || fail "an unknown-busy Codex pane should queue with one Enter, got:"$'\n'"$(cat "$keys")"
+  [ ! -s "$log" ] || fail "a visible mid-turn doorbell was typed again:"$'\n'"$(cat "$log")"
+  [ "$(cat "$state/t1.inbox/.busy-enter" 2>/dev/null)" = "${rec##*/}" ] \
+    || fail "the rendered busy fallback did not retain the one-Enter claim"
+  pass "watcher: an unknown-busy Codex pane uses the rendered busy fallback and queues its doorbell once"
+}
+
+test_watcher_failed_revalidation_does_not_claim_busy_enter() {
+  local dir state out log keys count pid rec line i=0
+  dir=$(setup_watch_case busy-revalidation-failed)
+  state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; keys="$dir/keys.log"
+  count="$dir/capture.count"; : > "$log"; : > "$keys"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
+  age_path "$rec"
+  printf 'BUSYTOKEN active\n› %s\n' "$line" > "$dir/busy.capture"
+  watch_bg "$state" "$dir/fakebin" "$out" \
+    FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
+    FM_FAKE_TMUX_CAPTURE_COUNT_FILE="$count" FM_FAKE_TMUX_CAPTURE_FAIL_AFTER=1 \
+    FM_BUSY_REGEX=BUSYTOKEN FM_TASK_INBOX_RING_MAX=99
+  pid=$!
+  while [ "$i" -lt 100 ]; do
+    [ "$(cat "$count" 2>/dev/null || printf 0)" -ge 2 ] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  sleep 2
+  kill -0 "$pid" 2>/dev/null || fail "capture failure exited the watcher:"$'\n'"$(cat "$out")"
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+  [ "$(cat "$count" 2>/dev/null || printf 0)" -ge 2 ] || fail "the busy ring did not reach its failed revalidation capture"
+  [ ! -s "$keys" ] || fail "a failed revalidation still sent Enter:"$'\n'"$(cat "$keys")"
+  [ ! -e "$state/t1.inbox/.busy-enter" ] || fail "a failed revalidation consumed the busy Enter claim"
+  pass "watcher: a failed pending-doorbell revalidation leaves the busy Enter claim available"
+}
+
 test_watcher_resubmits_stuck_doorbell_on_idle_pane() {
   local dir state out log keys pid rec line i=0
   dir=$(setup_watch_case idle-stuck)
@@ -917,6 +991,8 @@ test_ring_ladder_policy
 test_watcher_rerings_idle_pane_quietly
 test_watcher_waits_on_busy_pane
 test_watcher_busy_pane_gets_one_enter_for_its_stuck_doorbell
+test_watcher_unknown_codex_busy_doorbell_gets_one_enter
+test_watcher_failed_revalidation_does_not_claim_busy_enter
 test_watcher_resubmits_stuck_doorbell_on_idle_pane
 test_watcher_quiet_on_healthy_inbox
 test_watcher_ack_silences_unwritable_ladder

@@ -359,8 +359,9 @@ _fm_task_inbox_enter_pending_doorbell() {  # <backend> <target> <record-path> <l
 # endpoint is positively dead or missing, or 4 in busy mode when no doorbell
 # was pending. No return value is delivery proof; the acknowledgement move is
 # the only delivery signal.
-fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [busy-hint]
-  local backend=$1 target=$2 rec=$3 label=${4:-} hint=${5:-} line cstate verdict
+fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [busy-hint] [claim-state] [claim-task]
+  local backend=$1 target=$2 rec=$3 label=${4:-} hint=${5:-} claim_state=${6:-} claim_task=${7:-}
+  local line cstate verdict busy
   case "$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || true)" in
     dead|missing) return 3 ;;
   esac
@@ -368,8 +369,12 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [bus
     return 2
   fi
   if _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
+    busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint")
+    if [ "$busy" = busy ] && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
+      fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" || return 4
+    fi
     _fm_task_inbox_enter_pending_doorbell "$backend" "$target" "$rec" "$label" \
-      "$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint")"
+      "$busy"
     return
   fi
   [ "$hint" != busy ] || return 4
@@ -389,8 +394,12 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [bus
   [ "$verdict" != send-failed ] || return 2
   [ "$verdict" != empty ] || return 0
   if _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
+    busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint")
+    if [ "$busy" = busy ] && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
+      fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" || return 4
+    fi
     _fm_task_inbox_enter_pending_doorbell "$backend" "$target" "$rec" "$label" \
-      "$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint")"
+      "$busy"
     return
   fi
   return 0

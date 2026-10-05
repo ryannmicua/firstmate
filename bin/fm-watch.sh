@@ -484,9 +484,8 @@ inbox_steer_check() {  # <window> <task>
     # message, so a harness that queues mid-turn input still sees the steer.
     [ "$verb" = ring ] || return 0
     fm_task_inbox_screen_holds_doorbell "$tail40" "$rec" || return 0
-    fm_task_inbox_claim_busy_enter "$STATE" "$task" "$rec" || return 0
     ring_rc=0
-    fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" busy || ring_rc=$?
+    fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" busy "$STATE" "$task" || ring_rc=$?
     if [ "$ring_rc" -eq 3 ]; then
       inbox_steer_escalate_unavailable "$w" "$task" "$rec"
       return 0
@@ -497,7 +496,7 @@ inbox_steer_check() {  # <window> <task>
   case "$verb" in
     ring)
       ring_rc=0
-      fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" idle || ring_rc=$?
+      fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" '' "$STATE" "$task" || ring_rc=$?
       if [ "$ring_rc" -eq 3 ]; then
         inbox_steer_escalate_unavailable "$w" "$task" "$rec"
         return 0

@@ -1104,24 +1104,27 @@ _fm_composer_screen_row() {  # <n> <screen>
   printf '%s\n' "$2" | sed -n "$(($1 + 1))p"
 }
 
-# _fm_composer_row_content: extract the classification content of one raw row:
-# ghost-strip when styled, plain otherwise, normalize-trim, and strip one
-# matching pair of side border glyphs.
-_fm_composer_row_content() {  # <raw-row> <styled> -> content on stdout
-  local raw=$1 styled=$2 stripped
+# _fm_composer_row_content: extract one raw row, stripping ANSI or ghost text
+# and side borders; outer whitespace is trimmed unless preserve-edges is set.
+_fm_composer_row_content() {  # <raw-row> <styled> [preserve-edges] -> content on stdout
+  local raw=$1 styled=$2 preserve_edges=${3:-0} stripped
   if [ "$styled" = 1 ]; then
     stripped=$(printf '%s\n' "$raw" | fm_composer_strip_ghost)
   else
     stripped=$(printf '%s\n' "$raw" | fm_composer_strip_ansi)
   fi
-  fm_composer_normalize_trim_var stripped
+  if [ "$preserve_edges" = 1 ]; then
+    fm_composer_normalize_spaces_var stripped
+  else
+    fm_composer_normalize_trim_var stripped
+  fi
   case "$stripped" in
     '│'*'│') stripped=${stripped#│}; stripped=${stripped%│} ;;
     '┃'*'┃') stripped=${stripped#┃}; stripped=${stripped%┃} ;;
     '║'*'║') stripped=${stripped#║}; stripped=${stripped%║} ;;
     '|'*'|') stripped=${stripped#|}; stripped=${stripped%|} ;;
   esac
-  fm_composer_normalize_trim_var stripped
+  [ "$preserve_edges" = 1 ] || fm_composer_normalize_trim_var stripped
   printf '%s' "$stripped"
 }
 
@@ -1509,11 +1512,11 @@ _fm_composer_select_cursorless() {
   [ -n "$FM_COMPOSER_SELECTED_KIND" ]
 }
 
-fm_composer_extract_selected_content() {  # <caps> <screen> [preserve-row-breaks]
-  local caps=$1 screen=$2 preserve_row_breaks=${3:-0} row_separator=' '
-  local styled=0 kv plain row raw content glyph joined='' footer_re prompt_row=-1
+fm_composer_extract_selected_content() {  # <caps> <screen> [preserve-wrap-data]
+  local caps=$1 screen=$2 preserve_wrap_data=${3:-0} row_separator=' '
+  local styled=0 kv plain row raw content glyph joined='' footer_re prompt_row=-1 row_preserve=0 check_content
   local leading_blank=1 placeholder_position=0 prompt_is_shell=0
-  [ "$preserve_row_breaks" != 1 ] || row_separator=$'\n'
+  [ "$preserve_wrap_data" != 1 ] || row_separator=$'\n'
   footer_re=${FM_COMPOSER_LEFTBAR_FOOTER_RE:-$FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT}
   while IFS= read -r kv; do
     [ "$kv" = styled=1 ] && styled=1
@@ -1526,18 +1529,25 @@ EOF
   row=$FM_COMPOSER_SELECTED_FIRST
   while [ "$row" -le "$FM_COMPOSER_SELECTED_LAST" ]; do
     raw=$(_fm_composer_screen_row "$row" "$screen")
-    content=$(_fm_composer_row_content "$raw" "$styled")
+    row_preserve=0
+    [ "$preserve_wrap_data" != 1 ] || row_preserve=1
+    content=$(_fm_composer_row_content "$raw" "$styled" "$row_preserve")
     placeholder_position=0
     case "$FM_COMPOSER_SELECTED_KIND" in
       bare)
         if [ "$row" -eq "$FM_COMPOSER_SELECTED_FIRST" ] \
            && fm_composer_leading_agent_glyph_var glyph "$content"; then
           content=${content#*"$glyph"}
+          if [ "$row_preserve" = 1 ]; then
+            content="${content#"${content%%[![:space:]]*}"}"
+          fi
         fi
         ;;
       leftbar)
         case "$content" in '┃'*) content=${content#┃} ;; esac
-        fm_composer_normalize_trim_var content
+        if [ "$row_preserve" != 1 ]; then
+          fm_composer_normalize_trim_var content
+        fi
         if [ -z "$content" ]; then
           :
         elif [ "$leading_blank" = 1 ] && [ "$row" -gt "$FM_COMPOSER_SELECTED_FIRST" ]; then
@@ -1556,13 +1566,22 @@ EOF
             prompt_is_shell=1
           fi
           content=${content#*"$glyph"}
+          if [ "$row_preserve" = 1 ]; then
+            content="${content#"${content%%[![:space:]]*}"}"
+          fi
         elif [ "$prompt_row" -lt 0 ]; then
           placeholder_position=1
         fi
         ;;
     esac
     fm_composer_normalize_spaces_var content
-    fm_composer_normalize_trim_var content
+    if [ "$row_preserve" = 1 ]; then
+      check_content=$content
+      fm_composer_normalize_trim_var check_content
+    else
+      fm_composer_normalize_trim_var content
+      check_content=$content
+    fi
     # A styled agent-glyph placeholder disappears above when ghost stripping
     # proves it is furniture. If the same placeholder-looking bytes survive
     # styling, they are real user input and must remain in the extracted content
@@ -1570,21 +1589,21 @@ EOF
     # OpenCode's left-bar hint and legacy shell-glyph boxed placeholders have no
     # such styling proof, so their structurally fixed positions remain the two
     # idle-regex exceptions here.
-    if [ -z "$content" ] \
+    if [ -z "$check_content" ] \
        || { { [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ] \
               || { [ "$FM_COMPOSER_SELECTED_KIND" = box ] && [ "$prompt_is_shell" = 1 ]; }; } \
             && [ "$placeholder_position" = 1 ] \
-            && fm_composer_idle_matches "$content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; } \
+            && fm_composer_idle_matches "$check_content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; } \
        || { [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ] \
             && [ "$row" -eq "$FM_COMPOSER_SELECTED_LAST" ] \
-            && fm_composer_idle_matches "$content" "$footer_re" sensitive; }; then
+            && fm_composer_idle_matches "$check_content" "$footer_re" sensitive; }; then
       row=$((row + 1))
       continue
     fi
     joined="${joined}${joined:+$row_separator}$content"
     row=$((row + 1))
   done
-  if [ "$preserve_row_breaks" = 1 ]; then
+  if [ "$preserve_wrap_data" = 1 ]; then
     printf '%s' "$joined"
   else
     printf '%s\n' "$joined" | LC_ALL=C awk '{$1=$1; printf "%s", $0}'
@@ -1595,8 +1614,7 @@ EOF
 # nothing but one or more copies of <text>. This lets a caller recognize its
 # own already-typed line and submit it again; any other content is someone's
 # input and must never be submitted.
-# Screen row boundaries are removed after selected-row extraction has trimmed
-# each row edge. Spaces within a row remain significant.
+# Spaces remain significant, including at captured row boundaries.
 fm_composer_screen_holds_only_text() {  # <caps> <screen> <text>
   local caps=$1 screen=$2 expected=$3 remaining
   fm_composer_normalize_spaces_var expected
