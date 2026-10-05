@@ -1,0 +1,36 @@
+^O──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+──
+
+ Trust project folder?
+ /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M44MQ3XAX2M58C71XCP62V1X/.tmp-validation/branch-compare-project
+
+ This allows pi to load .pi settings and resources, install missing project packages, and execute project extensions.
+
+ → Trust
+   Trust parent folder (/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M44MQ3XAX2M58C71XCP62V1X/.tmp-validation)
+   Trust (this session only)
+   Do not trust
+   Do not trust (this session only)
+
+ ↑↓ navigate  enter select  escape/ctrl+c cancel
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

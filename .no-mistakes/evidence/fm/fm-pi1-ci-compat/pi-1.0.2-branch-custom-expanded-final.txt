@@ -1,0 +1,59 @@
+
+ pi v0.87.1
+ escape to interrupt
+ ctrl+c to clear
+ ctrl+c twice to exit
+ ctrl+d to exit (empty)
+ ctrl+z to suspend
+ ctrl+k to delete to end
+ shift+tab to cycle thinking level
+ ctrl+p/shift+ctrl+p to cycle models
+ ctrl+l to select model
+ ctrl+o to expand tools
+ ctrl+t to expand thinking
+ ctrl+g for external editor
+ / for commands
+ ! to run bash
+ !! to run bash (no context)
+ alt+enter to queue follow-up
+ alt+up to edit all queued messages
+ ctrl+v to paste image (with text fallback)
+ drop files to attach
+
+ Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.
+
+[Extensions]
+  project
+
+~/.no-mistakes/worktrees/ff5e17b6f5de/01M44MQ3XAX2M58C71XCP62V1X/.tmp-validation/branch-compare-project/.pi/extensions/fm-branch-supervision
+.ts
+
+
+ Inspect the pending supervision state.
+
+
+
+ fm_branch_outcomes
+ No supervision outcomes.
+
+
+
+ fm_branch_processed
+ acknowledged through 1
+
+
+ Both supervision checks are complete.
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/rgm/.pi/agent/install/releases/0.87.1/node_modules/@earendil-works/pi-coding-agent/docs/providers.md
+   /home/rgm/.pi/agent/install/releases/0.87.1/node_modules/@earendil-works/pi-coding-agent/docs/models.md
+
+ Warning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart tmux.
+
+ Tool output: expanded
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/.no-mistakes/worktrees/ff5e17b6f5de/01M44MQ3XAX2M58C71XCP62V1X/.tmp-validation/branch-compare-project (detached)
+↑24 ↓9 0.0%/0 (auto)                                                                                                                 unknown

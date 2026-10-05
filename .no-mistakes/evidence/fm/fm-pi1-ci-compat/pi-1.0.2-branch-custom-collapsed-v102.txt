@@ -1,0 +1,41 @@
+
+ ▀▀█  v1.0.2
+ █▀ █ escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more
+ Press ctrl+o to show full startup help and loaded resources.
+
+ Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.
+
+[Extensions]
+  fm-branch-supervision.ts
+
+
+ Inspect the pending supervision state.
+
+
+
+ fm_branch_outcomes recent=2
+ No supervision outcomes.
+
+
+
+ fm_branch_processed through=1
+ acknowledged through 1
+
+
+ Both supervision checks are complete.
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+
+ /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M44MQ3XAX2M58C71XCP62V1X/.tmp-validation/pi-1.0.2/node_modules/@earendil-works/pi-coding-a
+ gent/docs/providers.md
+
+ /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M44MQ3XAX2M58C71XCP62V1X/.tmp-validation/pi-1.0.2/node_modules/@earendil-works/pi-coding-a
+ gent/docs/models.md
+
+ Warning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart tmux.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/.no-mistakes/worktrees/ff5e17b6f5de/01M44MQ3XAX2M58C71XCP62V1X/.tmp-validation/branch-compare-project (detached)
+↑24 ↓9 0.0%/0 (auto)                                                                                                                 unknown
