@@ -2169,15 +2169,13 @@ ${context.command}
   const stockCollapsedArgsChars = 100;
   const stockToolCallHeader = (
     title: string,
-    args: unknown,
+    args: object,
     theme: Parameters<NonNullable<ToolDefinition["renderCall"]>>[1],
     expanded: boolean,
   ): string => {
     const header = theme.fg("toolTitle", theme.bold(title));
-    if (!stockCallHeaderShowsArgs || args == null) return header;
-    const entries = typeof args === "object" && !Array.isArray(args)
-      ? Object.entries(args)
-      : [["args", args] as [string, unknown]];
+    if (!stockCallHeaderShowsArgs) return header;
+    const entries = Object.entries(args);
     if (entries.length === 0) return header;
     if (expanded) {
       const lines = entries.map(([key, value]) => {
