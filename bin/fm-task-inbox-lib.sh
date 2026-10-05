@@ -307,7 +307,7 @@ _fm_task_inbox_doorbell_pending() {  # <backend> <target> <record-path> [expecte
 # hint when it has one, else the backend's native state, else the target
 # harness's rendered busy footer that bin/fm-tmux-lib.sh's submit core also reads.
 _fm_task_inbox_busy_state() {  # <backend> <target> [expected-label] [hint] [harness] [screen]
-  local busy screen harness=${5:-unknown}
+  local busy screen visible harness=${5:-unknown}
   case "${4:-}" in
     busy|idle) printf '%s' "$4"; return 0 ;;
   esac
@@ -319,11 +319,24 @@ _fm_task_inbox_busy_state() {  # <backend> <target> [expected-label] [hint] [har
   if [ -z "$screen" ]; then
     screen=$(fm_backend_capture "$1" "$2" 40 "${3:-}" 2>/dev/null) || { printf 'unknown'; return 0; }
   fi
-  if printf '%s\n' "$screen" | grep -v '^[[:space:]]*$' | tail -12 | fm_busy_lines_match "$harness"; then
-    printf 'busy'
-  else
-    printf 'unknown'
-  fi
+  visible=$(printf '%s\n' "$screen" | grep -v '^[[:space:]]*$' | tail -12)
+  case "$harness" in
+    codex)
+      if printf '%s\n' "$visible" \
+        | grep -qiE '^[[:space:]]*•[[:space:]].*[[:space:]]\([0-9]+[[:space:]]*[smh]([[:space:]]+[0-9]+[[:space:]]*[smh])*[[:space:]]+•[[:space:]]+esc to interrupt\)[[:space:]]*$'; then
+        printf 'busy'
+      else
+        printf 'unknown'
+      fi
+      ;;
+    *)
+      if printf '%s\n' "$visible" | fm_busy_lines_match "$harness"; then
+        printf 'busy'
+      else
+        printf 'unknown'
+      fi
+      ;;
+  esac
 }
 
 # Submit a doorbell already sitting in the composer by pressing Enter only,

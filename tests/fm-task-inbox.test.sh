@@ -847,7 +847,7 @@ test_watcher_unknown_codex_busy_doorbell_gets_one_enter() {
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
   age_path "$rec"
-  printf 'esc to interrupt\n› %s\n' "$line" > "$dir/busy.capture"
+  printf '• Working (6s • esc to interrupt)\n› %s\n' "$line" > "$dir/busy.capture"
   watch_bg "$state" "$dir/fakebin" "$out" \
     FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
     FM_TASK_INBOX_RING_MAX=1
@@ -872,6 +872,25 @@ test_watcher_unknown_codex_busy_doorbell_gets_one_enter() {
   pass "watcher: an unknown-busy Codex turn queues once without spending or escalating the ladder"
 }
 
+test_watcher_codex_reply_phrase_does_not_defer() {
+  local dir state out pid rec
+  dir=$(setup_watch_case codex-reply-phrase)
+  state="$dir/state"; out="$dir/watch.out"
+  fm_write_meta "$state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=codex"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  age_path "$rec"
+  printf 'Assistant reply: the old status text said esc to interrupt.\n\n› \n' > "$dir/reply.capture"
+  watch_bg "$state" "$dir/fakebin" "$out" \
+    FM_FAKE_TMUX_CAPTURE="$dir/reply.capture" \
+    FM_TASK_INBOX_RING_MAX=1
+  pid=$!
+  wait_watcher_gone "$pid" \
+    || { kill "$pid" 2>/dev/null; fail "an idle Codex reply containing the busy phrase deferred retries forever"; }
+  grep -qF 'unread firstmate instruction' "$state/.wake-queue" \
+    || fail "the idle Codex reply should not defer the exhausted-ring stale wake"
+  pass "watcher: an idle Codex reply cannot impersonate its active busy row"
+}
+
 test_watcher_failed_enter_releases_busy_claim() {
   local dir state out log keys attempts pid rec line i=0
   dir=$(setup_watch_case busy-enter-failed)
@@ -881,7 +900,7 @@ test_watcher_failed_enter_releases_busy_claim() {
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
   age_path "$rec"
-  printf 'esc to interrupt\n› %s\n' "$line" > "$dir/busy.capture"
+  printf '• Working (6s • esc to interrupt)\n› %s\n' "$line" > "$dir/busy.capture"
   watch_bg "$state" "$dir/fakebin" "$out" \
     FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_KEY_ATTEMPTS_LOG="$attempts" \
     FM_FAKE_TMUX_KEY_FAIL=1 FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" FM_TASK_INBOX_RING_MAX=1
@@ -917,16 +936,18 @@ test_watcher_failed_revalidation_does_not_claim_busy_enter() {
   watch_bg "$state" "$dir/fakebin" "$out" \
     FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
     FM_FAKE_TMUX_CAPTURE_COUNT_FILE="$count" FM_FAKE_TMUX_CAPTURE_FAIL_AFTER=1 \
-    FM_BUSY_REGEX=BUSYTOKEN FM_TASK_INBOX_RING_MAX=99
+    FM_BUSY_REGEX=BUSYTOKEN FM_TASK_INBOX_RING_MAX=99 FM_POLL=999
   pid=$!
   while [ "$i" -lt 100 ]; do
-    [ "$(cat "$count" 2>/dev/null || printf 0)" -ge 2 ] && break
+    grep -qF 'busy Enter on pending doorbell:' "$state/.watch-triage.log" 2>/dev/null && break
     kill -0 "$pid" 2>/dev/null || break
     sleep 0.1
     i=$((i + 1))
   done
-  sleep 2
-  kill -0 "$pid" 2>/dev/null || fail "capture failure exited the watcher:"$'\n'"$(cat "$out")"
+  grep -qF 'busy Enter on pending doorbell:' "$state/.watch-triage.log" 2>/dev/null \
+    || { kill "$pid" 2>/dev/null; fail "the failed revalidation did not finish its busy-doorbell check"; }
+  [ "$(cat "$count" 2>/dev/null || printf 0)" -ge 2 ] \
+    || { kill "$pid" 2>/dev/null; fail "the busy ring did not reach its failed revalidation capture"; }
   kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
   [ "$(cat "$count" 2>/dev/null || printf 0)" -ge 2 ] || fail "the busy ring did not reach its failed revalidation capture"
   [ ! -s "$keys" ] || fail "a failed revalidation still sent Enter:"$'\n'"$(cat "$keys")"
@@ -1125,6 +1146,7 @@ test_watcher_rerings_idle_pane_quietly
 test_watcher_waits_on_busy_pane
 test_watcher_busy_pane_gets_one_enter_for_its_stuck_doorbell
 test_watcher_unknown_codex_busy_doorbell_gets_one_enter
+test_watcher_codex_reply_phrase_does_not_defer
 test_watcher_failed_enter_releases_busy_claim
 test_watcher_failed_revalidation_does_not_claim_busy_enter
 test_watcher_resubmits_stuck_doorbell_on_idle_pane
