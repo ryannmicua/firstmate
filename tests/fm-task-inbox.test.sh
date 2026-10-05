@@ -299,7 +299,10 @@ ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint] [harness] [
       }
       fm_backend_send_text_submit() {
         printf "typed:%s\n" "$3" >> "$FM_TEST_ACTIONS"
-        if [ "${FM_TEST_SUBMIT_LEAVES:-0}" = 1 ]; then
+        if [ "${FM_TEST_SUBMIT_QUEUED_BUSY:-0}" = 1 ]; then
+          printf "› %s\n" "$3" > "$FM_TEST_CAPTURE"
+          printf empty
+        elif [ "${FM_TEST_SUBMIT_LEAVES:-0}" = 1 ]; then
           printf "› %s\n\n" "$3" > "$FM_TEST_CAPTURE"
           printf unknown
         else
@@ -541,6 +544,35 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   [ "$rc" = 4 ] || fail "working-pane mode without a pending doorbell should return 4, rc=$rc"
   [ ! -s "$actions" ] || fail "working-pane mode typed or pressed keys: $(cat "$actions")"
   pass "inbox: own doorbells are resubmitted with Enter only (wrapped, doubled, or swallowed at send), foreign text is protected, and working panes are never typed into"
+}
+
+test_queued_busy_submit_claims_visible_doorbell() {
+  local dir="$TMP_ROOT/queued-busy-submit" state="$TMP_ROOT/queued-busy-submit/state"
+  local rec line actions cap rc
+  mkdir -p "$state"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
+  actions="$dir/actions"; cap="$dir/capture"
+  : > "$actions"; printf '› \n' > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=empty FM_TEST_BUSY=busy FM_TEST_SUBMIT_QUEUED_BUSY=1 \
+    FM_TEST_BUSY_RESULT_FILE="$dir/busy-result" \
+    ring_with_stubs "$rec" "$actions" "$cap" idle codex "$state" t1 || rc=$?
+  [ "$rc" = 0 ] || fail "a queued busy submit should preserve successful delivery, rc=$rc"
+  [ "$(cat "$actions")" = "typed:$line" ] \
+    || fail "the initial queued submit should type the doorbell exactly once: $(cat "$actions")"
+  [ "$(cat "$state/t1.inbox/.busy-enter" 2>/dev/null)" = "${rec##*/}" ] \
+    || fail "an accepted queued submit left visible on a busy pane should claim its one Enter"
+  [ "$(cat "$dir/busy-result")" = busy ] \
+    || fail "an accepted queued submit should preserve its current busy classification"
+
+  : > "$actions"
+  rc=0
+  FM_TEST_COMPOSER=pending FM_TEST_BUSY=busy \
+    ring_with_stubs "$rec" "$actions" "$cap" busy codex "$state" t1 || rc=$?
+  [ "$rc" = 4 ] && [ ! -s "$actions" ] \
+    || fail "the next busy watcher poll should not queue the visible doorbell again, rc=$rc actions=$(cat "$actions")"
+  pass "inbox: a queued busy submit claims its visible doorbell before the next watcher poll"
 }
 
 # fm_task_inbox_ring against a backend whose agent classifies dead or missing:
@@ -1246,6 +1278,7 @@ test_write_is_durable_and_exact
 test_doorbell_is_a_shell_noop
 test_doorbell_rejects_terminal_controls
 test_ring_recovers_only_its_own_pending_doorbell
+test_queued_busy_submit_claims_visible_doorbell
 test_ring_skips_dead_agent
 test_idempotent_write_dedups_exact_body
 test_idempotent_write_follows_concurrent_ack

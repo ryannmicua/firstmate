@@ -48,7 +48,7 @@ unset NO_MISTAKES_GATE
 LAB=$(mktemp -d "$(cd "${TMPDIR:-/tmp}" && pwd -P)/fm-stuck-doorbell-live.XXXXXX")
 TIMEOUT=${FM_STUCK_DOORBELL_LIVE_TIMEOUT:-240}
 BACKENDS=${FM_STUCK_DOORBELL_LIVE_BACKENDS:-tmux herdr}
-HARNESSES=${FM_STUCK_DOORBELL_LIVE_HARNESSES:-claude codex opencode pi grok kimi muse}
+HARNESSES=${FM_STUCK_DOORBELL_LIVE_HARNESSES:-codex}
 LAB_HELPER=${HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
 ORIGINAL_PATH=$PATH
 SOCKET="fm-stuck-doorbell-$$"

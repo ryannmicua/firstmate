@@ -446,7 +446,18 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [bus
   # The verdict is read only to report a failed keystroke and to look for a
   # swallowed Enter; it is never delivery proof.
   [ "$verdict" != send-failed ] || return 2
-  [ "$verdict" != empty ] || return 0
+  if [ "$verdict" = empty ]; then
+    if _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
+      busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" '' "$harness")
+      if [ "$busy" = busy ]; then
+        [ -z "$busy_result_var" ] || printf -v "$busy_result_var" '%s' busy
+        if [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
+          fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" >/dev/null 2>&1 || :
+        fi
+      fi
+    fi
+    return 0
+  fi
   if _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
     busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint" "$harness")
     [ -z "$busy_result_var" ] || printf -v "$busy_result_var" '%s' "$busy"
