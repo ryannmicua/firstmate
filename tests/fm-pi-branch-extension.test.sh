@@ -4547,56 +4547,14 @@ JS
   pass "the installed Pi still bounds the picker's list and ranks its search"
 }
 
-# Pi's stock call header gained arguments in 0.99: before it, the header is
-# the bold title alone; from 0.99 a collapsed call appends `key=json` and an
-# expanded call lists `key: value` under the title. Both supervision tools
-# must match the header of whichever Pi version loaded them.
+# Both supervision tools must match Pi's stock call header before and from 0.99.
 test_outcomes_tool_call_headers_follow_the_loaded_pi_version() {
   local repo version status out
   repo="$TMP_ROOT/call-header-versions"
   install_pi_branch_extension_fixture "$repo"
   for version in 0.87.0 0.99.0; do
     FM_STUB_PI_VERSION="$version" EXT="$repo/.pi/extensions/fm-branch-supervision.ts" \
-      node --input-type=module > "$TMP_ROOT/node-output" 2>&1 <<'JS'
-import { pathToFileURL } from "node:url";
-
-const version = process.env.FM_STUB_PI_VERSION;
-const tools = [];
-const pi = {
-  events: { on() {}, emit() {} },
-  on() {},
-  registerCommand() {},
-  registerMessageRenderer() {},
-  registerTool(tool) { tools.push(tool); },
-  sendMessage() {},
-  sendUserMessage() {},
-};
-const extension = await import(pathToFileURL(process.env.EXT).href);
-extension.default(pi);
-const theme = {
-  fg(color, text) { return `<${color}>${text}</${color}>`; },
-  bg(_color, text) { return text; },
-  bold(text) { return `**${text}**`; },
-};
-const showsArgs = version === "0.99.0";
-for (const [name, key, value] of [["fm_branch_outcomes", "recent", 2], ["fm_branch_processed", "through", 1]]) {
-  const tool = tools.find((candidate) => candidate.name === name);
-  if (!tool) throw new Error(`${name} was not registered`);
-  const title = `<toolTitle>**${name}**</toolTitle>`;
-  for (const expanded of [false, true]) {
-    const stock = !showsArgs
-      ? title
-      : expanded
-        ? `${title}\n<muted>  ${key}: ${value}</muted>`
-        : `${title} <muted>${key}=${value}</muted>`;
-    const shell = tool.renderCall({ [key]: value }, theme, { state: {}, expanded, isError: false, isPartial: false });
-    const header = shell.children[0]?.text;
-    if (header !== stock) {
-      throw new Error(`Pi ${version} ${expanded ? "expanded" : "collapsed"} ${name} header ${JSON.stringify(header)} is not stock ${JSON.stringify(stock)}`);
-    }
-  }
-}
-JS
+      node "$ROOT/tests/assets/fm-pi-branch-call-header-assertions.mjs" > "$TMP_ROOT/node-output" 2>&1
     status=$?
     out=$(cat "$TMP_ROOT/node-output")
     expect_code 0 "$status" "Pi $version supervision tool call headers must match that version's stock header: $out"
