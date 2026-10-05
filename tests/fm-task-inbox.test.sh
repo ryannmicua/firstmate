@@ -364,6 +364,17 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   [ "$rc" = 0 ] || fail "a wrapped own doorbell should be resubmitted, rc=$rc"
   [ "$(cat "$actions")" = key:Enter ] || fail "own-line recovery should press Enter once and never type: $(cat "$actions")"
 
+  # Codex indents soft-wrapped composer rows under the prompt glyph. The
+  # matcher removes those two renderer spaces but preserves additional input.
+  wrapped=$(printf '› %s\n  %s\n  %s\n  %s\n\n  model footer\n' \
+    "${line:0:118}" "${line:118:118}" "${line:236:118}" "${line:354}")
+  : > "$actions"; printf '%s' "$wrapped" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending FM_TEST_CLEAR_ON_KEY=1 \
+    ring_with_stubs "$rec" "$actions" "$cap" idle codex || rc=$?
+  [ "$rc" = 0 ] && [ "$(cat "$actions")" = key:Enter ] \
+    || fail "an indented, wrapped Codex doorbell should be resubmitted with Enter only, rc=$rc actions=$(cat "$actions")"
+
   # The stuck shape is recognized whatever the composer verdict says: live
   # codex leaves the cursor on the blank row the swallowed Enter inserted,
   # which the cursor-anchored classifier reads as unknown.
@@ -450,6 +461,28 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   [ "$prefix" != "$space_line" ] || fail "the space-path fixture did not contain run box"
   split=$((${#prefix} + 4))
   space_split=$split
+  wrapped=$(printf '› %s\n  %s\n  %s\n  %s\n\n  model footer\n' \
+    "${space_line:0:118}" "${space_line:118:118}" "${space_line:236:118}" "${space_line:354}")
+  : > "$actions"; printf '%s' "$wrapped" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending FM_TEST_CLEAR_ON_KEY=1 \
+    ring_with_stubs "$space_rec" "$actions" "$cap" idle codex || rc=$?
+  [ "$rc" = 0 ] && [ "$(cat "$actions")" = key:Enter ] \
+    || fail "an indented wrapped doorbell should preserve the literal run box path, rc=$rc actions=$(cat "$actions")"
+  : > "$actions"
+  rc=0
+  FM_TEST_COMPOSER=pending \
+    ring_with_stubs "$compact_rec" "$actions" "$cap" idle codex || rc=$?
+  [ "$rc" = 1 ] && [ ! -s "$actions" ] \
+    || fail "an indented wrapped runbox alias should remain protected, rc=$rc actions=$(cat "$actions")"
+  wrapped=$(printf '› %s\n    %s\n    %s\n    %s\n\n  model footer\n' \
+    "${space_line:0:118}" "${space_line:118:118}" "${space_line:236:118}" "${space_line:354}")
+  : > "$actions"; printf '%s' "$wrapped" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending \
+    ring_with_stubs "$space_rec" "$actions" "$cap" idle codex || rc=$?
+  [ "$rc" = 1 ] && [ ! -s "$actions" ] \
+    || fail "leading spaces beyond Codex's renderer indent should remain foreign text, rc=$rc actions=$(cat "$actions")"
   wrapped=$(printf '› %s\n%s\n' "${space_line:0:split}" "${space_line:split}")
   : > "$actions"; printf '%s\n' "$wrapped" > "$cap"
   rc=0

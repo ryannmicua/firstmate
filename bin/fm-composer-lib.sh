@@ -1516,6 +1516,7 @@ fm_composer_extract_selected_content() {  # <caps> <screen> [preserve-wrap-data]
   local caps=$1 screen=$2 preserve_wrap_data=${3:-0} row_separator=' '
   local styled=0 kv plain row raw content glyph joined='' footer_re prompt_row=-1 row_preserve=0 check_content
   local leading_blank=1 placeholder_position=0 prompt_is_shell=0
+  local codex_wrap=0 previous_row=-2
   [ "$preserve_wrap_data" != 1 ] || row_separator=$'\n'
   footer_re=${FM_COMPOSER_LEFTBAR_FOOTER_RE:-$FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT}
   while IFS= read -r kv; do
@@ -1526,12 +1527,27 @@ EOF
   plain=$(printf '%s\n' "$screen" | fm_composer_strip_ansi)
   _fm_composer_scan_screen "$plain" '' 1
   _fm_composer_select_cursorless "$plain" || return 1
+  if [ "$preserve_wrap_data" = 1 ] && [ "$FM_COMPOSER_SELECTED_KIND" = bare ]; then
+    raw=$(_fm_composer_screen_row "$FM_COMPOSER_SELECTED_FIRST" "$screen")
+    content=$(_fm_composer_row_content "$raw" "$styled" 1)
+    if fm_composer_leading_agent_glyph_var glyph "$content" && [ "$glyph" = '›' ]; then
+      codex_wrap=1
+    fi
+  fi
   row=$FM_COMPOSER_SELECTED_FIRST
   while [ "$row" -le "$FM_COMPOSER_SELECTED_LAST" ]; do
     raw=$(_fm_composer_screen_row "$row" "$screen")
     row_preserve=0
     [ "$preserve_wrap_data" != 1 ] || row_preserve=1
     content=$(_fm_composer_row_content "$raw" "$styled" "$row_preserve")
+    # Codex aligns continuation rows under its `› ` prefix with two renderer
+    # spaces. Strip only those columns; any typed leading spaces remain.
+    if [ "$codex_wrap" = 1 ] \
+       && [ "$row" -gt "$FM_COMPOSER_SELECTED_FIRST" ] \
+       && [ "$previous_row" -eq "$((row - 1))" ] \
+       && [ "${content:0:2}" = '  ' ]; then
+      content=${content#  }
+    fi
     placeholder_position=0
     case "$FM_COMPOSER_SELECTED_KIND" in
       bare)
@@ -1605,6 +1621,7 @@ EOF
       continue
     fi
     joined="${joined}${joined:+$row_separator}$content"
+    previous_row=$row
     row=$((row + 1))
   done
   if [ "$preserve_wrap_data" = 1 ]; then
