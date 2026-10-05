@@ -802,6 +802,52 @@ Two findings from the run shaped the shipped behavior: an OpenCode vendor update
 Kimi was not installed on the verification machine; its receive path is the same one-line-plus-shell contract, and the portable ladder and enqueue regressions in `tests/fm-task-inbox.test.sh` and `tests/fm-send-inbox.test.sh` cover every harness-independent half.
 This guard is the refresh command after any harness upgrade; it spends a small number of real tokens per installed harness, reports an absent harness explicitly, and refuses a run that verified nothing.
 
+### Swallowed-Enter recovery
+
+A doorbell whose Enter the harness swallowed sits unsubmitted in the composer until something presses Enter; `fm_task_inbox_ring` recognizes a composer holding only that inbox's own doorbell and resubmits it with Enter only (`bin/fm-task-inbox-lib.sh` header).
+Verified on 2026-10-05 on Linux x86_64 with tmux 3.4 on a private socket and Herdr 0.9.1 in a named non-default lab session created and torn down by `bin/fm-herdr-lab.sh`:
+
+```sh
+FM_STUCK_DOORBELL_LIVE=1 FM_STUCK_DOORBELL_LIVE_BACKENDS=tmux tests/fm-task-inbox-stuck-doorbell-live-e2e.test.sh
+FM_STUCK_DOORBELL_LIVE=1 FM_STUCK_DOORBELL_LIVE_BACKENDS=herdr tests/fm-task-inbox-stuck-doorbell-live-e2e.test.sh
+```
+
+Observed output (OpenCode updated itself from 1.18.33 to 1.18.34 between the two backend runs):
+
+```text
+ok - codex (codex-cli 0.160.0) on tmux idle-send: Enter swallowed=yes; handled via idle-ring(rc=0)+idle-ring(rc=0)
+ok - codex (codex-cli 0.160.0) on tmux idle-stuck: recognized and resubmitted with Enter only; handled after its own submit
+ok - codex (codex-cli 0.160.0) on tmux mid-turn: Enter swallowed=yes; handled via busy-enter(rc=0)+idle-ring(rc=0)
+ok - claude (2.1.289 (Claude Code)) on tmux idle-send: Enter swallowed=no; handled via its own submit
+ok - claude (2.1.289 (Claude Code)) on tmux idle-stuck: recognized and resubmitted with Enter only; handled after its own submit
+ok - claude (2.1.289 (Claude Code)) on tmux mid-turn: Enter swallowed=no; handled via its own submit
+ok - opencode (1.18.33) on tmux idle-send: Enter swallowed=no; handled via its own submit
+not ok - opencode (1.18.33) on tmux idle-stuck: a doorbell sitting in the composer was not recognized as our own
+ok - opencode (1.18.33) on tmux mid-turn: Enter swallowed=no; handled via its own submit
+ok - pi (0.87.1) on tmux idle-send: Enter swallowed=no; handled via idle-ring(rc=0)
+ok - pi (0.87.1) on tmux idle-stuck: recognized and resubmitted with Enter only; handled after its own submit
+# pi (0.87.1) on tmux mid-turn: the long turn never read as working; the phase may not be mid-turn
+ok - pi (0.87.1) on tmux mid-turn: Enter swallowed=no; handled via its own submit
+ok - codex (codex-cli 0.160.0) on herdr idle-send: Enter swallowed=yes; handled via idle-ring(rc=0)
+ok - codex (codex-cli 0.160.0) on herdr idle-stuck: recognized and resubmitted with Enter only; handled after its own submit
+ok - codex (codex-cli 0.160.0) on herdr mid-turn: Enter swallowed=yes; handled via busy-enter(rc=0)
+ok - claude (2.1.289 (Claude Code)) on herdr idle-send: Enter swallowed=no; handled via its own submit
+ok - claude (2.1.289 (Claude Code)) on herdr idle-stuck: recognized and resubmitted with Enter only; handled after its own submit
+ok - claude (2.1.289 (Claude Code)) on herdr mid-turn: Enter swallowed=no; handled via its own submit
+ok - opencode (1.18.34) on herdr idle-send: Enter swallowed=no; handled via its own submit
+not ok - opencode (1.18.34) on herdr idle-stuck: a doorbell sitting in the composer was not recognized as our own
+ok - opencode (1.18.34) on herdr mid-turn: Enter swallowed=no; handled via its own submit
+ok - pi (0.87.1) on herdr idle-send: Enter swallowed=no; handled via its own submit
+ok - pi (0.87.1) on herdr idle-stuck: recognized and resubmitted with Enter only; handled after its own submit
+ok - pi (0.87.1) on herdr mid-turn: Enter swallowed=no; handled via its own submit
+```
+
+Codex 0.160.0 is the only installed harness exposed: an Enter arriving in the same input read as the typed line becomes a newline, idle and mid-turn, on both backends, leaving the doorbell above a blank row that the tmux cursor-anchored classifier reads as `unknown`; the recovery delivered every case.
+Claude 2.1.289, OpenCode, and Pi 0.87.1 submitted the same immediate Enter themselves.
+Mid-turn Codex labels the stuck composer `tab to queue message`; a manual tmux probe on the same version showed Enter there moves the doorbell to `Messages to be submitted after next tool call` and Tab queues it for turn end, and both ended with the record handled, so recovery presses Enter only and binds no harness-specific queue key.
+OpenCode's idle-stuck failure is a recognition gap, not exposure: the cursorless composer selection rejects its left-bar composer because OpenCode 1.18.33 and later draw a key-hint row directly under the `╹▀▀▀` floor, so a doorbell left in its composer is handled as before this recovery existed: skipped as protected where the composer reads `pending`, and typed again where it reads `unknown`.
+Grok, Kimi, Muse, Cursor, omp, Gemini, Rovo, and Antigravity were not installed on the verification machine.
+
 ## Gemini
 
 The Gemini crewmate adapter was verified on 2026-09-04 with gemini-cli 0.58.0 on Linux, Node v24.20.0, tmux 3.4.

@@ -281,7 +281,8 @@ fm_task_inbox_doorbell_line() {  # <record-path>
 # record's own doorbell line: the residue of a ring whose Enter the harness
 # swallowed. Live codex-cli 0.160.0 turns an Enter that arrives in the same
 # input read as the typed line into a newline, leaving the doorbell in the
-# composer (verified in tmux, idle and mid-turn).
+# composer (verified on tmux and Herdr, idle and mid-turn; docs/verification/
+# runtime-backends.md "Swallowed-Enter recovery").
 # The doorbell line is constant per inbox, so a copy left by an earlier ring
 # is recognized too; any other composer content is someone's input.
 fm_task_inbox_screen_holds_doorbell() {  # <screen> <record-path>
