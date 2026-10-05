@@ -85,6 +85,8 @@ case "${1:-}" in
         mv "$FM_ACK_RECORD" "${FM_ACK_RECORD%/*}/handled/"
       fi
     else
+      printf '%s\n' "${1:-}" >> "${FM_KEY_ATTEMPTS_LOG:-/dev/null}"
+      [ "${FM_FAKE_TMUX_KEY_FAIL:-0}" != 1 ] || exit 1
       printf '%s\n' "${1:-}" >> "${FM_KEY_LOG:-/dev/null}"
     fi
     exit 0 ;;
@@ -268,7 +270,7 @@ test_doorbell_rejects_terminal_controls() {
 # composer (FM_TEST_CLEAR_ON_KEY=1) and a submit whose Enter the harness
 # swallowed can leave its line behind (FM_TEST_SUBMIT_LEAVES=1).
 # Every typed line and pressed key is appended to <actions>.
-ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint]
+ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint] [harness] [claim-state] [task]
   FM_TEST_LIB="$ROOT/bin/fm-task-inbox-lib.sh" FM_TEST_ACTIONS="$2" FM_TEST_CAPTURE="$3" \
     bash -c '
       . "$FM_TEST_LIB"
@@ -278,6 +280,7 @@ ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint]
       fm_backend_capture() { cat "$FM_TEST_CAPTURE"; }
       fm_backend_send_key() {
         printf "key:%s\n" "$3" >> "$FM_TEST_ACTIONS"
+        [ "${FM_TEST_KEY_FAIL:-0}" != 1 ] || return 1
         [ "${FM_TEST_CLEAR_ON_KEY:-0}" != 1 ] || printf "› \n" > "$FM_TEST_CAPTURE"
       }
       fm_backend_send_text_submit() {
@@ -289,8 +292,8 @@ ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint]
           printf empty
         fi
       }
-      fm_task_inbox_ring tmux sess:fm-t1 "$1" fm-t1 "${2:-}"
-    ' _ "$1" "${4:-}"
+      fm_task_inbox_ring tmux sess:fm-t1 "$1" fm-t1 "${2:-}" "${3:-unknown}" "${4:-}" "${5:-}"
+    ' _ "$1" "${4:-}" "${5:-unknown}" "${6:-}" "${7:-}"
 }
 
 test_ring_recovers_only_its_own_pending_doorbell() {
@@ -365,6 +368,15 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   [ "$(cat "$actions")" = "typed:$line"$'\n'key:Enter ] \
     || fail "a swallowed send should be recovered by one Enter: $(cat "$actions")"
 
+  : > "$actions"; printf '› \n' > "$cap"
+  rc=0
+  FM_TEST_BUSY=busy FM_TEST_SUBMIT_LEAVES=1 FM_TEST_KEY_FAIL=1 \
+    ring_with_stubs "$rec" "$actions" "$cap" '' codex "$state" t1 || rc=$?
+  [ "$rc" = 2 ] && [ "$(cat "$actions")" = "typed:$line"$'\n'key:Enter ] \
+    || fail "a failed Enter after a swallowed initial submit should remain retryable, rc=$rc actions=$(cat "$actions")"
+  [ ! -e "$state/t1.inbox/.busy-enter" ] \
+    || fail "a failed Enter after a swallowed initial submit consumed the busy claim"
+
   # Foreign text sharing the composer is never submitted or altered.
   : > "$actions"; printf '› %s please keep this draft\n' "$line" > "$cap"
   rc=0
@@ -399,6 +411,13 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   FM_TEST_COMPOSER=pending ring_with_stubs "$space_rec" "$actions" "$cap" idle || rc=$?
   [ "$rc" = 1 ] || fail "a space-aliased foreign doorbell should stay protected, rc=$rc"
   [ ! -s "$actions" ] || fail "a space-aliased foreign doorbell was submitted: $(cat "$actions")"
+
+  : > "$actions"; printf 'Working...\n› %s\n' "$line" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending FM_BUSY_REGEX='' \
+    ring_with_stubs "$rec" "$actions" "$cap" '' codex || rc=$?
+  [ "$rc" = 2 ] && [ "$(cat "$actions")" = $'key:Enter\nkey:Enter\nkey:Enter' ] \
+    || fail "generic Working output should not make an unknown Codex pane busy, rc=$rc actions=$(cat "$actions")"
 
   # The watcher's working-pane mode never types; with nothing of its own
   # pending it reports that distinctly.
@@ -755,7 +774,7 @@ test_watcher_unknown_codex_busy_doorbell_gets_one_enter() {
   printf 'esc to interrupt\n› %s\n' "$line" > "$dir/busy.capture"
   watch_bg "$state" "$dir/fakebin" "$out" \
     FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
-    FM_TASK_INBOX_RING_MAX=99
+    FM_TASK_INBOX_RING_MAX=1
   pid=$!
   while [ "$i" -lt 100 ]; do
     [ -s "$keys" ] && break
@@ -770,7 +789,44 @@ test_watcher_unknown_codex_busy_doorbell_gets_one_enter() {
   [ ! -s "$log" ] || fail "a visible mid-turn doorbell was typed again:"$'\n'"$(cat "$log")"
   [ "$(cat "$state/t1.inbox/.busy-enter" 2>/dev/null)" = "${rec##*/}" ] \
     || fail "the rendered busy fallback did not retain the one-Enter claim"
-  pass "watcher: an unknown-busy Codex pane uses the rendered busy fallback and queues its doorbell once"
+  [ ! -e "$state/t1.inbox/.ring-state" ] || fail "an unknown-busy Codex turn spent a ladder attempt"
+  if grep -qF 'unread firstmate instruction' "$state/.wake-queue" 2>/dev/null; then
+    fail "an unknown-busy Codex turn escalated its unread instruction:"$'\n'"$(cat "$state/.wake-queue")"
+  fi
+  pass "watcher: an unknown-busy Codex turn queues once without spending or escalating the ladder"
+}
+
+test_watcher_failed_enter_releases_busy_claim() {
+  local dir state out log keys attempts pid rec line i=0
+  dir=$(setup_watch_case busy-enter-failed)
+  state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; keys="$dir/keys.log"
+  attempts="$dir/key-attempts.log"; : > "$log"; : > "$keys"; : > "$attempts"
+  fm_write_meta "$state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=codex"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  line=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
+  age_path "$rec"
+  printf 'esc to interrupt\n› %s\n' "$line" > "$dir/busy.capture"
+  watch_bg "$state" "$dir/fakebin" "$out" \
+    FM_SEND_LOG="$log" FM_KEY_LOG="$keys" FM_KEY_ATTEMPTS_LOG="$attempts" \
+    FM_FAKE_TMUX_KEY_FAIL=1 FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" FM_TASK_INBOX_RING_MAX=1
+  pid=$!
+  while [ "$i" -lt 100 ]; do
+    [ "$(wc -l < "$attempts" | tr -d ' ')" -ge 2 ] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  sleep 1
+  kill -0 "$pid" 2>/dev/null || fail "failed Enter transport exited the watcher:"$'\n'"$(cat "$out")"
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+  [ "$(wc -l < "$attempts" | tr -d ' ')" -ge 2 ] || fail "the busy Enter was not retried after key transport failure"
+  [ ! -s "$keys" ] || fail "a failed key transport was recorded as a sent Enter:"$'\n'"$(cat "$keys")"
+  [ ! -e "$state/t1.inbox/.busy-enter" ] || fail "a failed Enter transport retained its one-shot claim"
+  [ ! -e "$state/t1.inbox/.ring-state" ] || fail "a busy turn spent a ladder attempt after key transport failure"
+  if grep -qF 'unread firstmate instruction' "$state/.wake-queue" 2>/dev/null; then
+    fail "a failed busy Enter escalated its unread instruction:"$'\n'"$(cat "$state/.wake-queue")"
+  fi
+  pass "watcher: a failed busy Enter releases its claim for the next poll"
 }
 
 test_watcher_failed_revalidation_does_not_claim_busy_enter() {
@@ -992,6 +1048,7 @@ test_watcher_rerings_idle_pane_quietly
 test_watcher_waits_on_busy_pane
 test_watcher_busy_pane_gets_one_enter_for_its_stuck_doorbell
 test_watcher_unknown_codex_busy_doorbell_gets_one_enter
+test_watcher_failed_enter_releases_busy_claim
 test_watcher_failed_revalidation_does_not_claim_busy_enter
 test_watcher_resubmits_stuck_doorbell_on_idle_pane
 test_watcher_quiet_on_healthy_inbox

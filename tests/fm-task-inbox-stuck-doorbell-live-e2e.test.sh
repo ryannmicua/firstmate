@@ -213,7 +213,10 @@ wait_idle() {  # <backend> <target> <harness>
 # working pane gets one Enter for its own stuck doorbell; an idle pane gets an
 # ordinary watcher-mode ring every 20 seconds. Prints how it recovered.
 watch_until_handled() {  # <backend> <target> <harness> <record> <acted>
-  local backend=$1 target=$2 harness=$3 rec=$4 acted=$5 i=0 claimed=0 last=0 how='' rc
+  local backend=$1 target=$2 harness=$3 rec=$4 acted=$5 i=0 claimed=0 last=0 how='' rc inbox_dir state task
+  inbox_dir=${rec%/*}
+  state=${inbox_dir%/*}
+  task=${inbox_dir##*/}; task=${task%.inbox}
   local handled="${rec%/*}/handled/${rec##*/}"
   while [ "$i" -lt "$TIMEOUT" ]; do
     if [ -f "$handled" ] && [ -e "$acted" ]; then
@@ -225,12 +228,12 @@ watch_until_handled() {  # <backend> <target> <harness> <record> <acted>
         if [ "$claimed" -eq 0 ] && fm_task_inbox_screen_holds_doorbell "$(screen_of "$backend" "$target")" "$rec"; then
           claimed=1
           rc=0
-          fm_task_inbox_ring "$backend" "$target" "$rec" '' busy || rc=$?
+          fm_task_inbox_ring "$backend" "$target" "$rec" '' busy "$harness" "$state" "$task" || rc=$?
           how="${how:+$how+}busy-enter(rc=$rc)"
         fi
       elif [ $((i - last)) -ge 20 ]; then
         rc=0
-        fm_task_inbox_ring "$backend" "$target" "$rec" '' idle || rc=$?
+        fm_task_inbox_ring "$backend" "$target" "$rec" '' idle "$harness" "$state" "$task" || rc=$?
         how="${how:+$how+}idle-ring(rc=$rc)"
         last=$i
       fi
@@ -282,7 +285,7 @@ check_one() {  # <backend> <harness>
     screen_of "$backend" "$target" | grep '[^[:space:]]' | tail -8 | sed 's/^/#   /' >&2
   else
     rc=0
-    fm_task_inbox_ring "$backend" "$target" "$rec" '' idle || rc=$?
+    fm_task_inbox_ring "$backend" "$target" "$rec" '' idle "$name" "$state" t1 || rc=$?
     if [ "$rc" != 0 ]; then
       bad "$label idle-stuck: the Enter-only resubmit left the doorbell pending (rc=$rc)"
     elif how=$(watch_until_handled "$backend" "$target" "$name" "$rec" "$acted"); then

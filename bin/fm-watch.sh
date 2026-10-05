@@ -356,8 +356,8 @@ hash_pane() {
 # into the contract's harness-scoped rendered-text checks: the Grok/Rovo/AGY
 # busy fallbacks and the launch-prompt backstop that keeps a launch pinned at
 # its fm-spawn seed from reading as provably working.
-window_is_busy() {  # <window> <tail40>
-  local w=$1 tail40=$2 task meta verdict
+window_is_busy() {  # <window> <tail40> [state-var]
+  local w=$1 tail40=$2 task meta verdict state_var=${3:-}
   task=$(window_to_task "$w" "$STATE")
   meta="$STATE/$task.meta"
   if [ -n "$task" ] && [ -f "$meta" ]; then
@@ -366,6 +366,7 @@ window_is_busy() {  # <window> <tail40>
     verdict=$(fm_busy_classify "$(window_backend "$w")" "$w" "$(window_harness "$w")" \
       "${task:-unknown}" "$STATE" "$tail40")
   fi
+  [ -z "$state_var" ] || printf -v "$state_var" '%s' "${verdict%% *}"
   [ "${verdict%% *}" = busy ]
 }
 
@@ -458,6 +459,7 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
 # while an unacknowledged instruction past the ladder is a stuck steer.
 inbox_steer_check() {  # <window> <task>
   local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state
+  local harness label semantic_busy delivery_busy delivery_hint ring_busy
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
   [ "$verb" != quiet ] || return 0
@@ -478,14 +480,23 @@ inbox_steer_check() {  # <window> <task>
       ;;
   esac
   tail40=$(fm_backend_capture "$backend" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
-  if window_is_busy "$w" "$tail40"; then
+  harness=$(window_harness "$w")
+  label=$(window_label "$w")
+  semantic_busy=unknown
+  window_is_busy "$w" "$tail40" semantic_busy || true
+  case "$semantic_busy" in
+    busy|idle) delivery_busy=$semantic_busy ;;
+    unknown) delivery_busy=$(_fm_task_inbox_busy_state "$backend" "$w" "$label" '' "$harness" "$tail40") ;;
+    *) delivery_busy=unknown ;;
+  esac
+  if [ "$delivery_busy" = busy ]; then
     # A working pane is never typed into and spends no attempt. Its own
     # doorbell left in the composer by a swallowed Enter gets one Enter per
     # message, so a harness that queues mid-turn input still sees the steer.
     [ "$verb" = ring ] || return 0
     fm_task_inbox_screen_holds_doorbell "$tail40" "$rec" || return 0
     ring_rc=0
-    fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" busy "$STATE" "$task" || ring_rc=$?
+    fm_task_inbox_ring "$backend" "$w" "$rec" "$label" busy "$harness" "$STATE" "$task" || ring_rc=$?
     if [ "$ring_rc" -eq 3 ]; then
       inbox_steer_escalate_unavailable "$w" "$task" "$rec"
       return 0
@@ -496,9 +507,17 @@ inbox_steer_check() {  # <window> <task>
   case "$verb" in
     ring)
       ring_rc=0
-      fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" '' "$STATE" "$task" || ring_rc=$?
+      delivery_hint=
+      [ "$delivery_busy" != idle ] || delivery_hint=idle
+      ring_busy=unknown
+      fm_task_inbox_ring "$backend" "$w" "$rec" "$label" "$delivery_hint" \
+        "$harness" "$STATE" "$task" ring_busy || ring_rc=$?
       if [ "$ring_rc" -eq 3 ]; then
         inbox_steer_escalate_unavailable "$w" "$task" "$rec"
+        return 0
+      fi
+      if [ "$ring_busy" = busy ]; then
+        triage_log "steer-inbox busy delivery deferred: $task ${rec##*/} result=$ring_rc"
         return 0
       fi
       if ! fm_task_inbox_record_ring "$STATE" "$task" "$rec"; then
@@ -842,7 +861,8 @@ secondmate_ring_to_drain() {  # <task> <window>
   rec=$(fm_task_inbox_write "$STATE" "$task" \
     "${FM_FROMFIRST_MARK}delivery=${delivery_id} Drain pending rows in this home's wake queue, then resume idle supervision." \
     fire-and-forget) || return 1
-  fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")"
+  fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" '' \
+    "$(window_harness "$w")" "$STATE" "$task"
 }
 
 # Surface one durable parent check when the foreign queue's drain position has

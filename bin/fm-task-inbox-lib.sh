@@ -48,15 +48,17 @@
 #
 # Re-ring ladder (fm_task_inbox_due_action): an unhandled message older than
 # FM_TASK_INBOX_GRACE_SECS is due one delivery attempt per grace period; an
-# attempt may ring, resubmit this inbox's own doorbell left in the composer by
-# a swallowed Enter (Enter only, never retyped), or be skipped to protect other
-# proven pending composer text. After FM_TASK_INBOX_RING_MAX attempts without
-# an acknowledgement it escalates. The caller owns the busy and recovery-grade
-# endpoint checks: a busy pane is never typed into and consumes no attempt,
-# though its own pending doorbell gets one Enter per message
-# (fm_task_inbox_claim_busy_enter), while a positively dead or missing endpoint
-# skips delivery and the ladder and escalates directly. This library owns only
-# the schedule and the escalation and busy-Enter markers.
+# attempt may ring, resubmit this inbox's exactly recognized doorbell left in the
+# composer by a swallowed Enter (Enter only, never retyped), or be skipped when
+# the composer is exactly proven pending with other text. Ambiguous composers
+# still use type-and-submit by design, so an unreadable harness is not starved.
+# After FM_TASK_INBOX_RING_MAX attempts without an acknowledgement it escalates.
+# The watcher owns its busy and recovery-grade endpoint checks: it does not type
+# into a pane it has classified busy or spend a ladder attempt there, though that
+# pane's recognized own doorbell gets one Enter per message
+# (fm_task_inbox_claim_busy_enter). A positively dead or missing endpoint skips
+# delivery and the ladder and escalates directly. This library owns only the
+# schedule and the escalation and busy-Enter markers.
 # If attempt bookkeeping cannot be persisted while the record remains unhandled,
 # the caller surfaces that failure instead of retrying silently; a concurrently
 # removed inbox is a quiet no-op. Escalation deliberately queues the wake before
@@ -300,10 +302,10 @@ _fm_task_inbox_doorbell_pending() {  # <backend> <target> <record-path> [expecte
 }
 
 # Delivery-busy for the shared queued-Enter verdict: the caller's semantic
-# hint when it has one, else the backend's native state, else the rendered
-# busy footer that bin/fm-tmux-lib.sh's submit core also reads.
-_fm_task_inbox_busy_state() {  # <backend> <target> [expected-label] [hint]
-  local busy screen
+# hint when it has one, else the backend's native state, else the target
+# harness's rendered busy footer that bin/fm-tmux-lib.sh's submit core also reads.
+_fm_task_inbox_busy_state() {  # <backend> <target> [expected-label] [hint] [harness] [screen]
+  local busy screen harness=${5:-unknown}
   case "${4:-}" in
     busy|idle) printf '%s' "$4"; return 0 ;;
   esac
@@ -311,8 +313,11 @@ _fm_task_inbox_busy_state() {  # <backend> <target> [expected-label] [hint]
   case "$busy" in
     busy|idle) printf '%s' "$busy"; return 0 ;;
   esac
-  screen=$(fm_backend_capture "$1" "$2" 40 "${3:-}" 2>/dev/null) || { printf 'unknown'; return 0; }
-  if printf '%s\n' "$screen" | grep -v '^[[:space:]]*$' | tail -12 | fm_busy_lines_match; then
+  screen=${6:-}
+  if [ -z "$screen" ]; then
+    screen=$(fm_backend_capture "$1" "$2" 40 "${3:-}" 2>/dev/null) || { printf 'unknown'; return 0; }
+  fi
+  if printf '%s\n' "$screen" | grep -v '^[[:space:]]*$' | tail -12 | fm_busy_lines_match "$harness"; then
     printf 'busy'
   else
     printf 'unknown'
@@ -326,42 +331,49 @@ _fm_task_inbox_busy_state() {  # <backend> <target> [expected-label] [hint]
 # composer no longer holds the doorbell.
 # Returns 0 once the composer no longer holds it, or when it is still visible
 # on a working pane (fm_composer_queued_enter_verdict: accepted and queued),
-# and 2 when no Enter could be sent or the doorbell is still pending on a pane
-# not known to be working.
+# and 2 when an Enter was sent but the doorbell is still pending on a pane not
+# known to be working. Internal status 5 means no Enter was successfully sent.
 _fm_task_inbox_enter_pending_doorbell() {  # <backend> <target> <record-path> <label> <busy>
   local backend=$1 target=$2 rec=$3 label=$4 busy=$5 attempt=0 attempts=3 sent=0
   [ "$busy" != busy ] || attempts=1
   while [ "$attempt" -lt "$attempts" ]; do
     fm_backend_send_key "$backend" "$target" Enter "$label" 2>/dev/null && sent=1
     sleep 0.4
-    _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label" || return 0
+    if ! _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
+      [ "$sent" -eq 1 ] || return 5
+      return 0
+    fi
     attempt=$((attempt + 1))
   done
-  [ "$sent" -eq 1 ] || return 2
+  [ "$sent" -eq 1 ] || return 5
   [ "$(fm_composer_queued_enter_verdict pending "$busy")" = empty ] && return 0
   return 2
 }
 
 # Ring the doorbell, best-effort, after checking endpoint liveness and the
 # composer state.
-# A composer holding only this inbox's doorbell is submitted again with Enter
-# only, never retyped. Any other proven pending composer stays untouched and
-# is retried by the watcher later. Empty, pending-unproven, and unknown
-# composers get the backend's type-and-submit path; ambiguous shapes remain
-# advisory so a harness the classifier cannot read is not starved of steering.
+# A composer holding only this inbox's exactly recognized doorbell is submitted
+# again with Enter only, never retyped. An exact `pending` verdict protects any
+# different text; pending-unproven and unknown composers still use the
+# type-and-submit path by design, so a harness the classifier cannot read is
+# not starved of steering.
 # When that submit is not confirmed and the doorbell is left sitting in the
 # composer, the same Enter-only recovery runs at once.
 # A <busy-hint> of busy or idle is the caller's semantic verdict for the pane.
 # busy is the watcher's working-pane mode: it only recovers a doorbell already
 # in the composer and never types into a working agent.
-# Returns 0 when submitted or queued, 1 when a composer is protected, 2 when
-# sending failed or the doorbell is still sitting unsubmitted, 3 when the
-# endpoint is positively dead or missing, or 4 in busy mode when no doorbell
-# was pending. No return value is delivery proof; the acknowledgement move is
-# the only delivery signal.
-fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [busy-hint] [claim-state] [claim-task]
-  local backend=$1 target=$2 rec=$3 label=${4:-} hint=${5:-} claim_state=${6:-} claim_task=${7:-}
+# Returns 0 when submitted or queued, 1 when an exact pending verdict protects
+# the composer, 2 when sending failed or the doorbell is still sitting
+# unsubmitted, 3 when the endpoint is positively dead or missing, or 4 in busy
+# mode when no doorbell was pending or its one-Enter claim already exists. No
+# return value is delivery proof; the acknowledgement move is the only delivery
+# signal. The optional busy-result variable receives the resolved classification
+# for a recognized own doorbell.
+fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [busy-hint] [harness] [claim-state] [claim-task] [busy-result-var]
+  local backend=$1 target=$2 rec=$3 label=${4:-} hint=${5:-} harness=${6:-unknown}
+  local claim_state=${7:-} claim_task=${8:-} busy_result_var=${9:-}
   local line cstate verdict busy
+  [ -z "$busy_result_var" ] || printf -v "$busy_result_var" '%s' unknown
   case "$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || true)" in
     dead|missing) return 3 ;;
   esac
@@ -369,12 +381,10 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [bus
     return 2
   fi
   if _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
-    busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint")
-    if [ "$busy" = busy ] && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
-      fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" || return 4
-    fi
-    _fm_task_inbox_enter_pending_doorbell "$backend" "$target" "$rec" "$label" \
-      "$busy"
+    busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint" "$harness")
+    [ -z "$busy_result_var" ] || printf -v "$busy_result_var" '%s' "$busy"
+    _fm_task_inbox_recover_pending_doorbell "$backend" "$target" "$rec" "$label" \
+      "$busy" "$claim_state" "$claim_task"
     return
   fi
   [ "$hint" != busy ] || return 4
@@ -394,12 +404,10 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label] [bus
   [ "$verdict" != send-failed ] || return 2
   [ "$verdict" != empty ] || return 0
   if _fm_task_inbox_doorbell_pending "$backend" "$target" "$rec" "$label"; then
-    busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint")
-    if [ "$busy" = busy ] && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
-      fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" || return 4
-    fi
-    _fm_task_inbox_enter_pending_doorbell "$backend" "$target" "$rec" "$label" \
-      "$busy"
+    busy=$(_fm_task_inbox_busy_state "$backend" "$target" "$label" "$hint" "$harness")
+    [ -z "$busy_result_var" ] || printf -v "$busy_result_var" '%s' "$busy"
+    _fm_task_inbox_recover_pending_doorbell "$backend" "$target" "$rec" "$label" \
+      "$busy" "$claim_state" "$claim_task"
     return
   fi
   return 0
@@ -526,6 +534,32 @@ fm_task_inbox_claim_busy_enter() {  # <state-dir> <task-id> <record-path>
   [ -d "$dir" ] || return 1
   [ "$(cat "$dir/.busy-enter" 2>/dev/null || true)" != "$base" ] || return 1
   { printf '%s\n' "$base" > "$dir/.busy-enter"; } 2>/dev/null
+}
+
+_fm_task_inbox_release_busy_enter() {  # <state-dir> <task-id> <record-path>
+  local dir base marker
+  dir=$(fm_task_inbox_dir "$1" "$2")
+  base=${3##*/}
+  marker="$dir/.busy-enter"
+  [ "$(cat "$marker" 2>/dev/null || true)" != "$base" ] || rm -f "$marker" 2>/dev/null
+}
+
+_fm_task_inbox_recover_pending_doorbell() {  # <backend> <target> <record-path> <label> <busy> <claim-state> <claim-task>
+  local backend=$1 target=$2 rec=$3 label=$4 busy=$5 claim_state=$6 claim_task=$7
+  local claimed=0 rc=0
+  if [ "$busy" = busy ] && [ -n "$claim_state" ] && [ -n "$claim_task" ]; then
+    fm_task_inbox_claim_busy_enter "$claim_state" "$claim_task" "$rec" || return 4
+    claimed=1
+  fi
+  _fm_task_inbox_enter_pending_doorbell "$backend" "$target" "$rec" "$label" \
+    "$busy" || rc=$?
+  if [ "$rc" = 5 ]; then
+    if [ "$claimed" = 1 ]; then
+      _fm_task_inbox_release_busy_enter "$claim_state" "$claim_task" "$rec" || true
+    fi
+    return 2
+  fi
+  return "$rc"
 }
 
 # Mark the current oldest as escalated after its stale wake is durably queued,
