@@ -284,7 +284,7 @@ ring_with_stubs() {  # <record> <actions> <capture-file> [busy-hint]
 }
 
 test_ring_recovers_only_its_own_pending_doorbell() {
-  local dir state rec line rc actions cap wrapped joined
+  local dir state rec line rc actions cap wrapped joined space_state compact_state space_rec compact_rec space_line compact_line prefix split
   dir="$TMP_ROOT/pending-doorbell"; state="$dir/state"
   mkdir -p "$state"
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
@@ -361,6 +361,28 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   FM_TEST_COMPOSER=pending ring_with_stubs "$rec" "$actions" "$cap" idle || rc=$?
   [ "$rc" = 1 ] || fail "foreign text sharing the composer should stay skipped, rc=$rc"
   [ ! -s "$actions" ] || fail "foreign composer text was submitted or altered: $(cat "$actions")"
+
+  # Paths differing only by a space must remain distinct doorbells.
+  space_state="$dir/path/run box/state"; compact_state="$dir/path/runbox/state"
+  mkdir -p "$space_state" "$compact_state"
+  space_rec=$(inbox_lib "$space_state" fm_task_inbox_write "$space_state" t1 "please continue")
+  compact_rec=$(inbox_lib "$compact_state" fm_task_inbox_write "$compact_state" t1 "please continue")
+  space_line=$(inbox_lib "$space_state" fm_task_inbox_doorbell_line "$space_rec")
+  compact_line=$(inbox_lib "$compact_state" fm_task_inbox_doorbell_line "$compact_rec")
+  [ "${space_line//[[:space:]]/}" = "${compact_line//[[:space:]]/}" ] \
+    || fail "the path-alias fixture must differ only by a space"
+  prefix=${space_line%%instruction*}; split=$((${#prefix} + 5))
+  wrapped=$(printf '› %s\n  %s\n' "${space_line:0:split}" "${space_line:split}")
+  : > "$actions"; printf '%s\n' "$wrapped" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending FM_TEST_CLEAR_ON_KEY=1 ring_with_stubs "$space_rec" "$actions" "$cap" idle || rc=$?
+  [ "$rc" = 0 ] && [ "$(cat "$actions")" = key:Enter ] \
+    || fail "a wrapped doorbell should retain literal path spaces and be resubmitted, rc=$rc actions=$(cat "$actions")"
+  : > "$actions"; printf '› %s\n' "$compact_line" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending ring_with_stubs "$space_rec" "$actions" "$cap" idle || rc=$?
+  [ "$rc" = 1 ] || fail "a space-aliased foreign doorbell should stay protected, rc=$rc"
+  [ ! -s "$actions" ] || fail "a space-aliased foreign doorbell was submitted: $(cat "$actions")"
 
   # The watcher's working-pane mode never types; with nothing of its own
   # pending it reports that distinctly.

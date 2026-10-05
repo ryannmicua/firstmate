@@ -1509,9 +1509,11 @@ _fm_composer_select_cursorless() {
   [ -n "$FM_COMPOSER_SELECTED_KIND" ]
 }
 
-fm_composer_extract_selected_content() {  # <caps> <screen>
-  local caps=$1 screen=$2 styled=0 kv plain row raw content glyph joined='' footer_re prompt_row=-1
+fm_composer_extract_selected_content() {  # <caps> <screen> [preserve-row-breaks]
+  local caps=$1 screen=$2 preserve_row_breaks=${3:-0} row_separator=' '
+  local styled=0 kv plain row raw content glyph joined='' footer_re prompt_row=-1
   local leading_blank=1 placeholder_position=0 prompt_is_shell=0
+  [ "$preserve_row_breaks" != 1 ] || row_separator=$'\n'
   footer_re=${FM_COMPOSER_LEFTBAR_FOOTER_RE:-$FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT}
   while IFS= read -r kv; do
     [ "$kv" = styled=1 ] && styled=1
@@ -1579,29 +1581,29 @@ EOF
       row=$((row + 1))
       continue
     fi
-    joined="${joined}${joined:+ }$content"
+    joined="${joined}${joined:+$row_separator}$content"
     row=$((row + 1))
   done
-  printf '%s\n' "$joined" | LC_ALL=C awk '{$1=$1; printf "%s", $0}'
+  if [ "$preserve_row_breaks" = 1 ]; then
+    printf '%s' "$joined"
+  else
+    printf '%s\n' "$joined" | LC_ALL=C awk '{$1=$1; printf "%s", $0}'
+  fi
 }
 
 # fm_composer_screen_holds_only_text: whether the selected composer holds
 # nothing but one or more copies of <text>. This lets a caller recognize its
 # own already-typed line and submit it again; any other content is someone's
 # input and must never be submitted.
-# Whitespace is ignored on both sides because a harness wraps long input at
-# its own column, breaking a long token mid-word, and the extracted rows
-# rejoin with a space the typed text never had (verified live on codex-cli
-# 0.160.0 with a wrapped inbox path). Copies typed back to back without an
-# Enter between them also join with no separator at all.
+# Screen row boundaries are removed after selected-row extraction has trimmed
+# each row edge. Spaces within a row remain significant.
 fm_composer_screen_holds_only_text() {  # <caps> <screen> <text>
   local caps=$1 screen=$2 expected=$3 remaining
   fm_composer_normalize_spaces_var expected
-  expected=${expected//[[:space:]]/}
   [ -n "$expected" ] || return 1
-  remaining=$(fm_composer_extract_selected_content "$caps" "$screen") || return 1
+  remaining=$(fm_composer_extract_selected_content "$caps" "$screen" 1) || return 1
   fm_composer_normalize_spaces_var remaining
-  remaining=${remaining//[[:space:]]/}
+  remaining=${remaining//$'\n'/}
   [ -n "$remaining" ] || return 1
   while [ -n "$remaining" ]; do
     case "$remaining" in
