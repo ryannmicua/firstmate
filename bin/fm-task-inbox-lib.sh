@@ -286,7 +286,9 @@ fm_task_inbox_doorbell_line() {  # <record-path>
 # composer (verified on tmux and Herdr, idle and mid-turn; docs/verification/
 # runtime-backends.md "Swallowed-Enter recovery").
 # The doorbell line is constant per inbox, so a copy left by an earlier ring
-# is recognized too; any other composer content is someone's input.
+# is recognized too. This identifies a recognized own doorbell for Enter-only
+# recovery. Only an exact `pending` composer verdict protects other text;
+# `pending-unproven` and `unknown` still use type-and-submit by design.
 fm_task_inbox_screen_holds_doorbell() {  # <screen> <record-path>
   local screen=$1 line caps
   line=$(fm_task_inbox_doorbell_line "$2") || return 1
@@ -454,7 +456,13 @@ fm_task_inbox_due_action() {  # <state-dir> <task-id>
   local dir oldest base now grace max ladder rec_base count last
   dir=$(fm_task_inbox_dir "$1" "$2")
   if ! oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2"); then
-    rm -f "$dir/.ring-state" "$dir/.escalated" "$dir/.busy-enter" 2>/dev/null || true
+    rm -f "$dir/.ring-state" "$dir/.escalated" 2>/dev/null || true
+    if [ -d "$dir" ] && fm_task_inbox_lock_acquire "$dir/.busy-enter.lock"; then
+      if ! fm_task_inbox_oldest_unhandled "$1" "$2" >/dev/null; then
+        rm -f "$dir/.busy-enter" 2>/dev/null || true
+      fi
+      fm_lock_release "$dir/.busy-enter.lock" || true
+    fi
     printf 'quiet'
     return 0
   fi
@@ -528,20 +536,32 @@ EOF
 # claims, so an unwritable inbox degrades to waiting for the idle pane rather
 # than pressing Enter on every poll.
 fm_task_inbox_claim_busy_enter() {  # <state-dir> <task-id> <record-path>
-  local dir base
+  local dir base lock marker rc=1
   dir=$(fm_task_inbox_dir "$1" "$2")
   base=${3##*/}
   [ -d "$dir" ] || return 1
-  [ "$(cat "$dir/.busy-enter" 2>/dev/null || true)" != "$base" ] || return 1
-  { printf '%s\n' "$base" > "$dir/.busy-enter"; } 2>/dev/null
+  lock="$dir/.busy-enter.lock"
+  marker="$dir/.busy-enter"
+  fm_task_inbox_lock_acquire "$lock" || return 1
+  if [ "$(cat "$marker" 2>/dev/null || true)" != "$base" ]; then
+    { printf '%s\n' "$base" > "$marker"; } 2>/dev/null && rc=0
+  fi
+  fm_lock_release "$lock" || true
+  return "$rc"
 }
 
 _fm_task_inbox_release_busy_enter() {  # <state-dir> <task-id> <record-path>
-  local dir base marker
+  local dir base marker lock
   dir=$(fm_task_inbox_dir "$1" "$2")
   base=${3##*/}
+  [ -d "$dir" ] || return 0
   marker="$dir/.busy-enter"
-  [ "$(cat "$marker" 2>/dev/null || true)" != "$base" ] || rm -f "$marker" 2>/dev/null
+  lock="$dir/.busy-enter.lock"
+  fm_task_inbox_lock_acquire "$lock" || return 1
+  if [ "$(cat "$marker" 2>/dev/null || true)" = "$base" ]; then
+    rm -f "$marker" 2>/dev/null || true
+  fi
+  fm_lock_release "$lock" || true
 }
 
 _fm_task_inbox_recover_pending_doorbell() {  # <backend> <target> <record-path> <label> <busy> <claim-state> <claim-task>

@@ -572,6 +572,82 @@ test_concurrent_writers_never_clobber() {
   pass "inbox: concurrent writers serialize on the sequence lock and lose nothing"
 }
 
+hold_busy_enter_lock() {  # <state-dir> <lock-path> <gate-dir>
+  FM_STATE_OVERRIDE="$1" bash -c '
+    . "$1"
+    lock=$2 gate=$3
+    fm_task_inbox_lock_acquire "$lock" || exit 1
+    : > "$gate/locked"
+    while [ ! -e "$gate/release" ]; do sleep 0.01; done
+    fm_lock_release "$lock"
+  ' _ "$ROOT/bin/fm-task-inbox-lib.sh" "$2" "$3"
+}
+
+claim_busy_enter_after_gate() {  # <state-dir> <record-path> <gate-dir> <id>
+  FM_STATE_OVERRIDE="$1" bash -c '
+    . "$1"
+    state=$2 rec=$3 gate=$4 id=$5
+    : > "$gate/ready.$id"
+    while [ ! -e "$gate/go" ]; do sleep 0.01; done
+    : > "$gate/started.$id"
+    if fm_task_inbox_claim_busy_enter "$state" t1 "$rec"; then
+      printf claimed
+    else
+      printf rejected
+    fi
+  ' _ "$ROOT/bin/fm-task-inbox-lib.sh" "$1" "$2" "$3" "$4"
+}
+
+test_concurrent_busy_enter_claim_is_exclusive() {
+  local dir="$TMP_ROOT/busy-enter-claim-race" state="$TMP_ROOT/busy-enter-claim-race/state"
+  local gate="$TMP_ROOT/busy-enter-claim-race/gate" rec ready=0 p0 p1 p2 wins=0 attempt completed_while_locked=0
+  mkdir -p "$state" "$gate"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  hold_busy_enter_lock "$state" "$state/t1.inbox/.busy-enter.lock" "$gate" &
+  p0=$!
+  for ((attempt = 0; attempt < 200; attempt++)); do
+    [ -f "$gate/locked" ] && break
+    sleep 0.01
+  done
+  if [ ! -f "$gate/locked" ]; then
+    : > "$gate/release"
+    wait "$p0" || true
+    fail "busy Enter lock holder should acquire the shared lock"
+  fi
+  claim_busy_enter_after_gate "$state" "$rec" "$gate" 1 > "$gate/result.1" &
+  p1=$!
+  claim_busy_enter_after_gate "$state" "$rec" "$gate" 2 > "$gate/result.2" &
+  p2=$!
+  for ((attempt = 0; attempt < 200; attempt++)); do
+    if [ -f "$gate/ready.1" ] && [ -f "$gate/ready.2" ]; then
+      ready=1
+      break
+    fi
+    sleep 0.01
+  done
+  : > "$gate/go"
+  for ((attempt = 0; attempt < 200; attempt++)); do
+    if [ -f "$gate/started.1" ] && [ -f "$gate/started.2" ]; then
+      break
+    fi
+    sleep 0.01
+  done
+  sleep 0.1
+  [ ! -s "$gate/result.1" ] && [ ! -s "$gate/result.2" ] || completed_while_locked=1
+  : > "$gate/release"
+  wait "$p0" || fail "busy Enter lock holder failed"
+  wait "$p1" || fail "first busy Enter claimer failed"
+  wait "$p2" || fail "second busy Enter claimer failed"
+  [ "$completed_while_locked" = 0 ] || fail "busy Enter claims should wait for the shared lock"
+  [ "$ready" = 1 ] || fail "both busy Enter claimers should reach the start gate"
+  [ "$(cat "$gate/result.1")" = claimed ] && wins=$((wins + 1))
+  [ "$(cat "$gate/result.2")" = claimed ] && wins=$((wins + 1))
+  [ "$wins" = 1 ] || fail "exactly one concurrent busy Enter claimer should win, got $wins"
+  [ "$(cat "$state/t1.inbox/.busy-enter")" = "${rec##*/}" ] \
+    || fail "the winning busy Enter claim should remain recorded"
+  pass "inbox: concurrent busy Enter claimers allow exactly one winner"
+}
+
 test_writer_retries_after_a_vanished_lock_collision() {
   local state fakebin marker rec real_ln
   state="$TMP_ROOT/vanished-lock-race/state"
@@ -1040,6 +1116,7 @@ test_idempotent_write_dedups_exact_body
 test_idempotent_write_follows_concurrent_ack
 test_handled_mv_dedups_by_sequence
 test_concurrent_writers_never_clobber
+test_concurrent_busy_enter_claim_is_exclusive
 test_writer_retries_after_a_vanished_lock_collision
 test_ladder_writes_ignore_vanished_inbox
 test_fire_and_forget_records_never_enter_the_ladder

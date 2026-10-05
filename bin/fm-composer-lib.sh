@@ -1611,9 +1611,10 @@ EOF
 }
 
 # fm_composer_screen_holds_only_text: whether the selected composer holds
-# nothing but one or more copies of <text>. This lets a caller recognize its
-# own already-typed line and submit it again; any other content is someone's
-# input and must never be submitted.
+# nothing but one or more copies of <text>. This identifies a recognized own
+# doorbell for Enter-only recovery. Only an exact `pending` composer verdict
+# protects other text; `pending-unproven` and `unknown` still use
+# type-and-submit by design.
 # Spaces remain significant, including at captured row boundaries.
 fm_composer_screen_holds_only_text() {  # <caps> <screen> <text>
   local caps=$1 screen=$2 expected=$3 remaining
