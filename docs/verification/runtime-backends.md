@@ -807,6 +807,9 @@ This guard is the refresh command after any harness upgrade; it spends a small n
 A doorbell whose Enter the harness swallowed sits unsubmitted in the composer until something presses Enter; `fm_task_inbox_ring` recognizes a composer holding only that inbox's own doorbell and resubmits it with Enter only (`bin/fm-task-inbox-lib.sh` header).
 Verified on 2026-10-05 on Linux x86_64 with tmux 3.4 on a private socket and Herdr 0.9.1 in a named non-default lab session created and torn down by `bin/fm-herdr-lab.sh`:
 
+The invocations below used the guard's broader harness default at the time of the run.
+The guard now defaults to Codex only; set `FM_STUCK_DOORBELL_LIVE_HARNESSES` explicitly when requesting broader harness coverage.
+
 ```sh
 FM_STUCK_DOORBELL_LIVE=1 FM_STUCK_DOORBELL_LIVE_BACKENDS=tmux tests/fm-task-inbox-stuck-doorbell-live-e2e.test.sh
 FM_STUCK_DOORBELL_LIVE=1 FM_STUCK_DOORBELL_LIVE_BACKENDS=herdr tests/fm-task-inbox-stuck-doorbell-live-e2e.test.sh
@@ -845,7 +848,7 @@ ok - pi (0.87.1) on herdr mid-turn: Enter swallowed=no; handled via its own subm
 Codex 0.160.0 is the only installed harness exposed: an Enter arriving in the same input read as the typed line becomes a newline, idle and mid-turn, on both backends, leaving the doorbell above a blank row that the tmux cursor-anchored classifier reads as `unknown`; the recovery delivered every case.
 Claude 2.1.289, OpenCode, and Pi 0.87.1 submitted the same immediate Enter themselves.
 Mid-turn Codex labels the stuck composer `tab to queue message`; a manual tmux probe on the same version showed Enter there moves the doorbell to `Messages to be submitted after next tool call` and Tab queues it for turn end, and both ended with the record handled, so recovery presses Enter only and binds no harness-specific queue key.
-Follow-up: close OpenCode's idle-stuck recognition gap before adding it to the default live matrix. The cursorless composer selection rejects its left-bar composer because OpenCode 1.18.33 and later draw a key-hint row directly under the `╹▀▀▀` floor. Only an exact `pending` composer verdict protects existing text; `pending-unproven` and `unknown` still use type-and-submit by design so unreadable harnesses are not starved. Enter-only recovery runs only when the selected composer is recognized as containing this inbox's own doorbell.
+Follow-up: close OpenCode's idle-stuck recognition gap. The cursorless composer selection rejects its left-bar composer because OpenCode 1.18.33 and later draw a key-hint row directly under the `╹▀▀▀` floor. Only an exact `pending` composer verdict protects existing text; `pending-unproven` and `unknown` still use type-and-submit by design so unreadable harnesses are not starved. Enter-only recovery runs only when the selected composer is recognized as containing this inbox's own doorbell.
 Grok, Kimi, Muse, Cursor, omp, Gemini, Rovo, and Antigravity were not installed on the verification machine.
 
 ## Gemini
