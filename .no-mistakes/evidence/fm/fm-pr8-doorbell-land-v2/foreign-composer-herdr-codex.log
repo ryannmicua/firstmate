@@ -1,0 +1,3 @@
+PASS: real Codex/Herdr ring returned rc=1 and preserved the unsubmitted composer draft.
+Composer text:
+: Firstmate instruction waiting: list '/tmp/fm-doorbell-foreign.i5MFgk/fm-home/state/t1.inbox'/*.msg and, in numeric order, read and act on each, then mv each handled file to '/tmp/fm-doorbell-foreign.i5MFgk/fm-home/state/t1.inbox'/ handled/. and preserve this unrelated draft exactly as written.

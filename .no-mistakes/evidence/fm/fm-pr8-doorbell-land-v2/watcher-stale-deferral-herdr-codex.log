@@ -1,0 +1,3 @@
+Observed during turn: ladder=[001.msg	1	1791247471], stale wake=none.
+PASS: idle recovery exhausted its one attempt; while Codex worked the ladder stayed unchanged with no stale wake; on idle the watcher queued one stale wake and suppressed the next duplicate.
+1791247500	1	stale	fm-lab-doorbell-stale-805620-28467:w1:p1	stale: fm-lab-doorbell-stale-805620-28467:w1:p1 (unread firstmate instruction: /tmp/fm-doorbell-stale.hTswJo/fm-home/state/t1.inbox/001.msg still unhandled after 1 doorbell delivery attempts with an idle pane; inspect the worker)

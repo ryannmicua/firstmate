@@ -1,0 +1,5 @@
+composer_before=pending
+ring_rc=1
+foreign_draft_retained=yes
+inbox_record_still_pending=yes
+PASS: live Codex foreign draft was preserved without submitting it

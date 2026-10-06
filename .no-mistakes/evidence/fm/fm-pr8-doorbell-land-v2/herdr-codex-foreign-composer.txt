@@ -1,0 +1,40 @@
+╭───────────────────────────────────────────────────────────────╮
+│ ✨ Update available! 0.160.0 -> 0.160.1                       │
+│ See https://github.com/openai/codex for installation options. │
+│                                                               │
+│ See full release notes:                                       │
+│ https://github.com/openai/codex/releases/latest               │
+╰───────────────────────────────────────────────────────────────╯
+
+
+  >_ OpenAI Codex (v0.160.0)
+     ~/.no-mistakes/worktrees/ff5e17b6f5de/01M471TVQ1JFXZSG1WAW26V3JP
+  permissions: YOLO mode
+
+  Any loose ends? Semicolons count.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Draft only: this is operator text and must remain unsent.
+
+  GPT-6.1-Sol default · ~/.no-mistakes/worktrees/ff5e17b6f5de/01M471TVQ1JFXZSG1WAW26V3JP
+  tab to queue message

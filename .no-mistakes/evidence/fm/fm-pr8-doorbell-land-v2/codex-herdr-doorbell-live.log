@@ -1,0 +1,28 @@
+not ok - codex (codex-cli 0.160.0) on herdr idle-send: not handled within 240s (Enter swallowed=no; attempts idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1))
+#        ~/.no-mistakes/worktrees/ff5e17b6f5de/01M471TVQ1JFXZSG1WAW26V3JP
+#     permissions: YOLO mode
+#     This terminal has excellent conversational potential.
+#   › : Firstmate instruction waiting: list '/tmp/fm-stuck-doorbell-live.8KoWXC/herdr-codex/state/t1.inbox'/*.msg and, in
+#     numeric order, read and act on each, then mv each handled file to '/tmp/fm-stuck-doorbell-live.8KoWXC/herdr-codex/
+#     state/t1.inbox'/handled/.
+#     GPT-6-Luna xhigh · ~/.no-mistakes/worktrees/ff5e17b6f5de/01M471TVQ1JFXZSG1WAW26V3JP
+#                                                                                                 ⚠ 1 warning · f2 to view
+not ok - codex (codex-cli 0.160.0) on herdr idle-stuck: a doorbell sitting in the composer was not recognized as our own
+#     This terminal has excellent conversational potential.
+#   › : Firstmate instruction waiting: list '/tmp/fm-stuck-doorbell-live.8KoWXC/herdr-codex/state/t1.inbox'/*.msg and, in
+#     numeric order, read and act on each, then mv each handled file to '/tmp/fm-stuck-doorbell-live.8KoWXC/herdr-codex/
+#     state/t1.inbox'/handled/.: Firstmate instruction waiting: list '/tmp/fm-stuck-doorbell-live.8KoWXC/herdr-codex/
+#     state/t1.inbox'/*.msg and, in numeric order, read and act on each, then mv each handled file to '/tmp/fm-stuck-
+#     doorbell-live.8KoWXC/herdr-codex/state/t1.inbox'/handled/.
+#     GPT-6-Luna xhigh · ~/.no-mistakes/worktrees/ff5e17b6f5de/01M471TVQ1JFXZSG1WAW26V3JP
+#                                                                                                 ⚠ 1 warning · f2 to view
+not ok - codex (codex-cli 0.160.0) on herdr mid-turn: not handled within 240s (Enter swallowed=no; attempts idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1)+idle-ring(rc=1))
+#     └ (no output)
+#   • SLEPT
+#     Worked for 51s • 07:50
+#   › : Firstmate instruction waiting: list '/tmp/fm-stuck-doorbell-live.8KoWXC/herdr-codex/state/t1.inbox'/*.msg and, in
+#     numeric order, read and act on each, then mv each handled file to '/tmp/fm-stuck-doorbell-live.8KoWXC/herdr-codex/
+#     state/t1.inbox'/handled/.
+#     GPT-6-Luna xhigh · ~/.no-mistakes/worktrees/ff5e17b6f5de/01M471TVQ1JFXZSG1WAW26V3JP · Process Firstmate inbox messag…
+#                                                                                                 ⚠ 1 warning · f2 to view
+not ok - live stuck-doorbell guard found failures above

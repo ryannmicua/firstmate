@@ -1,0 +1,8 @@
+busy_before_ring=busy
+ring_busy=unknown
+initial_ring_rc=0
+busy_enter_claim=<missing>
+second_busy_ring_rc=4
+worker_acted=yes
+inbox_acked=yes
+FAIL: the live busy Codex steer did not satisfy the one-Enter recovery contract

@@ -1,0 +1,4 @@
+ok - codex (codex-cli 0.160.0) on herdr idle-send: Enter swallowed=yes; handled via idle-ring(rc=0)
+ok - codex (codex-cli 0.160.0) on herdr idle-stuck: recognized and resubmitted with Enter only; handled after its own submit
+ok - codex (codex-cli 0.160.0) on herdr mid-turn: Enter swallowed=yes; handled via busy-enter(rc=0)
+ok - live stuck-doorbell guard: 1 harness/backend pair(s) recovered a doorbell left in the composer
