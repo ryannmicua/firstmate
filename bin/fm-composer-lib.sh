@@ -1636,15 +1636,28 @@ EOF
 # doorbell for Enter-only recovery. Only an exact `pending` composer verdict
 # protects other text; `pending-unproven` and `unknown` still use
 # type-and-submit by design.
-# Spaces remain significant, including at captured row boundaries.
+# Spaces remain significant, except for a separator Codex drops at a soft wrap.
 fm_composer_screen_holds_only_text() {  # <caps> <screen> <text>
   local caps=$1 screen=$2 expected=$3 remaining plain shape row row_len pos expected_len expected_pos char expected_char padding offset=0
+  local first_raw first_content glyph codex_wrap=0 row_index=0 kv styled=0
   fm_composer_normalize_spaces_var expected
   [ -n "$expected" ] || return 1
   plain=$(printf '%s\n' "$screen" | fm_composer_strip_ansi)
   _fm_composer_scan_screen "$plain" '' 1
   _fm_composer_select_cursorless "$plain" || return 1
   shape=$FM_COMPOSER_SELECTED_KIND
+  while IFS= read -r kv; do
+    [ "$kv" = styled=1 ] && styled=1
+  done <<EOF
+$caps
+EOF
+  if [ "$shape" = bare ]; then
+    first_raw=$(_fm_composer_screen_row "$FM_COMPOSER_SELECTED_FIRST" "$screen")
+    first_content=$(_fm_composer_row_content "$first_raw" "$styled" 1)
+    if fm_composer_leading_agent_glyph_var glyph "$first_content" && [ "$glyph" = '›' ]; then
+      codex_wrap=1
+    fi
+  fi
   remaining=$(fm_composer_extract_selected_content "$caps" "$screen" 1) || return 1
   fm_composer_normalize_spaces_var remaining
   [ -n "$remaining" ] || return 1
@@ -1652,6 +1665,15 @@ fm_composer_screen_holds_only_text() {  # <caps> <screen> <text>
   while IFS= read -r row; do
     row_len=${#row}
     pos=0
+    # Codex may omit the source separator space when it wraps exactly at that
+    # space. The continuation row begins with the next word, so account for
+    # that single renderer loss at the row boundary only.
+    expected_pos=$((offset % expected_len))
+    if [ "$codex_wrap" = 1 ] && [ "$row_index" -gt 0 ] && [ "$row_len" -gt 0 ] \
+       && [ "${expected:expected_pos:1}" = ' ' ] \
+       && [ "${row:0:1}" != ' ' ]; then
+      offset=$((offset + 1))
+    fi
     while [ "$pos" -lt "$row_len" ]; do
       expected_pos=$((offset % expected_len))
       char=${row:pos:1}
@@ -1667,6 +1689,7 @@ fm_composer_screen_holds_only_text() {  # <caps> <screen> <text>
         return 1
       fi
     done
+    row_index=$((row_index + 1))
   done <<EOF
 $remaining
 EOF

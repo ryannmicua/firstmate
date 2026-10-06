@@ -367,6 +367,18 @@ test_ring_recovers_only_its_own_pending_doorbell() {
   [ "$rc" = 0 ] || fail "a wrapped own doorbell should be resubmitted, rc=$rc"
   [ "$(cat "$actions")" = key:Enter ] || fail "own-line recovery should press Enter once and never type: $(cat "$actions")"
 
+  # Codex 0.160.0 can drop the source space when a soft wrap lands at that
+  # separator, e.g. between "in" and "numeric" in the doorbell instruction.
+  prefix=${line%% numeric\ order*}
+  [ "$prefix" != "$line" ] || fail "the doorbell fixture should contain the numeric-order separator"
+  wrapped=$(printf '› %s\n  %s\n\n  model footer\n' "$prefix" "${line#"$prefix "}")
+  : > "$actions"; printf '%s' "$wrapped" > "$cap"
+  rc=0
+  FM_TEST_COMPOSER=pending FM_TEST_CLEAR_ON_KEY=1 \
+    ring_with_stubs "$rec" "$actions" "$cap" idle codex || rc=$?
+  [ "$rc" = 0 ] && [ "$(cat "$actions")" = key:Enter ] \
+    || fail "a Codex wrap that drops its separator should recover with Enter only, rc=$rc actions=$(cat "$actions")"
+
   # Codex indents soft-wrapped composer rows under the prompt glyph. The
   # matcher removes those two renderer spaces but preserves additional input.
   wrapped=$(printf '› %s\n  %s\n  %s\n  %s\n\n  model footer\n' \
