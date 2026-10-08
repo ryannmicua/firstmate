@@ -1,0 +1,94 @@
+Live runtime validation transcript
+==================================
+The Paseo and tmux sessions used disposable homes under the worktree. The local Paseo daemon was version 0.10.1 and was stopped before its isolated home was removed.
+
+Paseo project and workspace registration
+----------------------------------------
+$ bin/fm-paseo-project.sh --if-selected demo
+created Paseo project demo (prj_4f7be88f6a73c0bd) for registered project demo at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4DWFXNQ9J27NDT7SP14B1M1/.test-tmp/paseo-live/fm-home/projects/demo
+
+$ paseo project ls --json
+[
+  {
+    "projectId": "prj_4f7be88f6a73c0bd",
+    "name": "demo",
+    "kind": "git",
+    "path": "/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4DWFXNQ9J27NDT7SP14B1M1/.test-tmp/paseo-live/fm-home/projects/demo"
+  }
+]
+
+$ paseo workspace create --isolation worktree --path <registered-project> --project prj_4f7be88f6a73c0bd --mode branch-off --new-branch fm/live-paseo-demo --base main --worktree-slug fm-live-demo --title 'Live validation demo' --json
+{
+  "workspaceId": "wks_ff42a7d48d3f114b",
+  "project": "demo",
+  "name": "Live validation demo",
+  "isolation": "worktree",
+  "cwd": "/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4DWFXNQ9J27NDT7SP14B1M1/.test-tmp/paseo-live/paseo-home/worktrees/0at8npbz/fm-live-demo"
+}
+
+The live Firstmate Paseo adapter refused a reused workspace when its real branch did not match task metadata:
+
+$ fm_backend_paseo_create_task live-branch-reuse ... branch=fm/recorded-branch workspace=wks_ff42a7d48d3f114b
+status=1
+error: Paseo workspace wks_ff42a7d48d3f114b at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4DWFXNQ9J27NDT7SP14B1M1/.test-tmp/paseo-live/paseo-home/worktrees/0at8npbz/fm-live-demo is on branch fm/live-paseo-demo, but task live-branch-reuse records branch fm/recorded-branch; refusing to run the task
+
+The live adapter retained and identified a newly created workspace when hook installation failed; no Paseo agent was launched:
+
+$ fm_backend_paseo_create_task live-hook-failure ... hooks=<blocked path>
+status=1
+mkdir: cannot create directory ‘/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4DWFXNQ9J27NDT7SP14B1M1/.test-tmp/paseo-live/blocked/file’: Not a directory
+error: could not install the AI-trailer strip hooks for task live-hook-failure in retained Paseo workspace wks_140af20ca3e34cb5 at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4DWFXNQ9J27NDT7SP14B1M1/.test-tmp/paseo-live/paseo-home/worktrees/0at8npbz/fm-demo-live-hook-failure
+
+$ paseo ls --json
+[]
+
+Operator-attested legacy handoff guards
+---------------------------------------
+A private tmux server contained only an unrelated lab session. The recorded legacy endpoint was absent. The marked lab home was accepted by the gate guard.
+
+Wrong operator confirmation:
+status=1
+Confirm the original worker has stopped (type STOP paseo-backend-adapter): error: handoff confirmation did not match; no task files or endpoint were changed
+
+Attempt against an unpinned task:
+status=1
+error: operator-attested handoff is limited to the stranded paseo-backend-adapter task
+
+Pinned task worktree on the wrong branch:
+status=1
+error: recorded local copy is on branch 'fm/other-branch', not the pinned legacy branch 'fm/paseo-backend-adapter'
+branch restored=fm/paseo-backend-adapter
+handoff journal absent=yes
+
+Live environment checks that left a surface untested
+-----------------------------------------------------
+$ bin/fm-herdr-lab.sh name isolated-upstream-check
+fm-lab-isolated-upstrea-2357304-14245
+
+$ bin/fm-herdr-lab.sh prepare fm-lab-isolated-upstrea-2357304-14245
+status=1
+fm-herdr-lab: fleet-state tripwire requires exactly one running default session
+
+$ pi auth check --provider openai-codex --no-refresh --json  # isolated HOME/XDG paths
+status=1
+{"status":"not_ready","provider":"openai-codex","reason":"credentials_not_configured"}
+
+No local model runtime (`ollama`, `llamafile`, `lmstudio`, or `local-ai`) was available on PATH.
+
+Private Codex steering attempt
+------------------------------
+Codex CLI 0.161.0 ran in a fresh HOME/CODEX_HOME inside the worktree in a private 120x40 tmux pane; Firstmate classified that exact pane as an active Codex process. The real `fm-send.sh` wrote `doorbell-live.inbox/001.msg` and sent its doorbell. Because the pane was still at Codex's first-run sign-in screen, the Enter key started the device-code flow and the pane displayed “Preparing device code login” / “Requesting a one-time code”. I immediately stopped the private tmux server and detached Codex app-server without completing sign-in. No real credential store was used or modified.
+
+
+Disposable Pi TUI tool-result attempt
+------------------------------------
+Pi 0.87.1 ran in a private 120x40 tmux pane with an isolated HOME, PI_CODING_AGENT_DIR, FM_HOME, and a loopback OpenAI-compatible endpoint. The real extension loaded and Pi displayed the built-in `read .gitignore` tool call, but the TUI stayed at “Working” and never rendered a result or sent a follow-up request. The same endpoint behavior occurred with extension discovery disabled. `pi auth check --provider openai-codex --no-refresh --json` reported credentials_not_configured, and no local model runner was available. No account sign-in was attempted.
+
+Herdr per-home workspace E2E attempt
+------------------------------------
+The first run used a worktree-local TMPDIR and was refused at the secondmate-home safety guard because the fixture was under the repository. A retry used an in-worktree disposable repo-root alias and an explicit in-worktree lab-state directory. The real test then reported successful primary, secondmate, and secondmate-owned spawns plus per-home list isolation. It exited during teardown: fm-teardown refused to change anything because it could not resolve the shared Treehouse project lock for the scratch project, and the lab helper reported a missing tripwire. A read-only session listing through bin/fm-herdr-lab.sh showed only the default session; no named lab session remained.
+
+
+Herdr per-home E2E final re-drive
+----------------------------------
+The focused real Herdr test completed with exit 0 when run through an in-worktree disposable repo-root alias with an explicit in-worktree FM_HERDR_LAB_STATE_DIR. Its assertions passed for primary spawn, primary-owned secondmate spawn, secondmate-owned spawn, per-home list_live isolation, and task teardown while preserving sibling tabs. A follow-up read-only `bin/fm-herdr-lab.sh run fm-lab-upstream-check session list --json` showed only the default session, confirming the named test lab was removed.
