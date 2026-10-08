@@ -3486,6 +3486,8 @@ if [ "$BACKEND" = paseo ]; then
   else
     PASEO_HOME_TAG=$(printf '%s' "$FM_HOME" | sha256sum | cut -c1-12)
   fi
+  PASEO_BRANCH=
+  if [ "$KIND" = ship ]; then PASEO_BRANCH=$BRANCH; fi
   PASEO_ENV_ARGS=(
     "FM_TASK_ID=$ID"
     "FIRSTMATE_HOME=$FM_HOME"
@@ -3515,7 +3517,7 @@ if [ "$BACKEND" = paseo ]; then
       ;;
     opencode*) PASEO_ENV_ARGS+=("OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}") ;;
   esac
-  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "$PASEO_HOME_TAG" "$PASEO_WORKSPACE_ID" "${RELAUNCH_WT:-}" "${PASEO_ENV_ARGS[@]}") || exit 1
+  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "$PASEO_HOME_TAG" "$PASEO_BRANCH" "$PASEO_WORKSPACE_ID" "${RELAUNCH_WT:-}" "${PASEO_ENV_ARGS[@]}") || exit 1
   IFS=$'\t' read -r PASEO_AGENT_ID PASEO_WORKSPACE_ID WT <<EOF
 $PASEO_RESULT
 EOF

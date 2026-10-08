@@ -45,20 +45,22 @@ case "$*" in
     ;;
   workspace\ create\ *)
     source=
+    branch=
     slug=
     base=
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --path) source=$2; shift 2 ;;
-        --new-branch) slug=$2; shift 2 ;;
+        --new-branch) branch=$2; shift 2 ;;
         --base) base=$2; shift 2 ;;
+        --worktree-slug) slug=$2; shift 2 ;;
         *) shift ;;
       esac
     done
     project_name=$(basename "$source")
     workspace_id=${FM_TEST_PASEO_WORKSPACE:-wks-$slug}
     worktree="$FM_TEST_PASEO_WORKTREE_ROOT/$slug"
-    git -C "$source" worktree add -q -b "$slug" "$worktree" "$base" || exit 1
+    git -C "$source" worktree add -q -b "$branch" "$worktree" "$base" || exit 1
     printf '%s\t%s\tworktree\t%s\n' "$workspace_id" "$project_name" "$worktree" >> "$FM_TEST_PASEO_WORKSPACES_FILE"
     printf 'Created workspace %s\n' "$workspace_id"
     jq -nc --arg id "$workspace_id" --arg path "$worktree" '{workspaceId:$id,cwd:$path}'
@@ -128,8 +130,12 @@ assert_no_grep 'FM_TEST_UNSET=' "$PASEO_ARGS" "Paseo received an unset allowlist
 assert_grep "paseo_agent_id=agent-$ID-1" "$HOME_DIR/state/$ID.meta" "successful Paseo spawn did not publish its agent identity"
 initial_workspace=$(sed -n 's/^paseo_workspace_id=//p' "$HOME_DIR/state/$ID.meta")
 initial_worktree=$(sed -n 's/^worktree=//p' "$HOME_DIR/state/$ID.meta")
+initial_branch=$(git -C "$initial_worktree" branch --show-current)
+recorded_branch=$(sed -n 's/^branch=//p' "$HOME_DIR/state/$ID.meta")
 assert_grep "paseo_workspace_id=$initial_workspace" "$HOME_DIR/state/$ID.meta" "successful Paseo spawn did not publish its workspace identity"
 assert_grep "worktree=$initial_worktree" "$HOME_DIR/state/$ID.meta" "successful Paseo spawn did not publish its worktree identity"
+assert_equals "fm/$ID" "$initial_branch" "Paseo ship worktree did not use the task-pinned branch"
+assert_equals "$initial_branch" "$recorded_branch" "Paseo worktree branch did not match the task-recorded branch"
 assert_grep "Using workspace $initial_workspace" "$PASEO_ARGS" "Paseo fake did not exercise workspace text without a workspaceId JSON field"
 assert_grep "--label fm-task=$ID --label fm-home=" "$PASEO_ARGS" "Paseo spawn did not publish unique task labels"
 printf 'closed\n' > "$TMP_ROOT/paseo-status"

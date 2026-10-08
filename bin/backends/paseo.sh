@@ -220,9 +220,9 @@ EOF
   printf '%s' "$worktree_path"
 }
 
-fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <workspace-id> <worktree-path> [env key=value...]
-  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} workspace_id=${8:-} expected_worktree=${9:-}
-  shift 9
+fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <branch> <workspace-id> <worktree-path> [env key=value...]
+  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} branch=${8:-} workspace_id=${9:-} expected_worktree=${10:-}
+  shift 10
   local provider base_ref candidate project_id project_name project_record slug workspace_raw workspace_json created_workspace created_text_id created_worktree
   local worktree_path worktree worktree_real run_raw run_json agent reported_workspace_json reported_workspace_text reported_workspace
   local reported_worktree run_status env_value
@@ -259,8 +259,9 @@ EOF
       return 1
     }
     slug="fm-${home_tag}-${id}"
+    [ -n "$branch" ] || branch=$slug
     create_args=(workspace create --isolation worktree --path "$source" --project "$project_id"
-      --mode branch-off --new-branch "$slug" --base "$base_ref" --worktree-slug "$slug"
+      --mode branch-off --new-branch "$branch" --base "$base_ref" --worktree-slug "$slug"
       --json)
     if workspace_raw=$(env -u PASEO_AGENT_ID -u PASEO_WORKSPACE_ID paseo "${create_args[@]}" 2>&1); then
       :
