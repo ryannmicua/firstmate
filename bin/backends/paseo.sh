@@ -220,9 +220,9 @@ EOF
   printf '%s' "$worktree_path"
 }
 
-fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <branch> <workspace-id> <worktree-path> [env key=value...]
-  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} branch=${8:-} workspace_id=${9:-} expected_worktree=${10:-}
-  shift 10
+fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <branch> <workspace-id> <worktree-path> <git-hooks-dir> [env key=value...]
+  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} branch=${8:-} workspace_id=${9:-} expected_worktree=${10:-} git_hooks_dir=${11:-}
+  shift 11
   local provider base_ref candidate project_id project_name project_record slug workspace_raw workspace_json created_workspace created_text_id created_worktree
   local worktree_path worktree worktree_real run_raw run_json agent reported_workspace_json reported_workspace_text reported_workspace
   local reported_worktree run_status env_value
@@ -303,6 +303,13 @@ EOF
     }
     worktree=$(fm_backend_paseo_validate_task_worktree "$source" "$worktree_path") || {
       printf 'error: Paseo workspace %s is retained for manual reconciliation\n' "$workspace_id" >&2
+      return 1
+    }
+  fi
+
+  if [ -n "$git_hooks_dir" ]; then
+    "$FM_ROOT/bin/fm-git-strip-ai-trailers.sh" install "$git_hooks_dir" "$worktree" || {
+      printf 'error: could not install the AI-trailer strip hooks for %s\n' "$id" >&2
       return 1
     }
   fi

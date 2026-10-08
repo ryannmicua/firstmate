@@ -845,29 +845,32 @@ fm_backend_send_key() {  # <backend> <target> <key> [expected-label]
 # A pane that already shows the recognised dialog is refused before any
 # adapter types, so that submit neither types the text nor sends Enter.
 fm_backend_send_text_submit() {  # <backend> <target> <text> <retries> <enter-sleep> <settle> [expected-label]
-  local backend=$1 rc=0 target label dialog
+  local backend=$1 rc=0 target label dialog composer_check=0
   shift
   target=$1
   label=${6:-}
   fm_backend_source "$backend" || return 1
-  # Every Enter loop below reads the dialog sink, so it must exist before
-  # any adapter types: a sink that fails here leaves the composer untouched.
-  fm_composer_dialog_sink_prepare || {
-    echo "error: the dialog check for a $backend submit could not be recorded" >&2
-    return 1
-  }
-  # One composer read after the sink exists and before the adapter types.
-  # The classify writes the sink; a named dialog means the next Enter would
-  # answer it.
-  if [ -n "$label" ]; then
-    fm_backend_composer_state "$backend" "$target" "$label" >/dev/null || true
-  else
-    fm_backend_composer_state "$backend" "$target" >/dev/null || true
-  fi
-  if dialog=$(fm_composer_blocking_dialog_noted); then
-    fm_composer_dialog_sink_release
-    echo "error: blocked on a prompt: $dialog" >&2
-    return 1
+  if fm_backend_composer_state_supported "$backend"; then
+    composer_check=1
+    # Every Enter loop below reads the dialog sink, so it must exist before
+    # any adapter types: a sink that fails here leaves the composer untouched.
+    fm_composer_dialog_sink_prepare || {
+      echo "error: the dialog check for a $backend submit could not be recorded" >&2
+      return 1
+    }
+    # One composer read after the sink exists and before the adapter types.
+    # The classify writes the sink; a named dialog means the next Enter would
+    # answer it.
+    if [ -n "$label" ]; then
+      fm_backend_composer_state "$backend" "$target" "$label" >/dev/null || true
+    else
+      fm_backend_composer_state "$backend" "$target" >/dev/null || true
+    fi
+    if dialog=$(fm_composer_blocking_dialog_noted); then
+      fm_composer_dialog_sink_release
+      echo "error: blocked on a prompt: $dialog" >&2
+      return 1
+    fi
   fi
   case "$backend" in
     tmux) fm_backend_tmux_send_text_submit "$@" || rc=$? ;;
@@ -878,7 +881,7 @@ fm_backend_send_text_submit() {  # <backend> <target> <text> <retries> <enter-sl
     paseo) fm_backend_paseo_send_text_submit "$@" || rc=$? ;;
     *) echo "error: no send-text implementation for backend '$backend'" >&2; rc=1 ;;
   esac
-  fm_composer_dialog_sink_release
+  [ "$composer_check" -eq 0 ] || fm_composer_dialog_sink_release
   return "$rc"
 }
 
@@ -959,9 +962,16 @@ fm_backend_busy_state() {  # <backend> <target>
 # fm_composer_classify_screen) - so no backend can hold a private shape
 # assumption; zellij's classifier reads `dump-screen --ansi`, which replaced
 # its old no-classifier content-diff reporting.
+FM_BACKEND_COMPOSER_STATE="tmux herdr zellij orca cmux"
+
+fm_backend_composer_state_supported() {  # <backend>
+  fm_backend_list_contains "$FM_BACKEND_COMPOSER_STATE" "$1"
+}
+
 fm_backend_composer_state() {  # <backend> <target> [expected-label] -> empty|pending|pending-unproven|unknown
   local backend=$1
   shift
+  fm_backend_composer_state_supported "$backend" || { printf 'unknown'; return 0; }
   fm_backend_source "$backend" || { printf 'unknown'; return 0; }
   case "$backend" in
     tmux) fm_tmux_composer_state "$@" ;;

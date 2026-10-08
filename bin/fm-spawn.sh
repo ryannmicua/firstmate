@@ -3479,6 +3479,10 @@ fi
 PASEO_LEGACY_ENV_FILE=
 PASEO_ENV_ARGS=()
 if [ "$BACKEND" = paseo ]; then
+  STATE_REAL=$(cd "$STATE" && pwd -P) || {
+    echo "error: could not resolve state directory $STATE" >&2
+    exit 1
+  }
   # Keep abort cleanup for environment files produced by earlier Paseo launches.
   PASEO_LEGACY_ENV_FILE="$STATE/$ID.paseo-env"
   if command -v shasum >/dev/null 2>&1; then
@@ -3486,6 +3490,9 @@ if [ "$BACKEND" = paseo ]; then
   else
     PASEO_HOME_TAG=$(printf '%s' "$FM_HOME" | sha256sum | cut -c1-12)
   fi
+  GIT_HOOKS_DIR="$STATE_REAL/$ID.git-hooks"
+  PASEO_GIT_HOOKS_DIR=
+  if [ "$KEEP_AI_TRAILERS" = 0 ]; then PASEO_GIT_HOOKS_DIR=$GIT_HOOKS_DIR; fi
   PASEO_BRANCH=
   if [ "$KIND" = ship ]; then PASEO_BRANCH=$BRANCH; fi
   PASEO_ENV_ARGS=(
@@ -3499,6 +3506,13 @@ if [ "$BACKEND" = paseo ]; then
   if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
     for paseo_env_name in $LAUNCH_ENV_NAMES; do
       [ "$paseo_env_name" = PASEO_AGENT_ID ] && continue
+      case "$paseo_env_name" in
+        FM_TASK_INBOX) continue ;;
+        LAVISH_AXI_HOST) [ "$LAVISH_AXI_HOST_CONFIG_PRESENT" != 1 ] || continue ;;
+        GIT_CONFIG_COUNT|GIT_CONFIG_KEY_0|GIT_CONFIG_VALUE_0)
+          [ "$KEEP_AI_TRAILERS" != 0 ] || continue
+          ;;
+      esac
       paseo_env_value=${!paseo_env_name-}
       [ "${!paseo_env_name+x}" = x ] || continue
       case "$paseo_env_value" in
@@ -3510,6 +3524,17 @@ if [ "$BACKEND" = paseo ]; then
       PASEO_ENV_ARGS+=("$paseo_env_name=$paseo_env_value")
     done
   fi
+  PASEO_ENV_ARGS+=("FM_TASK_INBOX=$STATE_REAL/$ID.inbox")
+  if [ "$LAVISH_AXI_HOST_CONFIG_PRESENT" = 1 ]; then
+    PASEO_ENV_ARGS+=("LAVISH_AXI_HOST=$LAVISH_AXI_HOST")
+  fi
+  if [ "$KEEP_AI_TRAILERS" = 0 ]; then
+    PASEO_ENV_ARGS+=(
+      "GIT_CONFIG_COUNT=1"
+      "GIT_CONFIG_KEY_0=core.hooksPath"
+      "GIT_CONFIG_VALUE_0=$GIT_HOOKS_DIR"
+    )
+  fi
   case "$HARNESS" in
     claude*)
       PASEO_ENV_ARGS+=("CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false" "CLAUDE_CODE_SEND_FEEDBACK=0")
@@ -3517,7 +3542,7 @@ if [ "$BACKEND" = paseo ]; then
       ;;
     opencode*) PASEO_ENV_ARGS+=("OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}") ;;
   esac
-  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "$PASEO_HOME_TAG" "$PASEO_BRANCH" "$PASEO_WORKSPACE_ID" "${RELAUNCH_WT:-}" "${PASEO_ENV_ARGS[@]}") || exit 1
+  PASEO_RESULT=$(fm_backend_paseo_create_task "$ID" "$PROJ_ABS" "$BRIEF_REAL" "$HARNESS" "${MODEL:-}" "${EFFORT:-}" "$PASEO_HOME_TAG" "$PASEO_BRANCH" "$PASEO_WORKSPACE_ID" "${RELAUNCH_WT:-}" "$PASEO_GIT_HOOKS_DIR" "${PASEO_ENV_ARGS[@]}") || exit 1
   IFS=$'\t' read -r PASEO_AGENT_ID PASEO_WORKSPACE_ID WT <<EOF
 $PASEO_RESULT
 EOF

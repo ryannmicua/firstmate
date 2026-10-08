@@ -10,6 +10,7 @@ PROJ_DIR="$TMP_ROOT/project"
 WT_DIR="$TMP_ROOT/project-worktree"
 FAKEBIN_DIR=$(fm_test_make_spawn_fakebin "$TMP_ROOT/fake" codex)
 PASEO_ARGS="$TMP_ROOT/paseo-args"
+PASEO_LAUNCH_ENV="$TMP_ROOT/paseo-launch-env"
 PASEO_WORKSPACES="$TMP_ROOT/paseo-workspaces.tsv"
 PASEO_WORKTREE_ROOT="$TMP_ROOT/paseo-worktrees"
 PASEO_RUN_COUNT="$TMP_ROOT/paseo-run-count"
@@ -17,8 +18,11 @@ mkdir -p "$PASEO_WORKTREE_ROOT"
 : >"$PASEO_WORKSPACES"
 printf '0\n' >"$PASEO_RUN_COUNT"
 ID=paseo-env-test
+LAVISH_AXI_HOST_VALUE=lavish-test.example:4387
 
 fm_test_spawn_home "$HOME_DIR" codex
+STATE_REAL_TEST=$(cd "$HOME_DIR/state" && pwd -P)
+printf '%s\n' "$LAVISH_AXI_HOST_VALUE" > "$HOME_DIR/config/lavish-axi-host"
 fm_git_worktree "$PROJ_DIR" "$WT_DIR" paseo-env-test
 fm_test_spawn_brief "$HOME_DIR" "$ID"
 printf '%s\n' 'FM_TEST_SET' 'FM_TEST_EMPTY' 'FM_TEST_UNSET' > "$HOME_DIR/config/launch-env-allowlist"
@@ -69,9 +73,11 @@ case "$*" in
     printf '%s\n' "$@" >> "$FM_TEST_PASEO_ARGS"
     workspace_id=
     task_id=
+    run_env=()
     previous=
     while [ "$#" -gt 0 ]; do
       if [ "$previous" = --workspace ]; then workspace_id=$1; fi
+      if [ "$previous" = --env ]; then run_env+=("$1"); fi
       case "$1" in fm-task=*) task_id=${1#fm-task=} ;; esac
       previous=$1
       shift
@@ -81,6 +87,12 @@ case "$*" in
     run_count=$((run_count + 1))
     printf '%s\n' "$run_count" > "$FM_TEST_PASEO_RUN_COUNT"
     agent=${FM_TEST_PASEO_AGENT:-agent-$task_id-$run_count}
+    if [ "${FM_TEST_PASEO_PROBE:-0}" = 1 ]; then
+      env "${run_env[@]}" bash -c 'printf "%s\n%s\n%s\n%s\n%s\n" "$FM_TASK_INBOX" "$LAVISH_AXI_HOST" "$GIT_CONFIG_COUNT" "$GIT_CONFIG_KEY_0" "$GIT_CONFIG_VALUE_0"' \
+        > "$FM_TEST_PASEO_LAUNCH_ENV" || exit 1
+      env "${run_env[@]}" git -C "$worktree" -c user.name=Firstmate -c user.email=tests@invalid \
+        commit -q --allow-empty --trailer 'Co-authored-by: Cursor <cursoragent@cursor.com>' -m "Paseo launch $run_count" || exit 1
+    fi
     printf 'response Using workspace %s\n' "$workspace_id" >> "$FM_TEST_PASEO_ARGS"
     if [ -n "${FM_TEST_PASEO_ABORT_MODE:-}" ]; then
       printf 'running\n' > "$FM_TEST_PASEO_STATUS"
@@ -120,6 +132,7 @@ out=$(BASH_COMPAT=3.2 FM_TEST_SET=present FM_TEST_EMPTY='' \
   FM_TEST_PASEO_ARGS="$PASEO_ARGS" FM_TEST_PASEO_SOURCE="$PROJ_DIR" \
   FM_TEST_PASEO_WORKSPACES_FILE="$PASEO_WORKSPACES" FM_TEST_PASEO_WORKTREE_ROOT="$PASEO_WORKTREE_ROOT" \
   FM_TEST_PASEO_RUN_COUNT="$PASEO_RUN_COUNT" FM_TEST_PASEO_STATUS="$TMP_ROOT/paseo-status" \
+  FM_TEST_PASEO_LAUNCH_ENV="$PASEO_LAUNCH_ENV" FM_TEST_PASEO_PROBE=1 \
   fm_test_run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" \
   "$ID" "$PROJ_DIR" --mode no-mistakes --yolo off --backend paseo --harness codex)
 status=$?
@@ -127,6 +140,11 @@ expect_code 0 "$status" "Paseo spawn in Bash 3.2 compatibility mode should succe
 assert_grep 'FM_TEST_SET=present' "$PASEO_ARGS" "Paseo did not receive a set allowlisted value"
 assert_grep 'FM_TEST_EMPTY=' "$PASEO_ARGS" "Paseo did not receive an empty-but-set allowlisted value"
 assert_no_grep 'FM_TEST_UNSET=' "$PASEO_ARGS" "Paseo received an unset allowlisted value"
+assert_equals "$STATE_REAL_TEST/$ID.inbox" "$(sed -n '1p' "$PASEO_LAUNCH_ENV")" "Paseo agent did not receive its steering inbox path"
+assert_equals "$LAVISH_AXI_HOST_VALUE" "$(sed -n '2p' "$PASEO_LAUNCH_ENV")" "Paseo agent did not receive the configured Lavish host"
+assert_equals 1 "$(sed -n '3p' "$PASEO_LAUNCH_ENV")" "Paseo agent did not receive the Git hook config count"
+assert_equals core.hooksPath "$(sed -n '4p' "$PASEO_LAUNCH_ENV")" "Paseo agent did not select the trailer hook"
+assert_equals "$STATE_REAL_TEST/$ID.git-hooks" "$(sed -n '5p' "$PASEO_LAUNCH_ENV")" "Paseo agent selected the wrong trailer hook path"
 assert_grep "paseo_agent_id=agent-$ID-1" "$HOME_DIR/state/$ID.meta" "successful Paseo spawn did not publish its agent identity"
 initial_workspace=$(sed -n 's/^paseo_workspace_id=//p' "$HOME_DIR/state/$ID.meta")
 initial_worktree=$(sed -n 's/^worktree=//p' "$HOME_DIR/state/$ID.meta")
@@ -136,18 +154,25 @@ assert_grep "paseo_workspace_id=$initial_workspace" "$HOME_DIR/state/$ID.meta" "
 assert_grep "worktree=$initial_worktree" "$HOME_DIR/state/$ID.meta" "successful Paseo spawn did not publish its worktree identity"
 assert_equals "fm/$ID" "$initial_branch" "Paseo ship worktree did not use the task-pinned branch"
 assert_equals "$initial_branch" "$recorded_branch" "Paseo worktree branch did not match the task-recorded branch"
+initial_commit=$(git -C "$initial_worktree" log -1 --format=%B)
+assert_not_contains "$initial_commit" "cursoragent@cursor.com" "Paseo agent commit retained the AI co-author trailer"
 assert_grep "Using workspace $initial_workspace" "$PASEO_ARGS" "Paseo fake did not exercise workspace text without a workspaceId JSON field"
 assert_grep "--label fm-task=$ID --label fm-home=" "$PASEO_ARGS" "Paseo spawn did not publish unique task labels"
 printf 'closed\n' > "$TMP_ROOT/paseo-status"
 out=$(FM_TEST_PASEO_ARGS="$PASEO_ARGS" FM_TEST_PASEO_SOURCE="$PROJ_DIR" \
   FM_TEST_PASEO_WORKSPACES_FILE="$PASEO_WORKSPACES" FM_TEST_PASEO_WORKTREE_ROOT="$PASEO_WORKTREE_ROOT" \
   FM_TEST_PASEO_RUN_COUNT="$PASEO_RUN_COUNT" FM_TEST_PASEO_STATUS="$TMP_ROOT/paseo-status" \
+  FM_TEST_PASEO_LAUNCH_ENV="$PASEO_LAUNCH_ENV" FM_TEST_PASEO_PROBE=1 \
   fm_test_run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" --relaunch "$ID")
 status=$?
 expect_code 0 "$status" "Paseo relaunch should reuse the validated workspace and worktree: $out"
 assert_grep "paseo_agent_id=agent-$ID-2" "$HOME_DIR/state/$ID.meta" "Paseo relaunch did not publish its replacement agent"
 assert_grep "paseo_workspace_id=$initial_workspace" "$HOME_DIR/state/$ID.meta" "Paseo relaunch did not retain the validated workspace identity"
 assert_grep "worktree=$initial_worktree" "$HOME_DIR/state/$ID.meta" "Paseo relaunch did not retain the validated worktree identity"
+relaunch_commit=$(git -C "$initial_worktree" log -1 --format=%B)
+assert_not_contains "$relaunch_commit" "cursoragent@cursor.com" "Paseo relaunch commit retained the AI co-author trailer"
+assert_equals "$STATE_REAL_TEST/$ID.inbox" "$(sed -n '1p' "$PASEO_LAUNCH_ENV")" "Paseo relaunch did not receive its steering inbox path"
+assert_equals "$LAVISH_AXI_HOST_VALUE" "$(sed -n '2p' "$PASEO_LAUNCH_ENV")" "Paseo relaunch did not receive the configured Lavish host"
 assert_equals 1 "$(grep -c 'workspace create' "$PASEO_ARGS")" "Paseo relaunch created another workspace"
 assert_equals 2 "$(grep -c 'run --background' "$PASEO_ARGS")" "Paseo relaunch did not publish a second agent"
 
