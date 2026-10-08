@@ -1943,6 +1943,7 @@ The live assertions printed `PASS task A workspace is worktree-isolated in proje
 Observed CLI version and daemon status were `0.9.2`, `daemonVersion: 0.9.1`, and `connectedDaemon: reachable`.
 The adapter suite covers project-path matching, project and workspace refusal, isolated branch/worktree creation, provider refusal, native busy status, unverified liveness, unsupported-key refusal, and agent-before-workspace archival.
 The spawn suite covers launch environment forwarding, identity publication from a `Using workspace` response without `workspaceId`, relaunch identity retention, terminal proof, and safe abort cleanup.
+Current adapter regressions also cover refusing a reused workspace whose branch differs from the task record and identifying the retained workspace and worktree when trailer-hook installation fails (`tests/fm-backend-paseo.test.sh`).
 
 ## cmux
 
