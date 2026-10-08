@@ -524,7 +524,7 @@ dismiss_interrupt_hazard() {  # <key> <ere>
 # sooner than its press gap; without that proof INTERRUPT_ARMED=no and no
 # further press is sent. Its hazard surface is then closed before returning.
 send_interrupt_keys() {
-  local key repeat clear arm= hazard= gap=0 i=0
+  local key repeat clear arm='' hazard='' gap=0 i=0
   if [ "$BACKEND" = paseo ]; then
     key=C-c
     repeat=1
