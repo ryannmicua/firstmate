@@ -92,8 +92,13 @@
 # - or a version 1 attempt whose workspace is still present or unreadable - may
 # name a live quarantined space and is retained for that sweep.
 # data/<id>/ is deliberately left in place: a successor spawn reads brief.md
-# from it. Handled steering-inbox messages are archived there to steers/
-# (byte-for-byte, retry-safe) before state/<id>.inbox is removed.
+# from it. Handled steering-inbox .msg files are archived byte-for-byte to
+# $DATA/<id>/steers/ before the inbox is removed. For a secondmate, the archive
+# instead lives in the surviving parent home's $FM_HOME/data/<id>/steers/,
+# and archiving precedes deletion of the secondmate home, including --force.
+# An identical archived copy is reused on retry; a differing file at the same
+# name is preserved and the new copy takes a numbered suffix. Archive failure
+# stops teardown before inbox or secondmate-home deletion.
 # Worktree-slot ownership (teardown-slot-collision): a treehouse pool slot is
 # reused across tasks, so a stale, duplicated, or drifted worktree= record can
 # name a slot a DIFFERENT live task now holds. Cleanup kills every process under
@@ -3826,11 +3831,8 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
 # The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the
 # retired endpoint; teardown only runs after landing is confirmed, so any
 # leftover unhandled steer here is moot rather than unlanded work.
-# Handled steers are the durable record of what the worker was told, so they
-# are archived byte-for-byte to data/<id>/steers/ before the inbox is removed.
-# A rerun is safe: an identical archived copy just drops its source, and a
-# differing file already at the name keeps both under a numbered suffix. Any
-# archive failure stops teardown before the inbox is deleted.
+# Handled-steer preservation is owned by this script's header and performed
+# by archive_handled_steers before secondmate-home deletion above.
 # state/<id>.git-hooks is the spawn-owned commit-msg strip directory, left
 # read-only by its installer.
 chmod u+w "$STATE/$ID.git-hooks" 2>/dev/null || true
