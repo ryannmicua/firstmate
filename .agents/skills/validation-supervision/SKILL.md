@@ -22,8 +22,8 @@ Apart from that single supported abort, do not hand-edit, commit, restart, or st
 Once ownership is settled, validate exactly once against that final head so no obsolete or intermediate head is ever treated as authoritative.
 
 An ask-user finding returns as `needs-decision`; firstmate loads `ask-user-authority` and either decides or escalates per that skill.
-Send the same worker one exact decision naming the decision key, step, action, affected finding IDs, instructions where needed, and exact response command, passing `--resolve-key` so the worker's open decision record closes at answer time.
-Require the matching `resolved` event, forbid `--yes`, and require the worker to process every synchronous return until completion or a genuinely new escalation.
+Send the decision through [`bin/fm-gate-decide.sh`](../../../bin/fm-gate-decide.sh) rather than a hand-written steer: preview it, then send it with the printed `--confirm` digest; its header owns the steer shape, the respond command, the standing etiquette, the `--resolve-key` close, carried-over finding annotation, and the durable decision record.
+When the helper refuses a gate it cannot read, report that refusal rather than guessing; a hand-written fallback steer still names the decision key, step, action, finding IDs, instructions, and exact response command, and passes `--resolve-key`.
 Resume fleet supervision immediately after the decision lands.
 
 Judge validation by the resolved state line from [`bin/fm-crew-state.sh`](../../../bin/fm-crew-state.sh), whose header owns outcome mappings and CI-monitor/daemon exceptions, never by shell liveness, the last status event, or a raw run record.
