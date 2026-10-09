@@ -43,7 +43,6 @@ Preserve its uncommitted changes and commits, keep the same task identity, and r
 A HERDR endpoint that is not merely idle but destroyed - a pane or workspace removed in Herdr churn - is recovered by that same relaunch, which creates one fresh endpoint in the existing worktree and rebinds the task's record to it; nothing special is needed, and the worktree is untouched ([`docs/agent-control.md`](../../../docs/agent-control.md) "Reclaiming a task whose endpoint is gone").
 That relaunch proves the endpoint is destroyed before it rebinds, so a Herdr server that was merely stopped is adopted back rather than duplicated.
 On tmux there is no proof-based reclaim: a task record carries no socket identity for its endpoint, so a `missing` window cannot be told apart from one on a tmux server this seat cannot address, and ordinary `exit` and `relaunch` refuse.
-The only exception is the attended, identity-pinned handoff for `paseo-backend-adapter`; use its exact operator procedure in [agent-control.md](../../../docs/agent-control.md#the-one-task-attended-legacy-handoff).
 Do not work around any refusal by using a fresh generic spawn - an unaccounted-for worker may still hold that worktree.
 That reclaim is the owning home's operation only, and a secondmate is the one exception: recover it through `bin/fm-spawn.sh <id> --secondmate` as above.
 Do not use a fresh generic spawn while the recorded worktree is unaccounted for, because allocating another worktree can split one task across two copies.
