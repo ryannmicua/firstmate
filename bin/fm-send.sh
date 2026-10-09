@@ -225,6 +225,9 @@ fm_refuse_if_gate_agent
 
 if [ -z "${FM_HOME+x}" ] || [ -z "${FM_HOME:-}" ]; then
   echo "error: FM_HOME is not set; fm-send refuses to resolve targets without an explicit firstmate home" >&2
+  # shellcheck source=bin/fm-home-hint-lib.sh
+  . "$SCRIPT_DIR/fm-home-hint-lib.sh"
+  fm_home_refusal_hint "$0" "${FM_SEND_ORIGINAL_ARGS[@]+"${FM_SEND_ORIGINAL_ARGS[@]}"}"
   exit 1
 fi
 

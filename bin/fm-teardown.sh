@@ -92,7 +92,8 @@
 # - or a version 1 attempt whose workspace is still present or unreadable - may
 # name a live quarantined space and is retained for that sweep.
 # data/<id>/ is deliberately left in place: a successor spawn reads brief.md
-# from it.
+# from it. Handled steering-inbox messages are archived there to steers/
+# (byte-for-byte, retry-safe) before state/<id>.inbox is removed.
 # Worktree-slot ownership (teardown-slot-collision): a treehouse pool slot is
 # reused across tasks, so a stale, duplicated, or drifted worktree= record can
 # name a slot a DIFFERENT live task now holds. Cleanup kills every process under
@@ -3798,6 +3799,35 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
 # The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the
 # retired endpoint; teardown only runs after landing is confirmed, so any
 # leftover unhandled steer here is moot rather than unlanded work.
+# Handled steers are the durable record of what the worker was told, so they
+# are archived byte-for-byte to data/<id>/steers/ before the inbox is removed.
+# A rerun is safe: an identical archived copy just drops its source, and a
+# differing file already at the name keeps both under a numbered suffix. Any
+# archive failure stops teardown before the inbox is deleted.
+archive_handled_steers() {
+  local handled="$STATE/$ID.inbox/handled" dest_dir="$DATA/$ID/steers" src base dest n
+  [ -d "$handled" ] || return 0
+  for src in "$handled"/*.msg; do
+    [ -f "$src" ] || continue
+    base=${src##*/}
+    mkdir -p "$dest_dir" || return 1
+    dest="$dest_dir/$base"
+    n=0
+    while [ -e "$dest" ]; do
+      cmp -s "$src" "$dest" && continue 2
+      n=$((n + 1))
+      dest="$dest_dir/$base.$n"
+    done
+    if ! { cp -p "$src" "$dest.tmp.$$" && cmp -s "$src" "$dest.tmp.$$" && mv "$dest.tmp.$$" "$dest"; }; then
+      rm -f "$dest.tmp.$$"
+      return 1
+    fi
+  done
+}
+archive_handled_steers || {
+  echo "error: could not archive handled steers for $ID to $DATA/$ID/steers; leaving the inbox in place" >&2
+  exit 1
+}
 # state/<id>.git-hooks is the spawn-owned commit-msg strip directory, left
 # read-only by its installer.
 chmod u+w "$STATE/$ID.git-hooks" 2>/dev/null || true

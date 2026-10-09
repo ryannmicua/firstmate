@@ -122,6 +122,20 @@ test_unset_fm_home_fails() {
   pass "fm-send strict: unset FM_HOME fails before target resolution"
 }
 
+test_unset_fm_home_prints_exact_retry_command() {
+  local dir fb home err log rc
+  dir="$TMP_ROOT/nohome-hint"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); home=$(setup_home hint); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
+
+  env -u FM_HOME PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
+    "$SEND" sess:win "hello world" >/dev/null 2>"$err"; rc=$?
+  [ "$rc" -ne 0 ] || fail "unset FM_HOME should still fail"
+  assert_contains "$(cat "$err")" "retry with: FM_HOME=$home $SEND sess:win hello\\ world" \
+    "refusal should print the exact retry command with the home candidate"
+  [ ! -s "$log" ] || fail "refusal with a hint still attempted a send"
+  pass "fm-send strict: unset FM_HOME refusal prints the exact retry command without running it"
+}
+
 test_unresolvable_target_does_not_tmux_fallback() {
   local dir fb home err log rc
   dir="$TMP_ROOT/unresolved"; mkdir -p "$dir"
@@ -234,6 +248,7 @@ test_key_send_exit_status_follows_delivery() {
 test_exact_lane_id_send_still_works
 test_key_send_exit_status_follows_delivery
 test_unset_fm_home_fails
+test_unset_fm_home_prints_exact_retry_command
 test_unresolvable_target_does_not_tmux_fallback
 test_prefixless_herdr_pane_id_fails
 test_unmatched_single_colon_target_must_exist

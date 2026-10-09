@@ -1121,6 +1121,17 @@ test_grok_idle_footer_does_not_confirm_cancellation() {
   pass "fm-control interrupt: grok's idle footer does not confirm cancellation"
 }
 
+test_unset_fm_home_prints_exact_retry_command() {
+  local dir out rc
+  dir=$(new_case nohome-hint)
+  out=$(env -u FM_HOME PATH="$dir/fakebin:$PATH" FM_ROOT_OVERRIDE="$dir/home" \
+    "$CONTROL" some-task interrupt 2>&1); rc=$?
+  [ "$rc" -ne 0 ] || fail "unset FM_HOME should still be refused"
+  assert_contains "$out" "retry with: FM_HOME=$dir/home $CONTROL some-task interrupt" \
+    "refusal should print the exact retry command with the home candidate"
+  pass "fm-control refuses an unset FM_HOME and prints the exact retry command without running it"
+}
+
 test_paseo_exit_sources_adapter() {
   local dir out rc
   dir=$(new_case paseo-exit)
@@ -1263,3 +1274,4 @@ test_grok_idle_footer_does_not_confirm_cancellation
 test_paseo_exit_sources_adapter
 test_secondmate_control_command_carries_no_marker
 test_fm_send_still_marks_the_same_secondmate_task
+test_unset_fm_home_prints_exact_retry_command
