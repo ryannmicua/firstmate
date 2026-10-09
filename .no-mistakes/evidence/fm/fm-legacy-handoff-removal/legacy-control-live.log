@@ -1,0 +1,114 @@
+$ bin/fm-lab-home.sh create /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+exit=0
+$ git init -q /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l/copy
+exit=0
+$ git -C /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l/copy -c user.name=Lab -c user.email=lab@example.invalid commit --allow-empty -qm lab
+exit=0
+$ tmux -L fm-lab new-session -d -s firstmate -n sentinel -x 120 -y 35 -c /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l/copy bash --noprofile --norc
+exit=0
+$ tmux -L fm-lab display-message -p -t firstmate:sentinel #{socket_path},#{pid},0
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l/tmux/tmux-1000/fm-lab,931498,0
+exit=0
+
+SCENARIO: Legacy task handoff is rejected without altering work or creating an endpoint
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:sentinel:bash
+exit=0
+$ bin/fm-control.sh paseo-backend-adapter handoff --expect-endpoint firstmate:fm-paseo-backend-adapter --expect-worktree /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l/copy --expect-head 8bbad9bccd7d8282266d55c03ac30eb5fb826ffb --note legacy retry
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+error: 'handoff' is not a control verb
+allowed verbs:
+  interrupt
+  exit
+  relaunch
+exit=2
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:sentinel:bash
+exit=0
+Task records, brief, unfinished work, and real tmux inventory unchanged.
+
+SCENARIO: Old attestation flags cannot enable handoff through relaunch
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:sentinel:bash
+exit=0
+$ bin/fm-control.sh paseo-backend-adapter relaunch --expect-endpoint legacy --note legacy retry
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+error: unexpected argument '--expect-endpoint'
+exit=1
+$ bin/fm-control.sh paseo-backend-adapter relaunch --expect-worktree legacy --note legacy retry
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+error: unexpected argument '--expect-worktree'
+exit=1
+$ bin/fm-control.sh paseo-backend-adapter relaunch --expect-head legacy --note legacy retry
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+error: unexpected argument '--expect-head'
+exit=1
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:sentinel:bash
+exit=0
+Removed handoff flags cannot enter an ordinary relaunch.
+
+SCENARIO: Missing historical tmux endpoint refuses exit and replacement without changing work
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:sentinel:bash
+exit=0
+$ bin/fm-control.sh paseo-backend-adapter exit
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+error: task paseo-backend-adapter's endpoint firstmate:fm-paseo-backend-adapter reads 'missing', but tmux absence cannot be proven from a task record: the record does not carry the endpoint's socket identity, and a server-wide window inventory only describes the tmux server this process addresses, so a window absent from it may still be alive on another; exit will not claim an agent stopped at an address it cannot trust, nor send lifecycle input to one
+exit=1
+$ bin/fm-control.sh paseo-backend-adapter relaunch --note do not duplicate
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+error: task paseo-backend-adapter's endpoint firstmate:fm-paseo-backend-adapter reads 'missing', but tmux absence cannot be proven from a task record: the record does not carry the endpoint's socket identity, and a server-wide window inventory only describes the tmux server this process addresses, so a window absent from it may still be alive on another; exit will not claim an agent stopped at an address it cannot trust, nor send lifecycle input to one
+error: relaunch of paseo-backend-adapter failed while stopping the old agent and its state is 'missing', so it was not proven stopped; its original instructions were restored and the durable record was retained for recovery
+exit=1
+$ bin/fm-spawn.sh paseo-backend-adapter --relaunch --harness codex
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision with a foreground checkpoint: bin/fm-watch-checkpoint.sh --seconds 180.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+error: task paseo-backend-adapter's recorded endpoint firstmate:fm-paseo-backend-adapter reads 'missing', but tmux absence cannot be proven from a task record: the record does not carry the endpoint's socket identity, and a server-wide window inventory only describes the tmux server this process addresses, so a window absent from it may still be alive on another. An endpoint that cannot be proven absent may still hold a live agent on this task's worktree; refusing rather than launching a second agent into it
+exit=1
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:sentinel:bash
+exit=0
+Both control verbs and direct spawn preserve task state and refuse the absent window.
+
+SCENARIO: Legacy transaction environment cannot bypass direct-spawn safety
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:sentinel:bash
+exit=0
+$ bin/fm-spawn.sh paseo-backend-adapter --relaunch --harness codex
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+error: task paseo-backend-adapter's recorded endpoint firstmate:fm-paseo-backend-adapter reads 'missing', but tmux absence cannot be proven from a task record: the record does not carry the endpoint's socket identity, and a server-wide window inventory only describes the tmux server this process addresses, so a window absent from it may still be alive on another. An endpoint that cannot be proven absent may still hold a live agent on this task's worktree; refusing rather than launching a second agent into it
+exit=1
+$ bin/fm-spawn.sh paseo-backend-adapter --relaunch --harness codex
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+error: task paseo-backend-adapter's recorded endpoint firstmate:fm-paseo-backend-adapter reads 'missing', but tmux absence cannot be proven from a task record: the record does not carry the endpoint's socket identity, and a server-wide window inventory only describes the tmux server this process addresses, so a window absent from it may still be alive on another. An endpoint that cannot be proven absent may still hold a live agent on this task's worktree; refusing rather than launching a second agent into it
+exit=1
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:sentinel:bash
+exit=0
+Nonempty and empty legacy transaction variables cannot bypass normal absence proof.
+
+SCENARIO: Ordinary exit still recognizes an already-stopped agent and preserves its endpoint
+$ tmux -L fm-lab rename-window -t firstmate:sentinel fm-sentinel
+exit=0
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:fm-sentinel:bash
+exit=0
+$ bin/fm-control.sh sentinel exit
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l
+already-stopped sentinel harness=codex backend=tmux endpoint=firstmate:fm-sentinel worktree=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HGNAD303NZ473VHVBMGE8S/.l/copy
+exit=0
+$ tmux -L fm-lab list-windows -a -F #{session_name}:#{window_name}:#{pane_current_command}
+firstmate:fm-sentinel:bash
+exit=0
+Ordinary exit recognizes a real stopped shell and preserves its endpoint and unfinished work.
+Teardown: private fm-lab tmux server stopped; disposable lab home removed.

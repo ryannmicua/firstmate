@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Legacy task handoff is rejected without altering work or creating an endpoint",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Old attestation flags cannot enable handoff through relaunch",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Missing historical tmux endpoint refuses exit and replacement without changing work",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Legacy transaction environment cannot bypass direct-spawn safety",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Ordinary exit still recognizes an already-stopped agent and preserves its endpoint",
+    "result": "pass",
+    "live": true
+  }
+]
