@@ -16,6 +16,9 @@ GitHub Actions and Dependabot are exempt so their automation keeps working, but 
 
 ## Workflow
 
+The workflow below targets upstream `kunchenguid/firstmate`.
+For changes targeting this fork, follow [`FORK.md`](FORK.md#syncing-from-upstream) for repository targeting and delivery.
+
 1. Fork the repo, then clone the parent repo or set your local `origin` back to the parent (`git@github.com:kunchenguid/firstmate.git`).
 2. Create a branch and make your changes.
 3. Initialize the gate with your fork as the push target: `no-mistakes init --fork-url git@github.com:<you>/firstmate.git` (contributing to firstmate requires **no-mistakes v1.46.0+** for structured attestation; without a fork, plain `no-mistakes init` still works for maintainers with push access).
