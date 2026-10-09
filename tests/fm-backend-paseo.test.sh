@@ -79,21 +79,23 @@ case "$*" in
   workspace\ create\ *)
     source=
     project_id=
+    branch=
     slug=
     base=
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --path) source=$2; shift 2 ;;
         --project) project_id=$2; shift 2 ;;
-        --new-branch) slug=$2; shift 2 ;;
+        --new-branch) branch=$2; shift 2 ;;
         --base) base=$2; shift 2 ;;
+        --worktree-slug) slug=$2; shift 2 ;;
         *) shift ;;
       esac
     done
     project_name=$(jq -r --arg id "$project_id" '.[] | select(.projectId == $id) | .name' "$FM_PASEO_PROJECTS_JSON" | head -n 1)
     id="wks-$slug"
     path="$FM_PASEO_WORKTREE_ROOT/$slug"
-    git -C "$source" worktree add -q -b "$slug" "$path" "$base" || exit 1
+    git -C "$source" worktree add -q -b "$branch" "$path" "$base" || exit 1
     printf '%s\t%s\tworktree\t%s\n' "$id" "$project_name" "$path" >> "$FM_PASEO_WORKSPACES_FILE"
     printf 'Created workspace %s\n' "$id"
     jq -nc --arg id "$id" --arg path "$path" '{workspaceId:$id,cwd:$path}'
@@ -155,9 +157,10 @@ export FM_PASEO_LOGS_EMPTY=1
 export FM_PASEO_LOGS_FAIL=1
 if fm_backend_paseo_capture agent-test 4 >/dev/null 2>&1; then fail "failed Paseo logs command was treated as empty success"; fi
 unset FM_PASEO_LOGS_EMPTY FM_PASEO_LOGS_FAIL
-if [ -n "$(fm_backend_paseo_send_text_submit agent-test hello)" ]; then fail "Paseo send leaked provider output as a verdict"; fi
+if [ -n "$(fm_backend_send_text_submit paseo agent-test hello 2 0.4 0.3)" ]; then fail "Paseo send leaked provider output as a verdict"; fi
+assert_contains "$(cat "$LOG")" '|send agent-test --no-wait hello' "shared submit wrapper did not reach Paseo send"
 export FM_PASEO_SEND_FAIL=1
-if fm_backend_paseo_send_text_submit agent-test hello >/dev/null 2>&1; then fail "failed Paseo send was treated as success"; fi
+if fm_backend_send_text_submit paseo agent-test hello 2 0.4 0.3 >/dev/null 2>&1; then fail "failed Paseo send was treated as success"; fi
 unset FM_PASEO_SEND_FAIL
 if fm_backend_paseo_terminal_proof agent-test; then fail "idle Paseo status was treated as terminal proof"; fi
 if fm_backend_paseo_stop_status_proof agent-test 1 0.01; then fail "idle Paseo status was treated as a successful stop proof"; fi
@@ -168,31 +171,41 @@ fm_backend_paseo_archive_agent agent-test
 assert_contains "$(fm_backend_paseo_busy_state agent-test)" idle "Paseo archive leaves a native terminal status"
 
 export PASEO_AGENT_ID=parent-agent PASEO_WORKSPACE_ID=parent-workspace
-fm_backend_paseo_create_task task-test "$SOURCE" "$PWD/README.md" codex default default home-tag wks-existing "$EXISTING_WT" A=1 B=2 >/dev/null
+fm_backend_paseo_create_task task-test "$SOURCE" "$PWD/README.md" codex default default home-tag existing-task wks-existing "$EXISTING_WT" '' A=1 B=2 >/dev/null
 assert_contains "$(cat "$LOG")" '--workspace wks-existing' "Paseo relaunch targets its validated workspace"
 assert_contains "$(cat "$LOG")" 'agent=unset workspace=unset|run' "Paseo workers are independent roots without the caller workspace"
 assert_contains "$(cat "$LOG")" '--env A=1 --env B=2' "Paseo preserves repeated env values"
 assert_not_contains "$(cat "$LOG")" 'BASH_ENV=' "Paseo does not rely on a shell environment file"
 assert_not_contains "$(cat "$LOG")" '--mode auto-review' "Codex does not receive a forced review mode"
-assert_contains "$(fm_backend_paseo_create_task opencode-test "$SOURCE" "$PWD/README.md" opencode default default home-tag wks-existing "$EXISTING_WT")" $'agent-test\twks-existing\t' \
+assert_contains "$(fm_backend_paseo_create_task opencode-test "$SOURCE" "$PWD/README.md" opencode default default home-tag '' wks-existing "$EXISTING_WT" '')" $'agent-test\twks-existing\t' \
   "Paseo retains validated workspace identity when run output only says Using workspace"
 assert_contains "$(cat "$LOG")" '--mode build' "OpenCode retains its build mode"
 
-if FM_PASEO_RUN_FAIL=1 fm_backend_paseo_create_task partial-run "$SOURCE" "$PWD/README.md" codex default default home-tag '' '' >/dev/null 2>"$TMP_ROOT/run-failure"; then
+runs_before=$(grep -c '|run ' "$LOG" || true)
+if fm_backend_paseo_create_task mismatched-branch "$SOURCE" "$PWD/README.md" codex default default home-tag fm/task-test wks-existing "$EXISTING_WT" '' >/dev/null 2>"$TMP_ROOT/mismatched-branch"; then
+  fail "Paseo reused a workspace on a branch different from the recorded task branch"
+fi
+assert_contains "$(cat "$TMP_ROOT/mismatched-branch")" 'existing-task' "Paseo branch mismatch refusal did not report the worktree branch"
+assert_contains "$(cat "$TMP_ROOT/mismatched-branch")" 'fm/task-test' "Paseo branch mismatch refusal did not report the recorded task branch"
+assert_equals "$runs_before" "$(grep -c '|run ' "$LOG" || true)" "Paseo ran after the task and worktree branches differed"
+
+if FM_PASEO_RUN_FAIL=1 fm_backend_paseo_create_task partial-run "$SOURCE" "$PWD/README.md" codex default default home-tag '' '' '' '' >/dev/null 2>"$TMP_ROOT/run-failure"; then
   fail "Paseo run failure after workspace creation was accepted"
 fi
 assert_contains "$(cat "$TMP_ROOT/run-failure")" 'workspace wks-fm-home-tag-partial-run' "Paseo run failure did not identify its created workspace"
 assert_not_contains "$(cat "$LOG")" 'workspace archive wks-fm-home-tag-partial-run' "Paseo auto-archived a partially created workspace"
 
-fm_backend_paseo_create_task fresh-a "$SOURCE" "$PWD/README.md" codex gpt-6-luna high home-tag '' '' >/dev/null
-fm_backend_paseo_create_task fresh-b "$SOURCE" "$PWD/README.md" codex gpt-6-luna high home-tag '' '' >/dev/null
+fm_backend_paseo_create_task fresh-a "$SOURCE" "$PWD/README.md" codex gpt-6-luna high home-tag fm/fresh-a '' '' '' >/dev/null
+fm_backend_paseo_create_task fresh-b "$SOURCE" "$PWD/README.md" codex gpt-6-luna high home-tag fm/fresh-b '' '' '' >/dev/null
 fresh_a_line=$(grep '|workspace create ' "$LOG" | grep 'fm-home-tag-fresh-a' | tail -n 1)
 fresh_b_line=$(grep '|workspace create ' "$LOG" | grep 'fm-home-tag-fresh-b' | tail -n 1)
 assert_contains "$fresh_a_line" '--project project-main' "fresh Paseo task was not placed under the existing project"
 assert_contains "$fresh_a_line" "--path $SOURCE" "fresh Paseo task did not use the registered source path"
-assert_contains "$fresh_a_line" '--mode branch-off --new-branch fm-home-tag-fresh-a --base main --worktree-slug fm-home-tag-fresh-a --json' \
-  "fresh Paseo task did not receive its unique isolated branch and workspace slug"
-assert_contains "$fresh_b_line" '--new-branch fm-home-tag-fresh-b' "second task did not receive its own branch"
+assert_contains "$fresh_a_line" '--mode branch-off --new-branch fm/fresh-a --base main --worktree-slug fm-home-tag-fresh-a --json' \
+  "fresh Paseo task did not receive its selected branch and unique workspace slug"
+assert_contains "$fresh_b_line" '--new-branch fm/fresh-b' "second task did not receive its selected branch"
+assert_equals fm/fresh-a "$(git -C "$WORKTREE_ROOT/fm-home-tag-fresh-a" branch --show-current)" \
+  "Paseo did not create the selected Git branch"
 assert_contains "$(grep '|run ' "$LOG" | grep 'fm-task=fresh-a' | tail -n 1)" '--label fm-task=fresh-a --label fm-home=home-tag' \
   "fresh Paseo task did not receive unique task and home labels"
 assert_contains "$(grep '|run ' "$LOG" | grep 'fm-task=fresh-a' | tail -n 1)" '--title fm-home-tag-fresh-a' \
@@ -201,14 +214,32 @@ assert_not_contains "$(cat "$LOG")" 'project create' "Paseo adapter created a pe
 assert_not_contains "$(cat "$LOG")" '--new-workspace' "Paseo adapter used the project-creating run shortcut"
 assert_not_contains "$fresh_a_line" 'parent-workspace' "Paseo fresh spawn inherited the ambient caller workspace"
 
+HOOK_FAIL_ROOT="$TMP_ROOT/hook-failure-root"
+mkdir -p "$HOOK_FAIL_ROOT/bin"
+cat >"$HOOK_FAIL_ROOT/bin/fm-git-strip-ai-trailers.sh" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+chmod +x "$HOOK_FAIL_ROOT/bin/fm-git-strip-ai-trailers.sh"
+saved_fm_root=$FM_ROOT
+FM_ROOT=$HOOK_FAIL_ROOT
+runs_before=$(grep -c '|run ' "$LOG" || true)
+if fm_backend_paseo_create_task hook-failure "$SOURCE" "$PWD/README.md" codex default default home-tag fm/hook-failure '' '' "$TMP_ROOT/task-hooks" >/dev/null 2>"$TMP_ROOT/hook-failure"; then
+  fail "Paseo started a task when trailer-hook installation failed"
+fi
+FM_ROOT=$saved_fm_root
+assert_contains "$(cat "$TMP_ROOT/hook-failure")" 'wks-fm-home-tag-hook-failure' "hook failure did not identify the retained Paseo workspace"
+assert_contains "$(cat "$TMP_ROOT/hook-failure")" "$WORKTREE_ROOT/fm-home-tag-hook-failure" "hook failure did not identify the retained worktree path"
+assert_equals "$runs_before" "$(grep -c '|run ' "$LOG" || true)" "Paseo ran after trailer-hook installation failed"
+
 cp "$PROJECTS" "$TMP_ROOT/projects-saved.json"
 printf '[]\n' >"$PROJECTS"
-if fm_backend_paseo_create_task no-project "$SOURCE" "$PWD/README.md" codex default default home-tag '' '' >/dev/null 2>"$TMP_ROOT/no-project"; then
+if fm_backend_paseo_create_task no-project "$SOURCE" "$PWD/README.md" codex default default home-tag '' '' '' '' >/dev/null 2>"$TMP_ROOT/no-project"; then
   fail "Paseo created a task without a registered source project"
 fi
 assert_contains "$(cat "$TMP_ROOT/no-project")" 'no registered Paseo project' "missing project refusal did not explain the identity problem"
 printf '[{"projectId":"project-main","name":"firstmate","path":"%s"},{"projectId":"project-duplicate","name":"firstmate-copy","path":"%s"}]\n' "$SOURCE" "$SOURCE" >"$PROJECTS"
-if fm_backend_paseo_create_task duplicate-project "$SOURCE" "$PWD/README.md" codex default default home-tag '' '' >/dev/null 2>"$TMP_ROOT/duplicate-project"; then
+if fm_backend_paseo_create_task duplicate-project "$SOURCE" "$PWD/README.md" codex default default home-tag '' '' '' '' >/dev/null 2>"$TMP_ROOT/duplicate-project"; then
   fail "Paseo reused an ambiguous project path"
 fi
 assert_contains "$(cat "$TMP_ROOT/duplicate-project")" '2 Paseo projects match' "ambiguous project refusal did not explain the collision"
@@ -216,14 +247,14 @@ mv "$TMP_ROOT/projects-saved.json" "$PROJECTS"
 
 git -C "$SOURCE" worktree add -q -b wrong-project "$TMP_ROOT/wrong-project-worktree" main
 printf 'wks-wrong-project\tother-project\tworktree\t%s\n' "$TMP_ROOT/wrong-project-worktree" >>"$WORKSPACES"
-if fm_backend_paseo_create_task wrong-project "$SOURCE" "$PWD/README.md" codex default default home-tag wks-wrong-project "$TMP_ROOT/wrong-project-worktree" >/dev/null 2>"$TMP_ROOT/wrong-project"; then
+if fm_backend_paseo_create_task wrong-project "$SOURCE" "$PWD/README.md" codex default default home-tag '' wks-wrong-project "$TMP_ROOT/wrong-project-worktree" '' >/dev/null 2>"$TMP_ROOT/wrong-project"; then
   fail "Paseo reused a workspace attached to another project"
 fi
 assert_contains "$(cat "$TMP_ROOT/wrong-project")" 'not the registered source project' "wrong-project workspace refusal did not name the project mismatch"
 assert_not_contains "$(tail -n 8 "$LOG")" 'run --background --workspace wks-wrong-project' "Paseo ran inside a workspace with the wrong project identity"
 
 printf 'wks-local\tfirstmate\tlocal\t%s\n' "$SOURCE" >>"$WORKSPACES"
-if fm_backend_paseo_create_task unsafe-local "$SOURCE" "$PWD/README.md" codex default default home-tag wks-local "$EXISTING_WT" >/dev/null 2>"$TMP_ROOT/unsafe-local"; then
+if fm_backend_paseo_create_task unsafe-local "$SOURCE" "$PWD/README.md" codex default default home-tag '' wks-local "$EXISTING_WT" '' >/dev/null 2>"$TMP_ROOT/unsafe-local"; then
   fail "Paseo reused a local workspace for an isolated task"
 fi
 assert_contains "$(cat "$TMP_ROOT/unsafe-local")" 'is not a worktree workspace' "unsafe workspace refusal did not name isolation"
@@ -231,7 +262,7 @@ assert_contains "$(cat "$TMP_ROOT/unsafe-local")" 'is not a worktree workspace' 
 MISMATCH_WT="$TMP_ROOT/mismatched-recorded-worktree"
 git -C "$SOURCE" worktree add -q -b mismatched-recorded-worktree "$MISMATCH_WT" main
 runs_before=$(grep -c '|run ' "$LOG" || true)
-if fm_backend_paseo_create_task mismatched-worktree "$SOURCE" "$PWD/README.md" codex default default home-tag wks-existing "$MISMATCH_WT" >/dev/null 2>"$TMP_ROOT/mismatched-worktree"; then
+if fm_backend_paseo_create_task mismatched-worktree "$SOURCE" "$PWD/README.md" codex default default home-tag '' wks-existing "$MISMATCH_WT" '' >/dev/null 2>"$TMP_ROOT/mismatched-worktree"; then
   fail "Paseo reused a workspace with a different recorded worktree path"
 fi
 assert_contains "$(cat "$TMP_ROOT/mismatched-worktree")" 'not its recorded worktree' "worktree mismatch refusal did not explain the identity conflict"

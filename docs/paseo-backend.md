@@ -26,6 +26,8 @@ Removing a Firstmate project does not remove its Paseo project; cleanup may be a
 Firstmate uses `paseo workspace create --path` to create one worktree workspace from that checkout, with its own branch and a unique home-and-task slug, then starts the agent with `paseo run --workspace`.
 The agent receives the task's unique `fm-task` label and the Firstmate home's `fm-home` label, while task metadata records the returned agent identity and the validated workspace and worktree identities.
 Relaunch requires the same registered source project, a matching worktree workspace, and the recorded worktree path, then reuses that workspace without creating another one.
+When the task has a recorded branch, Firstmate checks that the worktree is on it before running the agent and refuses a mismatch with both branch names in the error.
+When trailer-hook installation is enabled but fails, Firstmate does not launch the agent and reports the retained workspace ID and worktree path for manual reconciliation.
 Paseo can answer an existing-workspace run with `Using workspace <id>` and no `workspaceId` JSON field, so Firstmate retains the workspace identity it validated before the run.
 The selected workspace is passed through `--workspace`; Firstmate does not pass `--cwd` to `paseo run`.
 When filtering is enabled, Firstmate passes eligible set allowlisted values to Paseo through individual `--env NAME=value` flags; these arguments are visible in process listings on the daemon host ([full forwarding contract](configuration.md#worker-launch-environment-configlaunch-env-allowlist)).

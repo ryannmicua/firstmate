@@ -220,11 +220,11 @@ EOF
   printf '%s' "$worktree_path"
 }
 
-fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <workspace-id> <worktree-path> [env key=value...]
-  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} workspace_id=${8:-} expected_worktree=${9:-}
-  shift 9
+fm_backend_paseo_create_task() { # <id> <source-clone> <brief> <harness> <model> <effort> <home-tag> <branch> <workspace-id> <worktree-path> <git-hooks-dir> [env key=value...]
+  local id=$1 source=$2 brief=$3 harness=$4 model=${5:-} effort=${6:-} home_tag=${7:-} branch=${8:-} workspace_id=${9:-} expected_worktree=${10:-} git_hooks_dir=${11:-}
+  shift 11
   local provider base_ref candidate project_id project_name project_record slug workspace_raw workspace_json created_workspace created_text_id created_worktree
-  local worktree_path worktree worktree_real run_raw run_json agent reported_workspace_json reported_workspace_text reported_workspace
+  local worktree_path worktree worktree_real run_raw run_json agent reported_workspace_json reported_workspace_text reported_workspace actual_branch
   local reported_worktree run_status env_value
   local -a create_args run_args
   fm_backend_paseo_runtime_check || return 1
@@ -259,8 +259,9 @@ EOF
       return 1
     }
     slug="fm-${home_tag}-${id}"
+    [ -n "$branch" ] || branch=$slug
     create_args=(workspace create --isolation worktree --path "$source" --project "$project_id"
-      --mode branch-off --new-branch "$slug" --base "$base_ref" --worktree-slug "$slug"
+      --mode branch-off --new-branch "$branch" --base "$base_ref" --worktree-slug "$slug"
       --json)
     if workspace_raw=$(env -u PASEO_AGENT_ID -u PASEO_WORKSPACE_ID paseo "${create_args[@]}" 2>&1); then
       :
@@ -302,6 +303,28 @@ EOF
     }
     worktree=$(fm_backend_paseo_validate_task_worktree "$source" "$worktree_path") || {
       printf 'error: Paseo workspace %s is retained for manual reconciliation\n' "$workspace_id" >&2
+      return 1
+    }
+  fi
+
+  if [ -n "$branch" ]; then
+    actual_branch=$(git -C "$worktree" branch --show-current) || {
+      printf 'error: could not inspect the branch for Paseo workspace %s at %s; refusing task %s\n' \
+        "$workspace_id" "$worktree" "$id" >&2
+      return 1
+    }
+    [ -n "$actual_branch" ] || actual_branch='<detached HEAD>'
+    if [ "$actual_branch" != "$branch" ]; then
+      printf 'error: Paseo workspace %s at %s is on branch %s, but task %s records branch %s; refusing to run the task\n' \
+        "$workspace_id" "$worktree" "$actual_branch" "$id" "$branch" >&2
+      return 1
+    fi
+  fi
+
+  if [ -n "$git_hooks_dir" ]; then
+    "$FM_ROOT/bin/fm-git-strip-ai-trailers.sh" install "$git_hooks_dir" "$worktree" || {
+      printf 'error: could not install the AI-trailer strip hooks for task %s in retained Paseo workspace %s at %s\n' \
+        "$id" "$workspace_id" "$worktree" >&2
       return 1
     }
   fi
