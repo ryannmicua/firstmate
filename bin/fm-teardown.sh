@@ -3729,6 +3729,33 @@ if [ "$KIND" != secondmate ]; then
     exit 1
   fi
 fi
+archive_handled_steers() {
+  local handled="$STATE/$ID.inbox/handled" dest_dir="$DATA/$ID/steers" src base dest n
+  if [ "$KIND" = secondmate ]; then
+    dest_dir="$FM_HOME/data/$ID/steers"
+  fi
+  [ -d "$handled" ] || return 0
+  for src in "$handled"/*.msg; do
+    [ -f "$src" ] || continue
+    base=${src##*/}
+    mkdir -p "$dest_dir" || return 1
+    dest="$dest_dir/$base"
+    n=0
+    while [ -e "$dest" ]; do
+      cmp -s "$src" "$dest" && continue 2
+      n=$((n + 1))
+      dest="$dest_dir/$base.$n"
+    done
+    if ! { cp -p "$src" "$dest.tmp.$$" && cmp -s "$src" "$dest.tmp.$$" && mv "$dest.tmp.$$" "$dest"; }; then
+      rm -f "$dest.tmp.$$"
+      return 1
+    fi
+  done
+}
+archive_handled_steers || {
+  echo "error: could not archive handled steers for $ID; leaving the inbox in place" >&2
+  exit 1
+}
 if [ "$KIND" = secondmate ]; then
   [ -n "$HOME_PATH" ] || HOME_PATH=$WT
   handoff_wake_retire_stage \
@@ -3804,30 +3831,6 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
 # A rerun is safe: an identical archived copy just drops its source, and a
 # differing file already at the name keeps both under a numbered suffix. Any
 # archive failure stops teardown before the inbox is deleted.
-archive_handled_steers() {
-  local handled="$STATE/$ID.inbox/handled" dest_dir="$DATA/$ID/steers" src base dest n
-  [ -d "$handled" ] || return 0
-  for src in "$handled"/*.msg; do
-    [ -f "$src" ] || continue
-    base=${src##*/}
-    mkdir -p "$dest_dir" || return 1
-    dest="$dest_dir/$base"
-    n=0
-    while [ -e "$dest" ]; do
-      cmp -s "$src" "$dest" && continue 2
-      n=$((n + 1))
-      dest="$dest_dir/$base.$n"
-    done
-    if ! { cp -p "$src" "$dest.tmp.$$" && cmp -s "$src" "$dest.tmp.$$" && mv "$dest.tmp.$$" "$dest"; }; then
-      rm -f "$dest.tmp.$$"
-      return 1
-    fi
-  done
-}
-archive_handled_steers || {
-  echo "error: could not archive handled steers for $ID to $DATA/$ID/steers; leaving the inbox in place" >&2
-  exit 1
-}
 # state/<id>.git-hooks is the spawn-owned commit-msg strip directory, left
 # read-only by its installer.
 chmod u+w "$STATE/$ID.git-hooks" 2>/dev/null || true
