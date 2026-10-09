@@ -1,0 +1,2 @@
+ok - fm-teardown: handled steers are archived byte-for-byte and retry-safe before the inbox is removed
+not ok - remote secondmate retirement failed: REFUSED: unsafe secondmate home removal target /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/fm-teardown-endpoint-safety.isMNO9/remote-steer-archive/mate is inside the firstmate repo

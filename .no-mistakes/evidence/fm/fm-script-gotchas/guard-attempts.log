@@ -1,0 +1,10 @@
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/guard-home
+ATTEMPT: fm-send with no FM_HOME
+error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+refusal exit=3
+ATTEMPT: fm-control with no FM_HOME
+error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+refusal exit=3
+ATTEMPT: disposable remote parent-route retirement
+error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+refusal exit=3

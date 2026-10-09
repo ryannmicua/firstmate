@@ -1,0 +1,18 @@
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/live-home
+complete: archive-task captain-call inventory reviewed
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/live-home
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+mkdir: cannot create directory ‘/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/live-home/data/archive-task/steers’: File exists
+error: could not archive handled steers for archive-task; leaving the inbox in place
+OBSERVED: archive failure retained handled inbox and task records
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/live-home
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+teardown archive-task complete (window fm-lab-archive:fm-archive-task, worktree /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/live-home/absent-worker)
+Backlog: archive-task just finished (this home keeps no markdown backlog at /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/live-home/data/backlog.md). Update /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HG8J0V5TEX93CF7T52EKM0/.test-tmp/live-home/data/backlog.md - move archive-task to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.
+OBSERVED: retry archived exact bytes, preserved collision, deduplicated identical copy, excluded unhandled message, removed inbox
