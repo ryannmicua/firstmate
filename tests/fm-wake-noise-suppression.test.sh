@@ -471,6 +471,7 @@ test_enrichment_has_one_budget() {
   cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   : > "$dir/config/supervision-host"
+  # shellcheck disable=SC2016 # The generated script expands its own variables.
   printf '#!/usr/bin/env bash\nprintf "called\n" >> "$FM_HOME/calls"\nsleep 4\n' > "$dir/slow-state"
   chmod +x "$dir/slow-state"
   for i in 1 2 3 4 5 6 7; do

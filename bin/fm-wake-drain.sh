@@ -334,7 +334,7 @@ EOF
 }
 
 print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
-  local snapshot=$1 task endpoint ident event event_endpoint line verb key receipt store lock ready coverage_rows= coverage epoch legacy_capture
+  local snapshot=$1 task endpoint ident event event_endpoint line verb key receipt store lock ready coverage_rows='' coverage epoch legacy_capture
   local output='' used=0 shown=0 omitted=0 bytes item_bytes=220 global_bytes=4000 rc=0
   [ "$ACTOR" = main ] || return 0
 
