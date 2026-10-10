@@ -1,0 +1,16 @@
+# same --confirm repeated after a successful send (gate still parked, key already closed)
+$ fm-gate-decide.sh t1 ... --confirm 9ce037ccdbf98c94
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-gd-live.foJ48h/fm
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-gd-live.foJ48h/fm
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+error: --resolve-key 'nm-01M4HKGCNAM38N169M7Z57TE67-review': no open decision or blocker with that key in /tmp/fm-gd-live.foJ48h/fm/state/t1.status, and no captain-held task 'nm-01M4HKGCNAM38N169M7Z57TE67-review' or 't1-decision-nm-01M4HKGCNAM38N169M7Z57TE67-review' still open (already closed or mistyped). Re-check the OPEN DECISIONS listing, then resend without that key or with the right one; nothing was sent.
+error: fm-send failed and the steer is not in the worker inbox; nothing was sent or recorded, so a resend is safe
+exit=4
+--- inbox:
+/tmp/fm-gd-live.foJ48h/fm/state/t1.inbox:
+001.msg
+handled
+
+/tmp/fm-gd-live.foJ48h/fm/state/t1.inbox/handled:
+--- record count:
+1

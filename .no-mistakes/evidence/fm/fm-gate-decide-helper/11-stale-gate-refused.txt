@@ -1,0 +1,10 @@
+# run has completed; confirm the stale round-2 fix preview (digest 4c63852ab22deb6c)
+$ fm-gate-decide.sh t1 --fix test-noop-config --instructions "Replace the stub with a real test." --confirm 4c63852ab22deb6c
+error: run 01M4HKGCNAM38N169M7Z57TE67 is no longer active
+exit=1
+--- inbox:
+001.msg
+002.msg
+handled
+--- record count:
+2

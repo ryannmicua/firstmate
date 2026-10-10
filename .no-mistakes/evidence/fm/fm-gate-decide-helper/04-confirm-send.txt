@@ -1,0 +1,67 @@
+$ fm-gate-decide.sh t1 ... --confirm 9ce037ccdbf98c94
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-gd-live.foJ48h/fm
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-gd-live.foJ48h/fm
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: doorbell not typed because the agent in fmw:fm-t1 has exited; the steer is durably recorded at /tmp/fm-gd-live.foJ48h/fm/state/t1.inbox/001.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+sent: decision for task t1, run 01M4HKGCNAM38N169M7Z57TE67 (key nm-01M4HKGCNAM38N169M7Z57TE67-review, digest 9ce037ccdbf98c94); recorded in /tmp/fm-gd-live.foJ48h/fm/data/t1/gate-decisions.jsonl
+exit=0
+--- state/t1.inbox:
+/tmp/fm-gd-live.foJ48h/fm/state/t1.inbox:
+001.msg
+handled
+
+/tmp/fm-gd-live.foJ48h/fm/state/t1.inbox/handled:
+--- 001.msg:
+schema=fm-task-inbox.v1
+at=2026-10-10T00:31:50Z
+--
+Gate decision from firstmate for no-mistakes run 01M4HKGCNAM38N169M7Z57TE67, step review, round 1, pipeline head b2029bcbb6df271d6226addde142f0b53c0725ba.
+This answers decision key nm-01M4HKGCNAM38N169M7Z57TE67-review.
+
+Decisions:
+- forbidden-host-aliases [ask-user]: fix
+- test-noop-config [ask-user]: approve - deliberate stub for this lab repo
+
+Run exactly this command in your worktree, the way your brief describes driving the pipeline, without editing it:
+no-mistakes axi respond --step review --action fix --findings forbidden-host-aliases --instructions 'Keep --port; delete only --bind/--listen.
+
+Leave these findings unchanged:
+- test-noop-config: approve - deliberate stub for this lab repo'
+
+Never add --yes or -y. Process every return of that call and of any reattach until checks-passed, a final outcome, or a genuinely new escalation; report a new ask-user gate with your brief's needs-decision format and stop.
+--- state/t1.status:
+needs-decision [key=nm-01M4HKGCNAM38N169M7Z57TE67-review]: ask-user findings=forbidden-host-aliases,test-noop-config
+resolved [key=nm-01M4HKGCNAM38N169M7Z57TE67-review] [at=1791592310]: answered: Gate decision from firstmate for no-mistakes run 01M4HKGCNAM38N169M7Z57TE67, step review, round 1, pipeline head b2029bcbb6df271d [truncated]
+--- data/t1/gate-decisions.jsonl:
+{
+  "command": "no-mistakes axi respond --step review --action fix --findings forbidden-host-aliases --instructions 'Keep --port; delete only --bind/--listen.\n\nLeave these findings unchanged:\n- test-noop-config: approve - deliberate stub for this lab repo'",
+  "decisions": [
+    {
+      "action": "fix",
+      "id": "forbidden-host-aliases",
+      "reason": ""
+    },
+    {
+      "action": "approve",
+      "id": "test-noop-config",
+      "reason": "deliberate stub for this lab repo"
+    }
+  ],
+  "delivery": "delivered",
+  "digest": "9ce037ccdbf98c94",
+  "instructions": "Keep --port; delete only --bind/--listen.",
+  "key": "nm-01M4HKGCNAM38N169M7Z57TE67-review",
+  "pipeline_head": "b2029bcbb6df271d6226addde142f0b53c0725ba",
+  "respond": {
+    "action": "fix",
+    "findings": [
+      "forbidden-host-aliases"
+    ],
+    "instructions": "Keep --port; delete only --bind/--listen.\n\nLeave these findings unchanged:\n- test-noop-config: approve - deliberate stub for this lab repo"
+  },
+  "round": 1,
+  "run": "01M4HKGCNAM38N169M7Z57TE67",
+  "schema": "fm-gate-decision.v1",
+  "step": "review",
+  "task": "t1"
+}

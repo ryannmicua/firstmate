@@ -1,0 +1,20 @@
+$ fm-gate-decide.sh t1 --fix forbidden-host-aliases --approve test-noop-config --reason "deliberate stub for this lab repo" --instructions "Keep --port; delete only --bind/--listen."
+--- steer preview for task t1 (not sent) ---
+Gate decision from firstmate for no-mistakes run 01M4HKGCNAM38N169M7Z57TE67, step review, round 1, pipeline head b2029bcbb6df271d6226addde142f0b53c0725ba.
+This answers decision key nm-01M4HKGCNAM38N169M7Z57TE67-review.
+
+Decisions:
+- forbidden-host-aliases [ask-user]: fix
+- test-noop-config [ask-user]: approve - deliberate stub for this lab repo
+
+Run exactly this command in your worktree, the way your brief describes driving the pipeline, without editing it:
+no-mistakes axi respond --step review --action fix --findings forbidden-host-aliases --instructions 'Keep --port; delete only --bind/--listen.
+
+Leave these findings unchanged:
+- test-noop-config: approve - deliberate stub for this lab repo'
+
+Never add --yes or -y. Process every return of that call and of any reattach until checks-passed, a final outcome, or a genuinely new escalation; report a new ask-user gate with your brief's needs-decision format and stop.
+--- end of preview ---
+digest: 9ce037ccdbf98c94
+send it with: FM_HOME=/tmp/fm-gd-live.foJ48h/fm /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HK0EWD0VAR23HEMDQNBN0M/bin/fm-gate-decide.sh t1 --fix forbidden-host-aliases --approve test-noop-config --reason deliberate\ stub\ for\ this\ lab\ repo --instructions Keep\ --port\;\ delete\ only\ --bind/--listen. --confirm 9ce037ccdbf98c94
+exit=0

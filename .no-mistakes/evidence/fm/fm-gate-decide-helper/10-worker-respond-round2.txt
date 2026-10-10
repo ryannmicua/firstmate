@@ -1,0 +1,71 @@
+run: running
+  intent: completed
+  rebase: completed
+  review: completed
+  test: running
+  test: completed
+  document: skipped
+  lint: skipped
+  push: running
+  push: completed
+  pr: running
+  pr: skipped
+  ci: running
+run: completed
+  ci: skipped
+run:
+  id: "01M4HKGCNAM38N169M7Z57TE67"
+  branch: fm/t1
+  status: completed
+  head: 962f2fb4
+  head_sha: 962f2fb47056281f34d27bc91ada5c2b98cb4f45
+  verification_plan: none
+  findings: 1 awaiting
+  steps[9]{step,status,findings,duration_ms}:
+    intent,completed,0,11
+    rebase,completed,0,160
+    review,completed,1,38539
+    test,completed,0,19329
+    document,skipped,0,0
+    lint,skipped,0,0
+    push,completed,0,153
+    pr,skipped,0,27
+    ci,skipped,0,9
+  automatic_skips[2]{step,reason}:
+    pr,provider unknown is not supported yet
+    ci,provider unknown is not supported yet
+branch_sync:
+  state: behind
+  changed: false
+  local:
+    branch: fm/t1
+    head: b2029bcbb6df271d6226addde142f0b53c0725ba
+    clean: true
+  pipeline:
+    run: "01M4HKGCNAM38N169M7Z57TE67"
+    status: completed
+    phase: ""
+    submitted_head: b2029bcbb6df271d6226addde142f0b53c0725ba
+    current_head: 962f2fb47056281f34d27bc91ada5c2b98cb4f45
+    pushed_head: 962f2fb47056281f34d27bc91ada5c2b98cb4f45
+    pushed_at: 1791592392
+    push_generation: 1
+  target:
+    kind: upstream
+    remote: origin
+    url: /tmp/fm-gd-live.foJ48h/remote.git
+    ref: refs/heads/fm/t1
+  remote:
+    observed_head: 962f2fb47056281f34d27bc91ada5c2b98cb4f45
+    freshness: pipeline_push
+    observed_at: 1791592392
+  relation: behind
+  safety: refresh_required
+  pr_state: none
+  next_action:
+    code: sync
+    command: no-mistakes axi sync
+outcome: passed-with-skips
+fixes[1]{step,summary}:
+  review,changes applied
+help[5]: Publication or CI verification did not run (see `run.automatic_skips` and `run.head_sha`). Report the missing evidence and its cause; this outcome does not establish CI readiness or a code failure.,"Summarize this pipeline run for the user in a concise, easily readable format: what was validated and what was found.",The pipeline fixed findings the original change missed (see `fixes`) - acknowledge the misses and list each fix so the user can review them.,"Commit post-pipeline follow-up work on top of the existing branch so every pipeline fix commit remains present. Never abort-and-restart, reset, or replace the branch in a way that drops prior gate-fix commits.","Before a post-pipeline local commit or fresh run, follow the exact structured `branch_sync.next_action.command`. A `sync` action may be a strict fast-forward or a content-equivalent diverged advance that anchors the pre-sync head before moving the branch with reset semantics. A `recover_custody` action may be ordinary `no-mistakes axi sync --recover` when unpublished pipeline commits are preserved in the local gate, or exact `no-mistakes axi sync --recover --keep-local` when a bound archive preserves a divergent later head while custody returns at the reported required head, or when that preserved head is unavailable and you are explicitly discarding the missing commits; never substitute one recovery command for the other. An `adopt_published` action is exact `no-mistakes axi sync --adopt-published`: it verifies the configured push target already has the exact rebased local head, then updates only the stale gate lane. A `user_owned` state means cancellation released the branch before changing the submitted head: the exact branch and head are yours, immediately usable, and no sync action is needed. Process blocked or pipeline-owned states instead of improvising reset, stash, merge, rebase, force, or branch replacement."

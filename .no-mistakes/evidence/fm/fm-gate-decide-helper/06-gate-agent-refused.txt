@@ -1,0 +1,7 @@
+# unmarked home, NO_MISTAKES_GATE=1 (caller is a gate agent); preview digest=47e08352015fa036
+$ fm-gate-decide.sh t1 ... --confirm 47e08352015fa036
+error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+exit=3
+--- home after:
+plain/state/t1.meta
+plain/state/t1.status

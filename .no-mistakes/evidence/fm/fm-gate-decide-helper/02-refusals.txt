@@ -1,0 +1,24 @@
+$ fm-gate-decide.sh t1 --fix forbidden-host-aliases --no-change test-noop-config --yes
+error: --yes is banned fleet-wide: it auto-resolves gates, including ask-user findings, without a decision
+exit=1
+
+$ fm-gate-decide.sh t1 --fix forbidden-host-aliases,QD-99 --no-change test-noop-config
+error: finding QD-99 is not in the current round of step review (current: forbidden-host-aliases,test-noop-config)
+exit=1
+
+$ fm-gate-decide.sh t1 --fix forbidden-host-aliases
+error: incomplete decision: no decision for test-noop-config
+exit=1
+
+$ fm-gate-decide.sh t1 --fix forbidden-host-aliases --approve test-noop-config
+error: --approve test-noop-config needs a --reason
+exit=1
+
+$ fm-gate-decide.sh t1 --fix forbidden-host-aliases --no-change forbidden-host-aliases,test-noop-config
+error: finding forbidden-host-aliases is decided more than once
+exit=1
+
+$ fm-gate-decide.sh t1 --fix forbidden-host-aliases --no-change test-noop-config --confirm deadbeefdeadbeef
+error: the gate changed since the preview (digest deadbeefdeadbeef, now 84a28b6c834e81d2); preview again before sending
+exit=1
+

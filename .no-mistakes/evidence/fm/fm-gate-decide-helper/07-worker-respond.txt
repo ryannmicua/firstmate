@@ -1,0 +1,31 @@
+# worker runs the steer's command verbatim (sh /tmp/fm-gd-live.foJ48h/respond.sh)
+    phase: pre_push
+    submitted_head: b2029bcbb6df271d6226addde142f0b53c0725ba
+    current_head: 962f2fb47056281f34d27bc91ada5c2b98cb4f45
+    pushed_head: ""
+    pushed_at: 0
+    push_generation: 0
+  target:
+    kind: ""
+    remote: origin
+    url: /tmp/fm-gd-live.foJ48h/remote.git
+    ref: ""
+  remote:
+    observed_head: ""
+    freshness: pipeline_push
+    observed_at: 0
+  relation: unknown
+  safety: blocked_pipeline_owned
+  pr_state: none
+  note: the pipeline head has moved but has not been successfully pushed; do not make local follow-up commits yet
+  next_action:
+    code: continue_active_run
+    command: no-mistakes axi status
+gate:
+  step: review
+  status: fix_review
+  risk: high
+  note: "Review auto-fix is disabled by default (`auto_fix.review: 0`; a repo or global `auto_fix.review > 0` override re-enables it), so blocking and ask-user review findings park for your decision rather than being silently self-fixed."
+  findings[1]{id,severity,file,action,description}:
+    test-noop-config,warning,.no-mistakes.yaml,ask-user,"The change adds .no-mistakes.yaml with `test: \"true\"`, which turns the pipeline's test step into a command that always passes. Nothing in the intent (add --port) calls for this file, and with it in place the new --port behavior is never actually tested. Unless this stub is a deliberate repository setup decision, remove it or replace it with a real test command."
+help[6]: Run `no-mistakes axi respond --action approve` to accept this step and continue,Run `no-mistakes axi respond --action fix --findings <ids>` to have the pipeline fix the selected findings (do not edit files yourself),Run `no-mistakes axi respond --action skip` to skip this step,Run `no-mistakes axi logs --step review --full` to read the full step log,"A long-running call is working, not stalled - background it if your harness needs to, but the run never advances past a gate on its own. Read every return; on a `gate:`, respond; loop until an `outcome:`.","Commit post-pipeline follow-up work on top of the existing branch so every pipeline fix commit remains present. Never abort-and-restart, reset, or replace the branch in a way that drops prior gate-fix commits."

@@ -1,0 +1,10 @@
+$ fm-gate-decide.sh t1 --approve test-noop-config --reason "kept deliberately" --confirm fecb434df15729b3
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-gd-live.foJ48h/fm
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-gd-live.foJ48h/fm
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: doorbell not typed because the agent in fmw:fm-t1 has exited; the steer is durably recorded at /tmp/fm-gd-live.foJ48h/fm/state/t1.inbox/002.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+sent: decision for task t1, run 01M4HKGCNAM38N169M7Z57TE67 (key nm-01M4HKGCNAM38N169M7Z57TE67-review, digest fecb434df15729b3); recorded in /tmp/fm-gd-live.foJ48h/fm/data/t1/gate-decisions.jsonl
+exit=0
+--- records:
+{"round":1,"pipeline_head":"b2029bcbb6df271d6226addde142f0b53c0725ba","delivery":"delivered","decisions":[{"action":"fix","id":"forbidden-host-aliases","reason":""},{"action":"approve","id":"test-noop-config","reason":"deliberate stub for this lab repo"}],"command":"no-mistakes axi respond --step review --action fix --findings forbidden-host-aliases --instructions 'Keep --port; delete only --bind/--listen.\n\nLeave these findings unchanged:\n- test-noop-config: approve - deliberate stub for this lab repo'"}
+{"round":2,"pipeline_head":"962f2fb47056281f34d27bc91ada5c2b98cb4f45","delivery":"delivered","decisions":[{"action":"approve","id":"test-noop-config","reason":"kept deliberately"}],"command":"no-mistakes axi respond --step review --action approve"}
