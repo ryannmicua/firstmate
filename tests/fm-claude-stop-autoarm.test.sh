@@ -464,6 +464,9 @@ test_actionable_close_rewakes_with_reason() {
 # reach through to the real script.
 link_real_bin() {  # <dir>
   local f
+  mkdir -p "$1/data"
+  printf '# Backlog\n\n' > "$1/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$1/.tasks.toml"
   for f in "$ROOT"/bin/*; do
     [ -e "$1/bin/${f##*/}" ] || [ -L "$1/bin/${f##*/}" ] || cp -Rp "$f" "$1/bin/${f##*/}"
   done

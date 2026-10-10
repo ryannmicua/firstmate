@@ -169,7 +169,7 @@ After an actionable foreground close, including an attached peer cycle that ende
 
 1. Launches `bin/fm-watch-arm.sh` with the closed arm's pid as `FM_WATCH_PREDECESSOR_ARM_PID`.
 2. Waits for that arm's one status line.
-3. Only then exits 2 with the wake.
+3. Only then exits 2 with the wake, unless [Wake-noise suppression](configuration.md#wake-noise-suppression-configwake-noise-suppression) keeps the hook parked on that successor for an eligible empty close.
 
 A child of the hook cannot outlive its exit-2 rewake.
 So that successor is the one deliberate detached launch in the continuity path:
@@ -222,7 +222,7 @@ The first recovery marks that generation announced, and later empty-queue arms l
 A non-successor watcher start checks the durable queue and recovery marker under their locks.
 If an announced-but-unacknowledged episode has an empty queue, the arm leaves that generation announced, making repeated empty-queue arms idempotent while a long-poll source is merely alive.
 If a durable row arrived after the announcement, the arm opens a fresh pending downtime generation so buried work still resurfaces once.
-A recovery whose drain would present nothing is retired by the watcher with main's own empty-queue acknowledgement instead of announced, unless it reclaimed a stale lock; [Wake-noise suppression](configuration.md#wake-noise-suppression-configwake-noise-suppression) owns the switch and its shadow mode.
+Optional empty-recovery filtering follows [Wake-noise suppression](configuration.md#wake-noise-suppression-configwake-noise-suppression); recovery after reclaiming a stale lock is always announced.
 
 ### Generation reuse
 
@@ -249,7 +249,7 @@ It is a non-fatal result that names its own remedy: re-drain, then acknowledge t
 
 The acknowledgement retires the marker only when no rows remain after sequence-bound consumption.
 A concurrently appended wake has a higher sequence, remains queued, and keeps the episode pending for presentation.
-Consequently, a watcher close during handling republishes the same generation as pending and forces one recovery turn even when no queue row remains, while the outstanding generation-bound acknowledgement stays valid.
+Consequently, a watcher close during handling republishes the same generation as pending and requests recovery even when no queue row remains, subject to the empty-recovery filtering above, while the outstanding generation-bound acknowledgement stays valid.
 An acknowledged episode does not freeze the generation, because the next downtime after it opens an episode of its own.
 
 ## Per-actor acknowledgement

@@ -1055,6 +1055,9 @@ test_main_only_pass_through_leaves_the_successor_watcher_running() {
 # and a later decision close still reaches main; in shadow mode it only logs.
 make_empty_close_bin() {  # <home> -> fixture bin whose first arm closes empty
   local root="$1/fixture-root" bin="$1/fixture-root/bin" f
+  mkdir -p "$1/data"
+  printf '# Backlog\n\n' > "$1/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$1/.tasks.toml"
   mkdir -p "$bin"
   # bin is copied, never symlinked, so the stand-in arm below cannot reach the
   # real one; the rest of the checkout (the dispatch modules bin imports) is

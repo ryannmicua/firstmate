@@ -106,6 +106,8 @@
 #     mark-read once it has presented the rows; it is the only reader that
 #     advances the cursor there. Prints nothing when nothing is unread or
 #     unprocessed.
+#     --read-only skips locking and state-directory creation for the drain's
+#     probe; it does not provide a locked snapshot or migrate indexes.
 #     "recordedAgo" is how long before this read the row was appended, as
 #     whole minutes under an hour, whole hours under two days, else whole days
 #     (for example "0m", "5h", "6d"; a future epoch reads "0m"). It is the one
@@ -121,6 +123,7 @@
 #     remains the deadline.
 #   fm-branch-outcome.sh list [--read-only] [--recent <n>]
 #     Print the last n records (default 20), read or not.
+#     --read-only has the same lock-free semantics as present --read-only.
 #   fm-branch-outcome.sh lookup --seqs <n,...>
 #     Print the requested records in sequence order only when every sequence
 #     exists; validate the full store while holding its lock.

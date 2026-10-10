@@ -764,7 +764,7 @@ ROWS
 # FM_OUTCOME_CREW_STATE_TIMEOUT seconds (default 20) for the whole section
 # and cut to 300 bytes.
 # Sets CURRENT_STATE_LINE; a read that fails or times out says so.
-current_crew_state_line() {  # <task>
+current_crew_state_line() {  # <task> <section-start-seconds>
   local task=$1 started=$2 bound state remaining
   bound=${FM_OUTCOME_CREW_STATE_TIMEOUT:-20}
   case "$bound" in ''|*[!0-9]*|0) bound=20 ;; esac

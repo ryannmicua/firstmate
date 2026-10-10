@@ -610,15 +610,13 @@ The flag is a home-local supervision-noise preference and is not inherited by se
 ## Wake-noise suppression (config/wake-noise-suppression)
 
 The optional local, gitignored `config/wake-noise-suppression` presence flag lets this home keep two kinds of no-op supervision wake away from the main session without a model turn.
-A repeat captain outcome, one naming a task whose newest captain outcome has the same fingerprint while the task's status log and recorded PR state are unchanged, is stored as a routine outcome and wakes nobody.
-An empty wake, a recovery announcement, a supervision-host main-only pass-through, or a Claude Stop-hook rewake for which main's drain would present nothing, has its recovery episode retired and supervision continues without waking main.
+With the flag present, eligible repeat captain outcomes are stored as routine and eligible empty wakes are retired without opening a main turn.
 
-With the flag absent both run in shadow mode: they make the same decision, change nothing, and log what they would have suppressed.
+With the flag absent both run in shadow mode: suppression changes neither outcome verdicts nor wake delivery, but records comparison evidence and logs what it would have suppressed.
 Every suppression, and every shadow decision, is logged to `state/.watch-triage.log`.
-Heartbeats, escalations, needs-decision and blocked events, failures, anything while an away or quiet record exists, and every case whose evidence cannot be read always reach main, and the session-start digest is never involved.
 
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes.
-`bin/fm-wake-suppress-lib.sh` owns the fingerprint, the recorded PR state, the exemptions, and the retirement, and `bin/fm-wake-drain.sh --would-present` owns what the drain would present.
+The [suppression contract](../bin/fm-wake-suppress-lib.sh) owns eligibility, fingerprint matching, recorded PR state, safety exemptions, and recovery retirement; the [drain's read-only probe](../bin/fm-wake-drain.sh) owns what would be presented.
 
 ## Parked-gate wait deferral (config/wedge-defer-parked-gate)
 

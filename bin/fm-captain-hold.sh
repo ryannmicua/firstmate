@@ -1923,12 +1923,12 @@ command_diverged() {
   # Both records must belong to the SAME home or the comparison is meaningless:
   # tasks-axi reads $FM_HOME's backlog, so a state dir pointed somewhere else
   # would report one home's status logs against another home's tasks. Every
-  # production caller pairs the two; a mismatch stays silent rather than
+  # production caller pairs the two; a mismatch fails the read rather than
   # inventing a cross-home divergence.
   [ "$STATE" = "$FM_HOME/state" ] || return 1
   # A read-only listing on a per-wake path, so it skips the mutation-oriented
-  # compatibility floor and its extra probes: a listing this parser cannot read
-  # simply yields no candidates and the report stays silent.
+  # compatibility floor and its extra probes. A failed listing returns nonzero
+  # so callers can distinguish unreadable evidence from no divergence.
   command -v tasks-axi >/dev/null 2>&1 || return 1
   ids=$(open_task_ids) || return 1
   [ -n "$ids" ] || return 0

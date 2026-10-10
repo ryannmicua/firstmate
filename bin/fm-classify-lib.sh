@@ -1963,8 +1963,7 @@ status_open_decisions_cursor_offset() {  # <status-file>
 # Print every non-blank status line whose bytes begin at or after the persisted
 # presentation offset. Does not write the cursor. A missing manifest row or
 # changed status identity reads the current file from offset 0; malformed or
-# unreadable cursor state fails the scan. Symlinks and unreadable status files
-# print nothing.
+# unreadable cursor state, symlinks, and unreadable status files fail the scan.
 status_new_lines_since_cursor() {  # <status-file> [<captured-end-offset>]
   local f=$1 captured_end=${2:-} offset size actual_size chunk line
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1

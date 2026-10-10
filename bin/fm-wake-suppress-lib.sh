@@ -30,7 +30,7 @@
 #     still lists them. The one-shot session-start digest and a session that
 #     does not hold the fleet lock never reach these call sites.
 #
-# Never suppressed: a wake naming a heartbeat, an escalation (including any
+# Never suppressed: a wake or outcome summary naming a heartbeat, an escalation (including any
 # escalation count or demand-deep-inspection), a needs-decision or blocked
 # event, a supervision-host line, or a failure; a captain outcome whose task's
 # newest status event is needs-decision or blocked; anything while an away or
@@ -39,7 +39,8 @@
 #
 # Switch: config/wake-noise-suppression, a local, gitignored presence flag.
 # Absent (the default), both run in shadow mode: they decide exactly as above
-# but change nothing, and log what they would have suppressed. Present, they
+# but leave verdicts and wake delivery unchanged while recording comparison
+# evidence and logging what they would have suppressed. Present, they
 # suppress. Every decision to suppress, in either mode, appends one line to
 # state/.watch-triage.log ("suppressed ..." or "would suppress ...").
 #
