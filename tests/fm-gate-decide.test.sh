@@ -253,7 +253,9 @@ test_gate_authority_before_recording() {
     out=$(
       cd "$caller" || exit 1
       unset FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE
-      for v in "${!FM_@}"; do case "$v" in *_OVERRIDE) unset "$v" ;; esac; done
+      while IFS= read -r v; do
+        case "$v" in *_OVERRIDE) unset "$v" ;; esac
+      done < <(compgen -A variable FM_)
       signal_helper "$signal" --fix QD-8,QD-11 --no-change QD-12
     ); rc=$?
     expect_code 0 "$rc" "$signal read-only preview remains available"
@@ -262,7 +264,9 @@ test_gate_authority_before_recording() {
     out=$(
       cd "$caller" || exit 1
       unset FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE
-      for v in "${!FM_@}"; do case "$v" in *_OVERRIDE) unset "$v" ;; esac; done
+      while IFS= read -r v; do
+        case "$v" in *_OVERRIDE) unset "$v" ;; esac
+      done < <(compgen -A variable FM_)
       signal_helper "$signal" --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1
     ); rc=$?
     case "$signal" in
