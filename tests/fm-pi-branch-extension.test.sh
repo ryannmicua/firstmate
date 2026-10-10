@@ -952,6 +952,57 @@ EOF
   pass "a captain outcome reaches main's model as one typed, sequence-keyed processing request while routine notes stay plain"
 }
 
+test_branch_report_response_uses_stored_verdict() {
+  local repo home out status
+  repo="$TMP_ROOT/stored-verdict-root"
+  home="$TMP_ROOT/stored-verdict-home"
+  mkdir -p "$home/state" "$home/config"
+  install_pi_branch_extension_fixture "$repo"
+  PLUGIN="$repo/.pi/extensions/fm-branch-supervision.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    DRIVER_PRELUDE="$DRIVER_PRELUDE" node --input-type=module > "$TMP_ROOT/node-output" 2>&1 <<'EOF'
+const prelude = process.env.DRIVER_PRELUDE;
+await eval(`(async () => { ${prelude}; globalThis.__t = { fire, dispatch, settle, sentToMain, mainEntries, outcomeScript, home, defaultSessionCtx }; })()`);
+const { fire, dispatch, settle, sentToMain, mainEntries, outcomeScript, home, defaultSessionCtx } = globalThis.__t;
+import { appendFileSync, writeFileSync } from "node:fs";
+writeFileSync(`${home}/config/wake-noise-suppression`, "");
+appendFileSync(`${home}/state/branch-driver.meta`, "kind=ship\npr=https://example.com/pr/9\npr_head=aaaa\n");
+writeFileSync(`${home}/state/branch-driver.status`, "paused [at=1]: awaiting external review\n");
+await fire("session_start", {}, defaultSessionCtx);
+let finishWakePrompt;
+globalThis.__fmOnBranchPrompt = () => new Promise((resolve) => { finishWakePrompt = resolve; });
+const offer = dispatch("signal: branch-driver working");
+if (!offer.accepted) throw new Error("branch did not accept the wake offer");
+await settle(() => (globalThis.__fmPrompts ?? []).length === 1, "branch wake prompt");
+const report = globalThis.__fmSessions[0].options.customTools.find((tool) => tool.name === "fm_branch_report");
+const summary = "PR https://example.com/pr/9 remains under review";
+for (const [call, requested, expected, wake] of [
+  ["first", "captain", "captain", "stale: branch-driver (idle 200s)"],
+  ["repeat", "captain", "routine", "stale: branch-driver (idle 300s)"],
+  ["ordinary", "routine", "routine", "signal: branch-driver working"],
+]) {
+  const result = await report.execute(call, { task: "branch-driver", verdict: requested, summary, wake }, undefined, undefined, {});
+  if (result.isError || !result.content[0].text.includes(`delivered [${expected}]`)) {
+    throw new Error(`${call}: response does not name the stored verdict: ${JSON.stringify(result)}`);
+  }
+  const row = JSON.parse(outcomeScript(["list", "--recent", "1"]));
+  if (row.verdict !== expected) throw new Error(`${call}: unexpected stored verdict ${row.verdict}`);
+}
+const captainEntries = mainEntries.filter((entry) => entry.customType === "fm-branch-visible-outcome");
+if (captainEntries.length !== 1) throw new Error("the repeat created a second captain entry");
+const routineNotes = sentToMain.filter((sent) => sent.message.customType === "fm-branch-merge");
+if (routineNotes.length !== 2 || routineNotes.some((sent) => sent.options.triggerTurn)) {
+  throw new Error("routine delivery disagrees with the stored verdicts");
+}
+finishWakePrompt();
+await offer.settlement;
+process.exit(0);
+EOF
+  status=$?
+  out=$(cat "$TMP_ROOT/node-output")
+  expect_code 0 "$status" "Pi report responses must name stored verdicts: $out"
+  pass "Pi report responses and delivery use the stored verdict for suppressed repeats"
+}
+
 test_requested_healthy_outcome_and_unsolicited_routine_outcome_delivery() {
   local repo home out status
   repo="$TMP_ROOT/requested-outcome-root"
@@ -5949,6 +6000,10 @@ EOF
   expect_code 0 "$status" "an extension-registered provider must resolve in the isolated branch runtime: $out"
   pass "an extension-registered provider resolves in the isolated branch runtime"
 }
+
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0
+
+test_branch_report_response_uses_stored_verdict
 
 test_outcomes_tool_call_headers_follow_the_loaded_pi_version
 test_outcomes_tool_uses_stock_execution_and_export_consumers
