@@ -254,7 +254,7 @@ test_gate_authority_before_recording() {
       cd "$caller" || exit 1
       unset FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE
       while IFS= read -r v; do
-        case "$v" in *_OVERRIDE) unset "$v" ;; esac
+        if [[ "$v" == *_OVERRIDE ]]; then unset "$v"; fi
       done < <(compgen -A variable FM_)
       signal_helper "$signal" --fix QD-8,QD-11 --no-change QD-12
     ); rc=$?
@@ -265,7 +265,7 @@ test_gate_authority_before_recording() {
       cd "$caller" || exit 1
       unset FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE
       while IFS= read -r v; do
-        case "$v" in *_OVERRIDE) unset "$v" ;; esac
+        if [[ "$v" == *_OVERRIDE ]]; then unset "$v"; fi
       done < <(compgen -A variable FM_)
       signal_helper "$signal" --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1
     ); rc=$?
