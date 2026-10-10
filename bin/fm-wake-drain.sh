@@ -19,6 +19,8 @@
 # presentation-path locks (default 10); queue mutation locks remain blocking.
 set -u
 
+if [ "${1:-}" = --would-present ]; then export FM_WAKE_READ_ONLY=1; fi
+
 SCRIPT_DIR="$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd "${d:-/}" && pwd)"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
@@ -332,7 +334,7 @@ EOF
 }
 
 print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
-  local snapshot=$1 task endpoint ident event event_endpoint line verb key receipt store lock ready
+  local snapshot=$1 task endpoint ident event event_endpoint line verb key receipt store lock ready coverage_rows= coverage epoch
   local output='' used=0 shown=0 omitted=0 bytes item_bytes=220 global_bytes=4000 rc=0
   [ "$ACTOR" = main ] || return 0
 
@@ -343,12 +345,14 @@ print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
       printf 'STATUS OUTCOME BACKSTOP SKIPPED: branch outcome history could not be read safely; repair it before relying on drain recovery.\n'
       return 0
     fi
-    if ! fm_lock_acquire_wait_bounded "$lock" "$PRESENTATION_LOCK_TIMEOUT"; then
+    if [ "$WOULD_PRESENT" = true ]; then
+      coverage_rows=$("$SCRIPT_DIR/fm-branch-outcome.sh" list --read-only --recent 9007199254740991 2>/dev/null) || return 2
+    elif ! fm_lock_acquire_wait_bounded "$lock" "$PRESENTATION_LOCK_TIMEOUT"; then
       printf 'STATUS OUTCOME BACKSTOP SKIPPED: branch outcome history is busy; retry on the next drain.\n'
       return 0
     fi
     ready="$STATE/.branch-outcome-index-ready"
-    if ! outcome_index_ready_ok "$ready"; then
+    if [ "$WOULD_PRESENT" != true ] && ! outcome_index_ready_ok "$ready"; then
       if ! "$SCRIPT_DIR/fm-branch-outcome.sh" processed-init --held-lock >/dev/null 2>&1 \
         || ! outcome_index_ready_ok "$ready"; then
         fm_lock_release "$lock"
@@ -363,7 +367,10 @@ print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
     [ -n "$task" ] || continue
     receipt=$(status_outcome_backstop_cursor_offset "$STATE/$task.status") || { rc=1; break; }
     [ "$receipt" -lt "$endpoint" ] || continue
-    status_snapshot_latest_event "$STATE/$task.status" "$endpoint" "$ident" || continue
+    if ! status_snapshot_latest_event "$STATE/$task.status" "$endpoint" "$ident"; then
+      [ "$WOULD_PRESENT" != true ] || { rc=1; break; }
+      continue
+    fi
     event=$FM_STATUS_SNAPSHOT_EVENT_LINE
     event_endpoint=$FM_STATUS_SNAPSHOT_EVENT_ENDPOINT
     [ "$receipt" -lt "$event_endpoint" ] || continue
@@ -380,7 +387,23 @@ print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
         [ -z "$key" ] || continue
         ;;
     esac
-    load_branch_outcome_index "$task"
+    if [ "$WOULD_PRESENT" = true ]; then
+      BRANCH_OUTCOME_INDEX_STATE=ok
+      BRANCH_OUTCOME_INDEX_ENDPOINT=
+      BRANCH_OUTCOME_INDEX_IDENT=
+      coverage=$(printf '%s\n' "$coverage_rows" | jq -sr --arg task "$task" '
+        map(select(.task == $task)) | last // empty
+        | [.epoch, (.statusEndpoint // 0), (.statusIdent // "-")] | @tsv') || { rc=1; break; }
+      if [ -n "$coverage" ]; then
+        IFS=$'\t' read -r epoch BRANCH_OUTCOME_INDEX_ENDPOINT BRANCH_OUTCOME_INDEX_IDENT <<< "$coverage"
+        if [ "$BRANCH_OUTCOME_INDEX_IDENT" = - ] && [ "$FM_STATUS_SNAPSHOT_EVENT_MTIME" -lt "$epoch" ]; then
+          BRANCH_OUTCOME_INDEX_ENDPOINT=$endpoint
+          BRANCH_OUTCOME_INDEX_IDENT=$ident
+        fi
+      fi
+    else
+      load_branch_outcome_index "$task"
+    fi
     if [ "$BRANCH_OUTCOME_INDEX_STATE" != ok ]; then
       rc=2
       break
@@ -409,7 +432,7 @@ print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
 $snapshot
 EOF
 
-  if [ -e "$store" ] || [ -L "$store" ]; then fm_lock_release "$lock"; fi
+  if [ "$WOULD_PRESENT" != true ] && { [ -e "$store" ] || [ -L "$store" ]; }; then fm_lock_release "$lock"; fi
   if [ "$rc" -eq 1 ]; then return 1; fi
   if [ "$rc" -eq 2 ]; then
     printf 'STATUS OUTCOME BACKSTOP SKIPPED: a bounded task outcome index could not be read safely; repair it before relying on drain recovery.\n'
@@ -543,7 +566,10 @@ print_record_divergence_section() {
   # Bounded, because this runs at the top of every supervision turn: a backlog
   # tool having a bad day must cost the drain a few seconds at worst, never the
   # presentation of the wakes it exists to deliver.
-  diverged=$(fm_run_timed "$bound" "$SCRIPT_DIR/fm-captain-hold.sh" diverged 2>/dev/null) || return 0
+  if ! diverged=$(fm_run_timed "$bound" "$SCRIPT_DIR/fm-captain-hold.sh" diverged 2>/dev/null); then
+    [ "$WOULD_PRESENT" != true ] || return 1
+    return 0
+  fi
   [ -n "$diverged" ] || return 0
 
   while IFS=$(printf '\t') read -r task origin key title; do
@@ -622,6 +648,7 @@ print_branch_outcomes_section() {
   local config rows through captain routine line seq task task_line target i
   local text='' used=0 shown=0 held=0 bytes item_bytes=600 captain_bytes=4000 routine_bytes=2000
   local routine_lines='' routine_count=0 routine_shown=0
+  local enrichment_start
   local -a captain_tasks=() captain_lines=() captain_line_bytes=()
   [ "$ACTOR" = main ] || return 0
   config=${FM_CONFIG_OVERRIDE:-$FM_HOME/config}
@@ -679,10 +706,11 @@ ROWS
   if [ "$shown" -gt 0 ]; then
     text="BRANCH OUTCOMES (captain outcomes the supervision session recorded for you, one line per task, oldest first; each says what was true when it was recorded and is followed by the task's current state from bin/fm-crew-state.sh, so check the task's current state first, including its still-open decisions listed above under OPEN DECISIONS, and sort them into still open and already settled, such as a decision since answered, a PR since merged, or a task since finished - process the still-open ones as firstmate: tell the captain, land or merge what is ready, answer or escalate a decision, or act on a blocker; your reply to the captain covers only those, as if the settled ones had never been listed, and a settled one needs only the acknowledgement):
 "
+    enrichment_start=$SECONDS
     for i in "${!captain_lines[@]}"; do
       text="$text${captain_lines[$i]}
 "
-      current_crew_state_line "${captain_tasks[$i]}"
+      current_crew_state_line "${captain_tasks[$i]}" "$enrichment_start"
       text="$text$CURRENT_STATE_LINE
 "
     done
@@ -731,17 +759,23 @@ ROWS
 
 # The task's current state, printed under its BRANCH OUTCOMES line so main
 # need not look it up: bin/fm-crew-state.sh's one line, bounded by
-# FM_OUTCOME_CREW_STATE_TIMEOUT seconds (default 20) and cut to 300 bytes.
+# FM_OUTCOME_CREW_STATE_TIMEOUT seconds (default 20) for the whole section
+# and cut to 300 bytes.
 # Sets CURRENT_STATE_LINE; a read that fails or times out says so.
 current_crew_state_line() {  # <task>
-  local task=$1 bound state
+  local task=$1 started=$2 bound state remaining
   bound=${FM_OUTCOME_CREW_STATE_TIMEOUT:-20}
   case "$bound" in ''|*[!0-9]*|0) bound=20 ;; esac
   if [ "$task" = fleet ]; then
     CURRENT_STATE_LINE="  current: fleet-wide outcome, no task state"
     return 0
   fi
-  if state=$(fm_run_timed "$bound" "$FM_CREW_STATE_BIN" "$task" 2>/dev/null) \
+  remaining=$((bound - (SECONDS - started)))
+  if [ "$remaining" -le 0 ]; then
+    CURRENT_STATE_LINE="  current: unavailable (current-state enrichment budget exhausted)"
+    return 0
+  fi
+  if state=$(fm_run_timed "$remaining" "$FM_CREW_STATE_BIN" "$task" 2>/dev/null) \
     && state=$(printf '%s\n' "$state" | awk 'NF { print; exit }' | tr '\t\r' '  ') \
     && [ -n "$state" ]; then
     :
@@ -850,12 +884,15 @@ print_status_presentation() {  # [<deduped-raw-rows>]
 # main. Prints the matching section names and exits 0 when something would be
 # presented, exits 1 when nothing would, and exits 2 on any read failure, which
 # callers treat as something to present. Open decisions use the whole-file fold
-# so no incremental cursor moves; the backstop shares the drain's own reader,
-# whose only write is the outcome index cache it would rebuild anyway.
+# so no incremental cursor moves; the backstop reads the outcome store without
+# rebuilding indexes. Only presenting drains migrate.
 # bin/fm-wake-suppress-lib.sh is its caller and owns what is done with it.
 would_present() {
   local found='' snapshot out rows
   [ "$ACTOR" = main ] || { echo "wake drain: --would-present answers for main only" >&2; return 2; }
+  if [ -e "$FM_WAKE_QUEUE" ] || [ -L "$FM_WAKE_QUEUE" ]; then
+    [ -f "$FM_WAKE_QUEUE" ] && [ -r "$FM_WAKE_QUEUE" ] && [ ! -L "$FM_WAKE_QUEUE" ] || return 2
+  fi
   if [ -s "$FM_WAKE_QUEUE" ]; then found="$found queued-rows"; fi
   snapshot=$(status_presentation_snapshot "$STATE") || return 2
   if [ -n "$snapshot" ]; then
@@ -868,8 +905,8 @@ would_present() {
   [ -z "$out" ] || found="$found open-decisions"
   out=$(print_record_divergence_section) || return 2
   [ -z "$out" ] || found="$found record-divergence"
-  if [ -s "$STATE/branch-outcomes.jsonl" ] && ! fm_afk_contract_away_present "$STATE"; then
-    rows=$("$SCRIPT_DIR/fm-branch-outcome.sh" present 2>/dev/null) || return 2
+  if { [ -e "$STATE/branch-outcomes.jsonl" ] || [ -L "$STATE/branch-outcomes.jsonl" ]; } && ! fm_afk_contract_away_present "$STATE"; then
+    rows=$("$SCRIPT_DIR/fm-branch-outcome.sh" present --read-only 2>/dev/null) || return 2
     out=$(printf '%s\n' "$rows" | jq -c 'select(.verdict == "captain")' 2>/dev/null) || return 2
     [ -z "$out" ] || found="$found branch-outcomes"
   fi

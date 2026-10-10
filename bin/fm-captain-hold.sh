@@ -1888,9 +1888,10 @@ EOF
 # two comma-separated listing fields are read - both are slugs that precede any
 # quoted title - so a title containing commas or quotes cannot shift them.
 open_task_ids() {
-  local data
+  local data rows
   data=$(fm_backlog_data_absolute "$DATA") || return 1
-  fm_backlog_row_list "$data" 2>/dev/null | awk -F, '
+  rows=$(fm_backlog_row_list "$data" 2>/dev/null) || return 1
+  printf '%s\n' "$rows" | awk -F, '
     /^  [A-Za-z0-9._-]+,/ {
       id = $1
       sub(/^ +/, "", id)
@@ -1903,8 +1904,10 @@ open_task_ids() {
 # over-includes tokens that are only prose, and status_key_closing_verb below is
 # what actually decides what the stream says about a key.
 status_log_key_tokens() {  # <status-file>
-  grep -o '\[key=[A-Za-z0-9._-]*\]' "$1" 2>/dev/null |
-    sed 's/^\[key=//; s/\]$//' | LC_ALL=C sort -u
+  local tokens rc=0
+  tokens=$(grep -o '\[key=[A-Za-z0-9._-]*\]' "$1" 2>/dev/null) || rc=$?
+  [ "$rc" -le 1 ] || return 1
+  printf '%s\n' "$tokens" | sed 's/^\[key=//; s/\]$//' | LC_ALL=C sort -u
 }
 
 list_has_line() {  # <newline-separated-list> <value>
@@ -1915,25 +1918,26 @@ list_has_line() {  # <newline-separated-list> <value>
 }
 
 command_diverged() {
-  local ids resolve f origin tokens id keys key show title
+  local ids resolve f origin tokens id keys key show title closing
   [ "$#" -eq 0 ] || { usage >&2; exit 2; }
   # Both records must belong to the SAME home or the comparison is meaningless:
   # tasks-axi reads $FM_HOME's backlog, so a state dir pointed somewhere else
   # would report one home's status logs against another home's tasks. Every
   # production caller pairs the two; a mismatch stays silent rather than
   # inventing a cross-home divergence.
-  [ "$STATE" = "$FM_HOME/state" ] || return 0
+  [ "$STATE" = "$FM_HOME/state" ] || return 1
   # A read-only listing on a per-wake path, so it skips the mutation-oriented
   # compatibility floor and its extra probes: a listing this parser cannot read
   # simply yields no candidates and the report stays silent.
-  command -v tasks-axi >/dev/null 2>&1 || return 0
-  ids=$(open_task_ids) || return 0
+  command -v tasks-axi >/dev/null 2>&1 || return 1
+  ids=$(open_task_ids) || return 1
   [ -n "$ids" ] || return 0
   resolve=${FM_CLASSIFY_RESOLVE_VERB:-$FM_CLASSIFY_RESOLVE_VERB_DEFAULT}
   for f in "$STATE"/*.status; do
-    [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || continue
+    [ -e "$f" ] || [ -L "$f" ] || continue
+    [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
     origin=$(basename "$f"); origin=${origin%.status}
-    tokens=$(status_log_key_tokens "$f")
+    tokens=$(status_log_key_tokens "$f") || return 1
     [ -n "$tokens" ] || continue
     while IFS= read -r id; do
       [ -n "$id" ] || continue
@@ -1946,8 +1950,9 @@ command_diverged() {
       esac
       while IFS= read -r key; do
         list_has_line "$tokens" "$key" || continue
-        [ "$(status_key_closing_verb "$f" "$key")" = "$resolve" ] || continue
-        task_show "$id" || continue
+        closing=$(status_key_closing_verb "$f" "$key") || return 1
+        [ "$closing" = "$resolve" ] || continue
+        task_show "$id" || return 1
         show=$TASK_SHOW_OUTPUT
         [ "$(show_field "$show" state)" != "done" ] || continue
         [ "$(show_field_value "$show" hold_kind)" = captain ] || continue

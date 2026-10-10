@@ -96,7 +96,7 @@
 #     Advance the processed marker after main acknowledged the captain rows
 #     through <seq>; the target itself must be a currently unprocessed captain
 #     row at or below the read cursor.
-#   fm-branch-outcome.sh present
+#   fm-branch-outcome.sh present [--read-only]
 #     A supervision-host drain's presentation off Pi (bin/fm-wake-drain.sh
 #     "BRANCH OUTCOMES", docs/supervision-host.md "Captain outcomes"): under
 #     the lock, print every unread record and every unprocessed captain record
@@ -119,7 +119,7 @@
 #     (fm-wake-drain.sh may run its redirected presentation body in a subshell
 #     on Bash 3.2); it skips the nested acquire so drain's bounded lock wait
 #     remains the deadline.
-#   fm-branch-outcome.sh list [--recent <n>]
+#   fm-branch-outcome.sh list [--read-only] [--recent <n>]
 #     Print the last n records (default 20), read or not.
 #   fm-branch-outcome.sh lookup --seqs <n,...>
 #     Print the requested records in sequence order only when every sequence
@@ -139,6 +139,8 @@
 #     change nothing. fm-session-start.sh runs it at every locked session
 #     start, on every harness and away posture, before the drain.
 set -eu
+
+case "${1:-}:${2:-}" in present:--read-only|list:--read-only) export FM_WAKE_READ_ONLY=1 ;; esac
 
 SCRIPT_DIR="$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd "${d:-/}" && pwd)"
 # shellcheck source=bin/fm-wake-lib.sh
@@ -169,7 +171,7 @@ RECORDED_AGO_JQ='def recorded_ago: ([$now - .epoch, 0] | max) as $s
     else "\($s / 86400 | floor)d" end;'
 
 usage() {
-  echo "usage: fm-branch-outcome.sh append --task <id> --verdict routine|captain --summary <text> [--wake <text>] [--silent true|false] | unread | mark-read --through <seq> | unprocessed | mark-processed --through <seq> | present | processed-init [--held-lock] | list [--recent <n>] | lookup --seqs <n,...> | startup-replay | seed-tail" >&2
+  echo "usage: fm-branch-outcome.sh append --task <id> --verdict routine|captain --summary <text> [--wake <text>] [--silent true|false] | unread | mark-read --through <seq> | unprocessed | mark-processed --through <seq> | present [--read-only] | processed-init [--held-lock] | list [--read-only] [--recent <n>] | lookup --seqs <n,...> | startup-replay | seed-tail" >&2
   exit 2
 }
 
@@ -238,6 +240,9 @@ read_processed() {
 
 last_seq() { # [<file> [<first expected seq, or null for a bounded suffix>]]
   local file=${1:-$STORE} start=${2:-1}
+  if [ -e "$file" ] || [ -L "$file" ]; then
+    [ -f "$file" ] && [ -r "$file" ] && [ ! -L "$file" ] || return 1
+  fi
   [ -s "$file" ] || { printf '0\n'; return 0; }
   jq -Rse --argjson start "$start" '
     def valid:
@@ -630,19 +635,21 @@ case "$CMD" in
     fm_lock_release "$LOCK"
     ;;
   present)
+    READ_ONLY=false
+    if [ "${1:-}" = --read-only ]; then READ_ONLY=true; shift; fi
     [ "$#" -eq 0 ] || usage
-    fm_lock_acquire_wait "$LOCK"
+    [ "$READ_ONLY" = true ] || fm_lock_acquire_wait "$LOCK"
     if ! LAST_SEQ=$(last_seq); then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       echo "error: refusing presentation because the outcome store is malformed or non-sequential" >&2
       exit 1
     fi
     if ! CURSOR_SEQ=$(read_cursor) || ! PROCESSED_SEQ=$(read_processed); then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       exit 1
     fi
     if [ "$CURSOR_SEQ" -gt "$LAST_SEQ" ] || [ "$PROCESSED_SEQ" -gt "$CURSOR_SEQ" ]; then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       echo "error: refusing presentation because the outcome cursor or processed marker is out of order" >&2
       exit 1
     fi
@@ -651,10 +658,10 @@ case "$CMD" in
         select(.seq > $cursor or (.verdict == "captain" and .seq > $processed))
         | . + {unread: (.seq > $cursor)}
         | if .verdict == "captain" then . + {recordedAgo: recorded_ago} else . end' "$STORE"; then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       exit 1
     fi
-    fm_lock_release "$LOCK"
+    [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
     ;;
   unprocessed)
     [ "$#" -eq 0 ] || usage
@@ -732,6 +739,8 @@ case "$CMD" in
     fi
     ;;
   list)
+    READ_ONLY=false
+    if [ "${1:-}" = --read-only ]; then READ_ONLY=true; shift; fi
     RECENT=20
     if [ "${1:-}" = --recent ]; then
       RECENT=${2:-}
@@ -739,16 +748,16 @@ case "$CMD" in
       shift 2 || usage
     fi
     [ "$#" -eq 0 ] || usage
-    fm_lock_acquire_wait "$LOCK"
+    [ "$READ_ONLY" = true ] || fm_lock_acquire_wait "$LOCK"
     if ! last_seq >/dev/null; then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       echo "error: refusing read because the outcome store is malformed or non-sequential" >&2
       exit 1
     fi
     if [ -s "$STORE" ]; then
-      tail -n "$RECENT" "$STORE"
+      tail -n "$RECENT" "$STORE" || { [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"; exit 1; }
     fi
-    fm_lock_release "$LOCK"
+    [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
     ;;
   lookup)
     [ "$#" -eq 2 ] && [ "$1" = --seqs ] || usage

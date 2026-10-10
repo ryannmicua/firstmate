@@ -894,8 +894,9 @@ _fm_decision_fold_line() {  # <open-set> <status-line> <resolve-verb> <held-verb
 # subprocess read, which exists for that function's much narrower payload-driven
 # path resolution rather than this directory-local glob.
 status_open_decisions() {  # <status-file> [<kind>]
-  local f=$1 kind=${2:-} line resolve held open='' verb
-  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 0
+  local f=$1 kind=${2:-} line resolve held open='' verb done_rc
+  [ -e "$f" ] || [ -L "$f" ] || return 0
+  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
   kind=$(_fm_status_kind "$f" "$kind")
   resolve=${FM_CLASSIFY_RESOLVE_VERB:-$FM_CLASSIFY_RESOLVE_VERB_DEFAULT}
   held=${FM_CLASSIFY_CAPTAIN_HELD_VERB:-$FM_CLASSIFY_CAPTAIN_HELD_VERB_DEFAULT}
@@ -907,6 +908,8 @@ status_open_decisions() {  # <status-file> [<kind>]
         ;;
     esac
   done < "$f"
+  done_rc=$?
+  [ "$done_rc" -eq 0 ] || return 1
   printf '%s' "$open"
 }
 
@@ -1025,14 +1028,14 @@ EOF
 # tag cannot be a transition, because the fold's own declaration guard rejects it.
 status_key_closing_verb() {  # <status-file> <key>
   local f=$1 want=$2 line resolve held open='' was verb='' kind event candidates
-  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 0
+  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
   [ -n "$want" ] || return 0
   kind=$(_fm_status_kind "$f")
   resolve=${FM_CLASSIFY_RESOLVE_VERB:-$FM_CLASSIFY_RESOLVE_VERB_DEFAULT}
   held=${FM_CLASSIFY_CAPTAIN_HELD_VERB:-$FM_CLASSIFY_CAPTAIN_HELD_VERB_DEFAULT}
   candidates=$(grep -E \
     "^[[:space:]]*(needs-decision|blocked|done|failed|$resolve|$held)[[:space:]:[]" \
-    "$f") || [ "$?" -eq 1 ] || candidates=$(cat "$f")
+    "$f") || [ "$?" -eq 1 ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     status_line_verb "$line" event
     case "$event:$kind" in
@@ -1096,10 +1099,10 @@ scan_open_decisions() {  # <state>
   local state=$1 f task open line exclude
   exclude=$(status_scan_parent_channel_exclude "$state")
   for f in "$state"/*.status; do
-    [ -e "$f" ] || continue
+    [ -e "$f" ] || [ -L "$f" ] || continue
     [ "$f" = "$exclude" ] && continue
     task=$(basename "$f"); task="${task%.status}"
-    open=$(status_open_decisions "$f") || continue
+    open=$(status_open_decisions "$f") || return 1
     [ -n "$open" ] || continue
     while IFS= read -r line; do
       [ -n "$line" ] || continue
@@ -1410,9 +1413,9 @@ status_presentation_snapshot() {  # <state>
   local state=$1 f task size ident exclude
   exclude=$(status_scan_parent_channel_exclude "$state")
   for f in "$state"/*.status; do
-    [ -e "$f" ] || continue
+    [ -e "$f" ] || [ -L "$f" ] || continue
     [ "$f" = "$exclude" ] && continue
-    [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || continue
+    [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
     task=$(basename "$f"); task="${task%.status}"
     size=$(_fm_status_file_size "$f") || return 1
     size=${size//[[:space:]]/}
@@ -1436,7 +1439,7 @@ FM_STATUS_SNAPSHOT_EVENT_MTIME=
 FM_STATUS_SNAPSHOT_EVENT_ENDPOINT=
 # shellcheck disable=SC2034 # Output globals are consumed by sourcing drain scripts.
 status_snapshot_latest_event() {  # <status-file> <captured-endpoint> <captured-identity>
-  local f=$1 endpoint=$2 expected_ident=$3 limit=65536 start length scratch record line event_endpoint
+  local f=$1 endpoint=$2 expected_ident=$3 limit=65536 start length chunk record line event_endpoint
   local before_mtime after_mtime before_size after_size before_ident after_ident skip_first=0
   FM_STATUS_SNAPSHOT_EVENT_LINE=
   FM_STATUS_SNAPSHOT_EVENT_MTIME=
@@ -1458,24 +1461,24 @@ status_snapshot_latest_event() {  # <status-file> <captured-endpoint> <captured-
     start=0
   fi
   length=$((endpoint - start))
-  scratch="$(_fm_status_span_scratch "$f").latest"
-  _fm_status_read_span "$f" "$start" "$length" > "$scratch" 2>/dev/null \
-    || { rm -f "$scratch"; return 1; }
-  if record=$(LC_ALL=C perl -e '
-    my ($path, $start, $skip_first) = @ARGV;
-    open my $file, "<", $path or exit 1;
-    binmode $file;
-    scalar(<$file>) if $skip_first;
+  chunk=$(_fm_status_read_span "$f" "$start" "$length" 2>/dev/null && printf '\001') || return 1
+  chunk=${chunk%$'\001'}
+  record=$(printf '%s' "$chunk" | LC_ALL=C perl -e '
+    my ($start, $skip_first) = @ARGV;
+    local $/;
+    my $data = <STDIN> // "";
     my ($latest, $end);
-    while (defined(my $line = <$file>)) {
+    my $offset = $start;
+    for my $line (split /(?<=\n)/, $data) {
+      $offset += length($line);
+      if ($skip_first) { $skip_first = 0; next; }
       next unless $line =~ /[^\s]/;
       $line =~ s/[\r\n]+\z//;
-      ($latest, $end) = ($line, $start + tell($file));
+      ($latest, $end) = ($line, $offset);
     }
     exit 1 unless defined $end;
     print "$end\t$latest";
-  ' "$scratch" "$start" "$skip_first"); then :; else rm -f "$scratch"; return 1; fi
-  rm -f "$scratch"
+  ' "$start" "$skip_first") || return 1
   event_endpoint=${record%%$'\t'*}
   line=${record#*$'\t'}
   case "$event_endpoint" in ''|*[!0-9]*) return 1 ;; esac
@@ -1963,10 +1966,8 @@ status_open_decisions_cursor_offset() {  # <status-file>
 # unreadable cursor state fails the scan. Symlinks and unreadable status files
 # print nothing.
 status_new_lines_since_cursor() {  # <status-file> [<captured-end-offset>]
-  local f=$1 captured_end=${2:-} cf offset size actual_size chunk_file line rc=0
-  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 0
-  cf=$(_fm_open_decisions_cursor_path "$f")
-  chunk_file="$cf.unread.$$"
+  local f=$1 captured_end=${2:-} offset size actual_size chunk line
+  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
   offset=$(status_presentation_cursor_offset "$f") || return 1
   case "$offset" in ''|*[!0-9]*) return 1 ;; esac
   actual_size=$(_fm_status_file_size "$f") || return 1
@@ -1980,15 +1981,15 @@ status_new_lines_since_cursor() {  # <status-file> [<captured-end-offset>]
     size=$actual_size
   fi
   [ "$offset" -lt "$size" ] || return 0
-  _fm_status_read_span "$f" "$offset" "$((size - offset))" > "$chunk_file" 2>/dev/null \
-    || { rm -f "$chunk_file"; return 1; }
+  chunk=$(_fm_status_read_span "$f" "$offset" "$((size - offset))" 2>/dev/null) || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
-      *[![:space:]]*) printf '%s\n' "$line" || { rc=1; break; } ;;
+      *[![:space:]]*) printf '%s\n' "$line" || return 1 ;;
     esac
-  done < "$chunk_file"
-  rm -f "$chunk_file"
-  return "$rc"
+  done <<EOF
+$chunk
+EOF
+  return 0
 }
 
 # 0 when a status line is an informational `note:` or a reserved-key

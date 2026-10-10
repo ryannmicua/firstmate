@@ -10,10 +10,8 @@
 #     fingerprint, and whose status log and recorded PR state have not changed
 #     since that outcome, is stored as a routine outcome instead, so neither
 #     the supervision host nor the Pi branch wakes main for it. The
-#     fingerprint is the task, the wake text with every digit run read as one
-#     number (so a recheck's growing idle age matches), and the sorted set of
-#     URLs the summary names; the summary prose itself is not compared,
-#     because a model restating an unchanged state rewords it. The recorded PR
+#     fingerprint is the task, wake text, and summary substance, with only
+#     the changing idle or paused age normalized. The recorded PR
 #     state is the task meta's pr= and pr_head= lines plus its PR poll
 #     registration and merge-notified receipt. fm_wake_suppress_repeat_record
 #     keeps that evidence in state/.<task>.captain-repeat, bound to the store
@@ -49,7 +47,7 @@
 # recovery marker).
 
 FM_WAKE_SUPPRESS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FM_WAKE_SUPPRESS_REPEAT_VERSION=fm-captain-repeat-v1
+FM_WAKE_SUPPRESS_REPEAT_VERSION=fm-captain-repeat-v2
 
 fm_wake_suppress_config() {
   printf '%s\n' "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
@@ -88,7 +86,7 @@ fm_wake_suppress_exempt() {  # <wake text, one or more lines>
     esac
     lower=$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')
     case "$lower" in
-      *escalat*|*demand-deep-inspection*|*needs-decision*|*blocked*|*failed*|*failure*) return 0 ;;
+      *escalat*|*demand-deep-inspection*|*decision*|*blocked*|*failed*|*failure*) return 0 ;;
     esac
   done <<EOF
 $text
@@ -181,26 +179,35 @@ _fm_wake_suppress_cksum() {
 fm_wake_suppress_outcome_fingerprint() {  # <task> <wake> <summary>
   {
     printf '%s\n' "$1"
-    printf '%s' "$2" | tr '\t\r\n' '   ' | sed -E 's/[0-9]+/#/g; s/^[[:space:]]+//; s/[[:space:]]+$//'
-    printf '\n'
-    printf '%s\n' "$3" | grep -Eo 'https?://[^[:space:]<>")]+' | sed -E 's/[.,;:]+$//' | LC_ALL=C sort -u
+    printf '%s' "$2" | tr '\t\r\n' '   ' | sed -E 's/((idle|paused) )[0-9]+s/\1#s/g; s/^[[:space:]]+//; s/[[:space:]]+$//'
+    printf '\n%s\n' "$3"
   } | _fm_wake_suppress_cksum
 }
 
 # The recorded PR state (header).
 fm_wake_suppress_pr_state() {  # <task>
-  local task=$1 f
-  {
-    f="$STATE/$task.meta"
-    [ -f "$f" ] && grep -E '^(pr|pr_head)=' "$f" 2>/dev/null
-    for f in "$STATE/$task.pr-poll" "$STATE/$task.pr-poll-merge-notified"; do
-      printf '%s\n' "${f##*/}"
-      if [ -e "$f" ] || [ -L "$f" ]; then
-        printf 'present\n'
-        [ -f "$f" ] && [ ! -L "$f" ] && cat "$f" 2>/dev/null
-      fi
-    done
-  } | _fm_wake_suppress_cksum
+  local task=$1 f data='' contents
+  f="$STATE/$task.meta"
+  if [ -e "$f" ] || [ -L "$f" ]; then
+    [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
+    contents=$(cat "$f" 2>/dev/null && printf '\001') || return 1
+    contents=${contents%$'\001'}
+    contents=$(printf '%s\n' "$contents" | awk '/^(pr|pr_head)=/') || return 1
+    data="$contents"
+  fi
+  for f in "$STATE/$task.pr-poll" "$STATE/$task.pr-poll-merge-notified"; do
+    data="$data
+${f##*/}"
+    if [ -e "$f" ] || [ -L "$f" ]; then
+      [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
+      contents=$(cat "$f" 2>/dev/null && printf '\001') || return 1
+      contents=${contents%$'\001'}
+      data="$data
+present
+$contents"
+    fi
+  done
+  printf '%s\n' "$data" | _fm_wake_suppress_cksum
 }
 
 fm_wake_suppress_repeat_path() {  # <task>
@@ -211,7 +218,7 @@ fm_wake_suppress_repeat_path() {  # <task>
 # True when the task's newest status event is a decision or blocker.
 _fm_wake_suppress_status_holds_decision() {  # <task>
   local f="$STATE/$1.status" last verb
-  [ -f "$f" ] && [ -r "$f" ] || return 1
+  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 0
   last=$(awk 'NF { line = $0 } END { print line }' "$f" 2>/dev/null) || return 0
   verb=$(printf '%s' "$last" | sed -E 's/^[[:space:]]*([A-Za-z-]+).*/\1/')
   case "$verb" in needs-decision|blocked) return 0 ;; esac
@@ -225,11 +232,13 @@ _fm_wake_suppress_status_holds_decision() {  # <task>
 # the task's newest captain row in the validated store (empty when none).
 fm_wake_suppress_repeat_of() {  # <task> <wake> <summary> <status-endpoint> <status-ident> <newest-captain-seq>
   local task=$1 wake=$2 summary=$3 endpoint=$4 ident=$5 newest=$6 path data
-  local version seq fp rec_endpoint rec_ident pr extra
+  local version seq fp rec_endpoint rec_ident pr extra current_pr
   FM_WAKE_REPEAT_OF=
   [ -n "$newest" ] || return 0
   [ "$ident" != - ] || return 0
+  fm_wake_suppress_away && return 0
   fm_wake_suppress_exempt "$wake" && return 0
+  fm_wake_suppress_exempt "$summary" && return 0
   _fm_wake_suppress_status_holds_decision "$task" && return 0
   path=$(fm_wake_suppress_repeat_path "$task") || return 0
   [ -f "$path" ] && [ ! -L "$path" ] && [ -r "$path" ] || return 0
@@ -242,18 +251,20 @@ EOF
   [ "$seq" = "$newest" ] || return 0
   [ "$fp" = "$(fm_wake_suppress_outcome_fingerprint "$task" "$wake" "$summary")" ] || return 0
   [ "$rec_endpoint" = "$endpoint" ] && [ "$rec_ident" = "$ident" ] || return 0
-  [ "$pr" = "$(fm_wake_suppress_pr_state "$task")" ] || return 0
+  current_pr=$(fm_wake_suppress_pr_state "$task") || return 0
+  [ "$pr" = "$current_pr" ] || return 0
   FM_WAKE_REPEAT_OF=$seq
 }
 
 # Record the evidence for a captain outcome that was just stored as captain.
 fm_wake_suppress_repeat_record() {  # <task> <seq> <wake> <summary> <status-endpoint> <status-ident>
-  local path tmp
+  local path tmp pr
   path=$(fm_wake_suppress_repeat_path "$1") || return 1
+  pr=$(fm_wake_suppress_pr_state "$1") || return 1
   tmp=$(mktemp "$STATE/.captain-repeat.XXXXXX") || return 1
   if ! printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$FM_WAKE_SUPPRESS_REPEAT_VERSION" "$2" \
       "$(fm_wake_suppress_outcome_fingerprint "$1" "$3" "$4")" "$5" "$6" \
-      "$(fm_wake_suppress_pr_state "$1")" > "$tmp" \
+      "$pr" > "$tmp" \
     || ! mv -f -- "$tmp" "$path"; then
     rm -f -- "$tmp"
     return 1

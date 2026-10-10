@@ -22,6 +22,9 @@ STALE_WAKE_LATER='stale: default:w4Q:p2 (paused 254117s, awaiting external - dec
 # new_home <name> [enforce]: a home with one paused task holding an open PR.
 new_home() {
   local dir="$TMP_ROOT/$1"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   : > "$dir/config/supervision-host"
   [ "${2:-}" != enforce ] || : > "$dir/config/wake-noise-suppression"
@@ -54,10 +57,10 @@ stored_summary() {  # <dir> <seq>
 test_repeat_captain_outcome_is_stored_routine_when_enforced() {
   local dir first second
   dir=$(new_home repeat-enforce enforce)
-  first=$(append "$dir" captain "$STALE_WAKE" "AP-1 PR is still waiting on your merge decision: $PR_URL")
-  second=$(append "$dir" captain "$STALE_WAKE_LATER" "AP-1 plan PR is open, clean, and still waiting on your merge call ($PR_URL). Worker idle.")
+  first=$(append "$dir" captain "$STALE_WAKE" "AP-1 waiting on merge: $PR_URL")
+  second=$(append "$dir" captain "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL")
   assert_equals captain "$(stored_verdict "$dir" "$first")" "the first captain outcome must stay captain"
-  assert_equals routine "$(stored_verdict "$dir" "$second")" "a reworded repeat with unchanged state must be stored routine"
+  assert_equals routine "$(stored_verdict "$dir" "$second")" "an identical repeat with unchanged state must be stored routine"
   assert_contains "$(stored_summary "$dir" "$second")" "Repeat of captain outcome $first" "the stored repeat must name the outcome it repeats"
   assert_grep "suppressed repeat captain outcome $second for ap1" "$dir/state/.watch-triage.log" "the expected line is missing"
   assert_grep "repeats captain outcome $first" "$dir/append.err" "the expected line is missing"
@@ -68,7 +71,7 @@ test_repeat_captain_outcome_shadow_mode_only_logs() {
   local dir second
   dir=$(new_home repeat-shadow)
   append "$dir" captain "$STALE_WAKE" "AP-1 waiting on merge: $PR_URL" >/dev/null
-  second=$(append "$dir" captain "$STALE_WAKE_LATER" "AP-1 still waiting on merge: $PR_URL")
+  second=$(append "$dir" captain "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL")
   assert_equals captain "$(stored_verdict "$dir" "$second")" "shadow mode must not change the stored verdict"
   assert_grep "would suppress repeat captain outcome $second for ap1 (shadow mode)" "$dir/state/.watch-triage.log" "the expected line is missing"
   pass "without config/wake-noise-suppression a repeat captain outcome is only logged"
@@ -96,6 +99,26 @@ test_changed_evidence_and_exempt_rows_are_never_suppressed() {
     "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL"
   expect_not_suppressed pr-merge-notified \
     ': > "$dir/state/ap1.pr-poll-merge-notified"' \
+    "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL"
+  expect_not_suppressed summary-escalation ':' \
+    "$STALE_WAKE_LATER" "AP-1 escalation 1: $PR_URL"
+  expect_not_suppressed summary-decision ':' \
+    "$STALE_WAKE_LATER" "AP-1 needs a decision: $PR_URL"
+  expect_not_suppressed summary-substance ':' \
+    "$STALE_WAKE_LATER" "AP-1 CI is queued: $PR_URL"
+  expect_not_suppressed different-pane ':' \
+    "${STALE_WAKE_LATER/w4Q:p2/w4Q:p3}" "AP-1 waiting on merge: $PR_URL"
+  expect_not_suppressed summary-number ':' \
+    "$STALE_WAKE_LATER" "AP-2 waiting on merge: $PR_URL"
+  expect_not_suppressed away ': > "$dir/state/.afk-contract"' \
+    "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL"
+  expect_not_suppressed quiet 'printf "mode=quiet\n" > "$dir/state/.afk-contract"' \
+    "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL"
+  expect_not_suppressed invalid-meta 'rm "$dir/state/ap1.meta"; mkdir "$dir/state/ap1.meta"' \
+    "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL"
+  expect_not_suppressed invalid-poll 'mkdir "$dir/state/ap1.pr-poll"' \
+    "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL"
+  expect_not_suppressed invalid-receipt 'mkdir "$dir/state/ap1.pr-poll-merge-notified"' \
     "$STALE_WAKE_LATER" "AP-1 waiting on merge: $PR_URL"
   expect_not_suppressed different-url ':' \
     "$STALE_WAKE_LATER" "AP-1 opened a second PR: https://github.com/example/repo/pull/6"
@@ -133,7 +156,7 @@ test_branch_report_receipt_carries_the_stored_verdict() {
     "$REPORT" --task ap1 --verdict captain --summary "AP-1 waiting on merge: $PR_URL" >/dev/null 2>&1 \
     || fail "the first branch report was refused"
   out=$(in_home "$dir" env FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 \
-    "$REPORT" --task ap1 --verdict captain --summary "AP-1 still waiting on merge: $PR_URL" 2>/dev/null) \
+    "$REPORT" --task ap1 --verdict captain --summary "AP-1 waiting on merge: $PR_URL" 2>/dev/null) \
     || fail "the repeat branch report was refused"
   assert_equals "captain routine" "$(awk -F '\t' '{ printf "%s%s", sep, $3; sep = " " }' "$dir/state/.supervision-host-receipts")" \
     "receipts must carry the stored verdicts so the host wakes main only for the first"
@@ -152,6 +175,9 @@ probe() {  # <dir>
 test_would_present_probe_reads_every_presenting_section_without_writing() {
   local dir before after
   dir="$TMP_ROOT/probe"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   : > "$dir/config/supervision-host"
   before=$(find "$dir/state" -mindepth 1 | sort)
@@ -166,17 +192,26 @@ test_would_present_probe_reads_every_presenting_section_without_writing() {
   assert_equals 0 "$(probe "$dir")" "the probe must not mark the captain outcome read"
 
   dir="$TMP_ROOT/probe-decision"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   printf 'needs-decision [at=1] [key=k1]: pick one\n' > "$dir/state/d.status"
   assert_equals 0 "$(probe "$dir")" "an open decision needs main"
 
   dir="$TMP_ROOT/probe-unread"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   printf 'note [at=1]: the answer arrived\n' > "$dir/state/n.status"
   assert_equals 0 "$(probe "$dir")" "an unread status note needs main"
   assert_equals 0 "$(probe "$dir")" "the probe must not consume the unread note"
 
   dir="$TMP_ROOT/probe-queue"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   append_wake "$dir/state" check some-check "check: something happened"
   assert_equals 0 "$(probe "$dir")" "a queued row needs main"
@@ -202,6 +237,9 @@ publish_downtime() {  # <dir>
 test_empty_wake_is_retired_only_when_enforced() {
   local dir
   dir="$TMP_ROOT/empty-enforce"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   : > "$dir/config/wake-noise-suppression"
   publish_downtime "$dir"
@@ -210,6 +248,9 @@ test_empty_wake_is_retired_only_when_enforced() {
   assert_grep 'suppressed empty wake (test-site): check: rearm-resurface' "$dir/state/.watch-triage.log" "the expected line is missing"
 
   dir="$TMP_ROOT/empty-shadow"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   publish_downtime "$dir"
   if suppress "$dir" 'check: rearm-resurface'; then fail "shadow mode suppressed a wake"; fi
@@ -226,7 +267,10 @@ test_must_not_suppress_wakes_reach_main() {
     'signal: t1.status needs-decision' \
     'supervision-host: cycle boundary'; do
     dir="$TMP_ROOT/exempt-$(printf '%s' "$wake" | cksum | cut -d' ' -f1)"
-    mkdir -p "$dir/state" "$dir/config"
+    mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
+  mkdir -p "$dir/state" "$dir/config"
     : > "$dir/config/wake-noise-suppression"
     publish_downtime "$dir"
     if suppress "$dir" "$wake"; then fail "an exempt wake was suppressed: $wake"; fi
@@ -234,6 +278,9 @@ test_must_not_suppress_wakes_reach_main() {
   done
 
   dir="$TMP_ROOT/exempt-away"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   : > "$dir/config/wake-noise-suppression"
   : > "$dir/state/.afk-contract"
@@ -241,6 +288,9 @@ test_must_not_suppress_wakes_reach_main() {
   if suppress "$dir" 'check: rearm-resurface'; then fail "a wake was suppressed under an away record"; fi
 
   dir="$TMP_ROOT/exempt-work"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   : > "$dir/config/wake-noise-suppression"
   publish_downtime "$dir"
@@ -277,6 +327,9 @@ run_watcher_briefly() {  # <dir> <seconds> [<until-file> <until-text>]
 
 watcher_home() {  # <name> [enforce]
   local dir="$TMP_ROOT/$1"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config" "$dir/fakebin"
   fm_test_track_watcher_state "$dir/state"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/fakebin/tmux"
@@ -314,6 +367,9 @@ test_watcher_keeps_watching_instead_of_an_empty_rearm_resurface() {
 test_branch_outcomes_show_the_current_crew_state() {
   local dir out
   dir="$TMP_ROOT/outcomes-current"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
   mkdir -p "$dir/state" "$dir/config"
   : > "$dir/config/supervision-host"
   in_home "$dir" "$OUTCOMES" append --task gone-task --verdict captain --summary "gone-task needs your call" >/dev/null
@@ -322,6 +378,60 @@ test_branch_outcomes_show_the_current_crew_state() {
   assert_contains "$out" "  current: state: unknown · source: none · no metadata for gone-task" \
     "the task's current crew state must follow its outcome line"
   pass "each BRANCH OUTCOMES captain line is followed by the task's current crew state"
+}
+
+test_identical_protected_summaries_stay_captain() {
+  local dir summary second i=0
+  for summary in "AP-1 escalation 1: $PR_URL" "AP-1 waiting on your decision: $PR_URL"; do
+    i=$((i + 1))
+    dir=$(new_home "protected-summary-$i" enforce)
+    append "$dir" captain "$STALE_WAKE" "$summary" >/dev/null
+    second=$(append "$dir" captain "$STALE_WAKE_LATER" "$summary")
+    assert_equals captain "$(stored_verdict "$dir" "$second")" "identical protected summaries must not be suppressed"
+  done
+  pass "identical escalation and decision summaries remain captain outcomes"
+}
+
+test_probe_missing_indexes_and_failed_reads() {
+  local dir before after
+  dir=$(new_home probe-migration enforce)
+  append "$dir" routine "$STALE_WAKE" "AP-1 waiting on merge: $PR_URL" >/dev/null
+  rm -f "$dir/state/.branch-outcome-index-ready" "$dir/state/.ap1.branch-outcome-index"
+  before=$(find "$dir/state" -type f -exec cksum {} + | sort)
+  assert_equals 1 "$(probe "$dir")" "a covered status must remain covered without migrating indexes"
+  after=$(find "$dir/state" -type f -exec cksum {} + | sort)
+  assert_equals "$before" "$after" "the probe must not modify persisted state or create indexes"
+  assert_absent "$dir/state/.branch-outcome-index-ready" "the probe must leave migration to the presenting drain"
+  mkdir "$dir/state/unreadable.status"
+  assert_equals 2 "$(probe "$dir")" "invalid status evidence must be indeterminate"
+  rm -r "$dir/state/unreadable.status"
+  mkdir -p "$dir/fakebin"
+  printf '#!/usr/bin/env bash\nexit 124\n' > "$dir/fakebin/tasks-axi"
+  chmod +x "$dir/fakebin/tasks-axi"
+  assert_equals 2 "$(PATH="$dir/fakebin:$PATH" probe "$dir")" "failed divergence lookup must be indeterminate"
+  pass "the probe reads coverage without migration and preserves indeterminate evidence"
+}
+
+test_enrichment_has_one_budget() {
+  local dir out started i
+  dir="$TMP_ROOT/enrichment-budget"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
+  mkdir -p "$dir/state" "$dir/config"
+  : > "$dir/config/supervision-host"
+  printf '#!/usr/bin/env bash\nprintf "called\n" >> "$FM_HOME/calls"\nsleep 4\n' > "$dir/slow-state"
+  chmod +x "$dir/slow-state"
+  for i in 1 2 3 4 5 6 7; do
+    in_home "$dir" "$OUTCOMES" append --task "t$i" --verdict captain --summary "task $i pending" >/dev/null
+  done
+  started=$SECONDS
+  out=$(in_home "$dir" env FM_OUTCOME_CREW_STATE_TIMEOUT=1 FM_CREW_STATE_BIN="$dir/slow-state" "$DRAIN" 2>/dev/null)
+  [ "$((SECONDS - started))" -lt 7 ] || fail "enrichment exceeded its aggregate budget"
+  assert_equals 1 "$(wc -l < "$dir/calls" | tr -d '[:space:]')" "remaining tasks must not start new reads after the deadline"
+  assert_contains "$out" "t7: task 7 pending" "all captain outcomes must still be presented"
+  assert_contains "$out" "enrichment budget exhausted" "remaining current states must explicitly be unavailable"
+  pass "current-state enrichment shares one deadline across the section"
 }
 
 test_repeat_captain_outcome_is_stored_routine_when_enforced
@@ -334,3 +444,8 @@ test_empty_wake_is_retired_only_when_enforced
 test_must_not_suppress_wakes_reach_main
 test_watcher_keeps_watching_instead_of_an_empty_rearm_resurface
 test_branch_outcomes_show_the_current_crew_state
+
+test_probe_missing_indexes_and_failed_reads
+test_enrichment_has_one_budget
+
+test_identical_protected_summaries_stay_captain
