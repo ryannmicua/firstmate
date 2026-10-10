@@ -35,12 +35,13 @@ Preserving commit identity helps Git recognize shared history when upstream merg
 ## Add-on index
 
 Each add-on is its own repository, installed and upgraded separately from any firstmate home.
-Neither add-on edits this repository.
+No add-on edits this repository.
 
 | Add-on | What it does | How it attaches | Install |
 | --- | --- | --- | --- |
 | [Quarterdeck](https://github.com/ryannmicua/quarterdeck) | Renders one local review page from homes' backlogs, reports, and `bin/fm-bearings-snapshot.sh --json`. | Standalone consumer of durable records and machine outputs; serving is read-only by default, with optional report review marks. | See its README Quick Start. |
 | [firstmate-claude-artifacts](https://github.com/ryannmicua/firstmate-claude-artifacts) | Lets Claude artifacts and Claude Docs serve as a review surface: a comment-check adapter plus a watcher skill for workers. | Trusted external process-event adapter bound through `bin/fm-extension.sh` into `config/extensions.d/` ([`docs/extension-bindings.md`](docs/extension-bindings.md)), plus a user-level skill outside the repository. | See its README and tutorial. |
+| [fm-recall](https://github.com/ryannmicua/fm-recall) | Planned history search: a local, owner-only SQLite FTS5 index of a home's backlog, reports, briefs, status, archived steers, and no-mistakes findings plus Claude Code, Codex, and OpenCode transcripts, answering with bounded excerpts and source pointers. | Read-only consumer of the home's records and the harness transcript directories that changes nothing in the home, plus a planned agent skill outside the repository. | Not installable yet: repository created (private), not implemented. |
 
 Extension points that exist today, in order of preference for new add-ons:
 
