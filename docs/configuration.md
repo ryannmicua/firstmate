@@ -33,8 +33,9 @@ When it is set, scripts still run from this repo's `bin/`, while `state/`, `data
 `FM_ROOT_OVERRIDE` overrides the firstmate repo root used by scripts, including the primary checkout watched by the worktree-tangle guard.
 When `FM_HOME` is unset, it also behaves as the old whole-root override.
 
-`bin/fm-send.sh` requires `FM_HOME` to be set before resolving a target.
-Unlike most scripts, it does not use the general fallback, because a steer must not silently resolve against the wrong home.
+`bin/fm-send.sh` and `bin/fm-control.sh` require a nonempty `FM_HOME` before resolving a target or task.
+Unlike most scripts, they do not use the general fallback, because a steer or lifecycle action must not silently resolve against the wrong home.
+The [`fm-home-hint-lib.sh` header](../bin/fm-home-hint-lib.sh) owns their conditional retry hint; the hint never runs the command or selects a home for the caller.
 These variables override individual operational directories for tests and specialized harness setup:
 
 | Variable | Directory selected |
@@ -78,6 +79,7 @@ Each effective `FM_HOME` contains private operational directories.
 - Project and secondmate registries.
 - Captain preferences and optional shared captain preferences.
 - Learnings, backlog, briefs, scout reports, and the optional per-task no-mistakes pipeline-spend ledger.
+- Handled steers archived by cleanup under `data/<id>/steers/` (`bin/fm-teardown.sh`).
 - Explicitly installed content-addressed extension packages under `data/extensions/packages/`.
 
 `state/` holds runtime records:
@@ -2348,7 +2350,7 @@ The two read files use different parsing rules:
 Runtime tuning via environment variables (defaults shown):
 
 ```sh
-FM_HOME=                 # optional operational home for most scripts, unset means this repo root; fm-send requires it explicitly
+FM_HOME=                 # optional operational home for most scripts; explicit-home exceptions: see FM_HOME above
 FM_ROOT_OVERRIDE=        # override firstmate repo root, tangle-guard target, and zellij/cmux home-title hash; also legacy whole-root override when FM_HOME is unset
 FM_STATE_OVERRIDE=       # alternate state dir, mainly for tests
 FM_DATA_OVERRIDE=        # alternate data dir, mainly for tests

@@ -613,6 +613,63 @@ test_sole_slot_record_still_tears_down() {
   pass "fm-teardown: a task that solely holds its slot still returns it"
 }
 
+test_handled_steers_are_archived_before_the_inbox_is_removed() {
+  local dir id=steer-task
+
+  dir=$(make_case steer-archive)
+  mark_case_as_treehouse_pool "$dir"
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=firstmate:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/$id.inbox/handled" "$dir/home/data/$id/steers"
+  printf 'first steer\r\nno trailing newline' > "$dir/home/state/$id.inbox/handled/001.msg"
+  printf 'second steer\n' > "$dir/home/state/$id.inbox/handled/002.msg"
+  printf 'unhandled\n' > "$dir/home/state/$id.inbox/003.msg"
+  # A prior interrupted teardown left an identical 002 and a differing 001.
+  cp "$dir/home/state/$id.inbox/handled/002.msg" "$dir/home/data/$id/steers/002.msg"
+  printf 'older different content\n' > "$dir/home/data/$id/steers/001.msg"
+
+  run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr" \
+    || fail "teardown with handled steers failed: $(cat "$dir/stderr")"
+  assert_absent "$dir/home/state/$id.inbox" "teardown left the steering inbox"
+  cmp -s "$dir/home/data/$id/steers/001.msg.1" - < <(printf 'first steer\r\nno trailing newline') \
+    || fail "handled steer was not archived byte-for-byte beside the differing copy"
+  [ "$(cat "$dir/home/data/$id/steers/001.msg")" = "older different content" ] \
+    || fail "archive overwrote an existing differing steer"
+  [ "$(cat "$dir/home/data/$id/steers/002.msg")" = "second steer" ] \
+    || fail "identical archived steer was not preserved"
+  assert_absent "$dir/home/data/$id/steers/002.msg.1" "identical archived steer was duplicated"
+  assert_absent "$dir/home/data/$id/steers/003.msg" "unhandled steer was archived as handled"
+  pass "fm-teardown: handled steers are archived byte-for-byte and retry-safe before the inbox is removed"
+}
+
+test_remote_secondmate_steers_survive_home_removal() {
+  local dir mate state data id=remote-steer-task force
+  for force in '' --force; do
+    dir=$(make_case "remote-steer-archive${force}")
+    mate="$dir/mate"
+    state="$mate/state/parent-route"
+    data="$mate/data/.parent-route"
+    mkdir -p "$state/$id.inbox/handled" "$data" "$mate/config"
+    printf '%s' "$id" > "$mate/.fm-secondmate-home"
+    fm_write_meta "$state/$id.meta" \
+      "window=firstmate:fm-$id" "endpoint_task_id=$id" \
+      "worktree=$mate" "project=$mate" "home=$mate" \
+      "kind=secondmate" "mode=secondmate" "harness=echo"
+    printf 'remote steer\r\nno trailing newline' > "$state/$id.inbox/handled/001.msg"
+    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
+      FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" \
+      FM_CONFIG_OVERRIDE="$mate/config" FM_TEARDOWN_GUARD_DONE=1 \
+      FM_RUNTIME_LOG="$dir/runtime.log" PATH="$dir/fakebin:$PATH" \
+      "$TEARDOWN" "$id" ${force:+"$force"} > "$dir/stdout" 2> "$dir/stderr" \
+      || fail "remote secondmate retirement failed: $(cat "$dir/stderr")"
+    assert_absent "$mate" "remote secondmate home survived retirement"
+    cmp -s "$dir/home/data/$id/steers/001.msg" - < <(printf 'remote steer\r\nno trailing newline') \
+      || fail "remote steer did not survive retirement byte-for-byte in the parent home"
+  done
+  pass "fm-teardown: remote secondmate steers survive forced and ordinary home removal in the parent archive"
+}
+
 test_recorded_endpoint_that_changed_directory_still_tears_down() {
   local dir id=moved-task
 
@@ -1447,3 +1504,5 @@ test_project_lock_anchors_at_the_local_root_across_home_layouts
 test_remote_seeded_home_returns_its_uncontested_slot
 test_remote_seeded_home_still_refuses_a_slot_its_child_holds
 test_remote_layout_homes_serialize_on_one_project_lock
+test_handled_steers_are_archived_before_the_inbox_is_removed
+test_remote_secondmate_steers_survive_home_removal
