@@ -172,7 +172,7 @@ digest_of() {  # <preview-output>
 test_preview_is_read_only_and_annotates_carried_ids() {
   local out rc
   setup_world preview
-  out=$(helper --fix QD-8,QD-11 --instructions "Keep repeatable --host." 2>&1); rc=$?
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12 --instructions "Keep repeatable --host." 2>&1); rc=$?
   expect_code 0 "$rc" "a complete decision previews"
   assert_contains "$out" "no-mistakes axi respond --step review --action fix --findings QD-8,QD-11 --instructions '" \
     "the preview shows the exact respond command"
@@ -192,9 +192,9 @@ test_preview_is_read_only_and_annotates_carried_ids() {
 test_confirm_sends_closes_and_records() {
   local out rc digest drained
   setup_world send
-  out=$(helper --fix QD-11 --no-change QD-8 --reason "already satisfied at head" 2>&1)
+  out=$(helper --fix QD-11 --no-change QD-8,QD-12 --reason "already satisfied at head" 2>&1)
   digest=$(digest_of "$out")
-  out=$(helper --fix QD-11 --no-change QD-8 --reason "already satisfied at head" --confirm "$digest" 2>&1); rc=$?
+  out=$(helper --fix QD-11 --no-change QD-8,QD-12 --reason "already satisfied at head" --confirm "$digest" 2>&1); rc=$?
   expect_code 0 "$rc" "a confirmed decision sends"
   assert_grep "--findings QD-11 --instructions" "$HOME_DIR/state/t1.inbox/001.msg" \
     "the steer reaches the worker's durable inbox"
@@ -208,7 +208,7 @@ recs = [json.loads(l) for l in open(sys.argv[1])]
 assert len(recs) == 1
 r = recs[0]
 assert r["schema"] == "fm-gate-decision.v1" and r["run"] == sys.argv[2] and r["step"] == "review" and r["round"] == 2
-assert {d["id"]: d["action"] for d in r["decisions"]} == {"QD-11": "fix", "QD-8": "no-change"}
+assert {d["id"]: d["action"] for d in r["decisions"]} == {"QD-11": "fix", "QD-8": "no-change", "QD-12": "no-change"}
 assert r["respond"]["findings"] == ["QD-11"]
 PY
   assert_no_respond
@@ -219,8 +219,8 @@ test_failed_send_preserves_decision() {
   local out digest rc
   setup_world failed-send
   : > "$HOME_DIR/state/t1.status"
-  out=$(helper --fix QD-8,QD-11); digest=$(digest_of "$out")
-  out=$(helper --fix QD-8,QD-11 --confirm "$digest" 2>&1); rc=$?
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12); digest=$(digest_of "$out")
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1); rc=$?
   expect_code 3 "$rc" "a send fm-send refuses (no open decision for the key) exits 3"
   assert_contains "$out" "delivery may have occurred" "failure does not guarantee nondelivery"
   [ -f "$HOME_DIR/data/t1/gate-decisions.jsonl" ] || fail "a failed send preserves the decision"
@@ -241,8 +241,8 @@ fi
 command -p tr "$@"
 SH
   chmod +x "$FB/tr"
-  out=$(helper --fix QD-8,QD-11); digest=$(digest_of "$out")
-  out=$(helper --fix QD-8,QD-11 --confirm "$digest" 2>&1); rc=$?
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12); digest=$(digest_of "$out")
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1); rc=$?
   expect_code 3 "$rc" "a post-delivery closure failure exits 3"
   assert_contains "$out" "the answer was delivered" "the real send fails after enqueue"
   assert_contains "$out" "check the worker inbox and decision closure before any resend" "the failure requires checking delivery"
@@ -261,9 +261,9 @@ test_final_verification_refuses_changes() {
   local axis out digest rc
   for axis in run step parked round findings head; do
     setup_world "final-$axis"
-    out=$(helper --fix QD-8,QD-11); digest=$(digest_of "$out")
+    out=$(helper --fix QD-8,QD-11 --no-change QD-12); digest=$(digest_of "$out")
     printf '%s' "$axis" > "$NM_DIR/change-mode"
-    out=$(helper --fix QD-8,QD-11 --confirm "$digest" 2>&1); rc=$?
+    out=$(helper --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1); rc=$?
     [ "$rc" -ne 0 ] || fail "a $axis change immediately before send must refuse: $out"
     assert_absent "$HOME_DIR/state/t1.inbox" "a $axis change sends nothing"
     assert_absent "$HOME_DIR/data/t1/gate-decisions.jsonl" "a $axis change records nothing"
@@ -275,9 +275,9 @@ test_final_verification_refuses_changes() {
 test_later_round_reads_the_earlier_decision() {
   local out digest
   setup_world later
-  out=$(helper --fix QD-8,QD-11 --instructions "Drop the --bind alias.")
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12 --instructions "Drop the --bind alias.")
   digest=$(digest_of "$out")
-  helper --fix QD-8,QD-11 --instructions "Drop the --bind alias." --confirm "$digest" >/dev/null 2>&1 \
+  helper --fix QD-8,QD-11 --no-change QD-12 --instructions "Drop the --bind alias." --confirm "$digest" >/dev/null 2>&1 \
     || fail "the first decision should send"
   # The pipeline runs a fix round and parks again at round 3, still carrying QD-8.
   python3 -I - "$NM_DIR/state.sqlite" <<'PY'
@@ -288,16 +288,32 @@ db.execute("INSERT INTO step_rounds VALUES ('sr1', 3, ?, NULL, 'changes applied'
            (json.dumps({"findings": [{"id": "QD-8"}, {"id": "QD-13"}]}), "c" * 40, "b" * 40))
 db.commit()
 PY
-  write_status review "$(printf '%s\n' '    QD-8,warning,app.py,ask-user,"The --bind alias duplicates --host"' \
+  write_status review "$(printf '%s\n' '    QD-8,warning,app.py,no-op,"The --bind alias duplicates --host"' \
     '    QD-13,error,app.py,ask-user,"New finding"')" 2
   printf 'needs-decision [key=nm-%s-review]: ask-user findings=QD-8,QD-13 file=x\n' "$RUN" >> "$HOME_DIR/state/t1.status"
-  out=$(helper --no-change QD-8 --reason "satisfied" --fix QD-13 2>&1)
+  expect_refusal "carried no-op omission" "incomplete decision: no decision for QD-8" --fix QD-13
+  out=$(helper --no-change QD-8 --reason "satisfied" --fix QD-13 2>&1) || fail "explicit no-op decision should preview"
+  assert_contains "$out" "- QD-8 [no-op]: no change - satisfied" "the emitted steer retains the no-op decision"
   assert_contains "$out" "- QD-8: in rounds 1,2; round 1 selected it for a fix; fix round 2 moved" \
     "every earlier round is listed"
   assert_contains "$out" "round 2 selected it for a fix; fix round 3 moved bbbbbbbbbbbb -> cccccccccccc" \
     "the latest fix round's evidence is listed"
   assert_contains "$out" "round 2 firstmate decision at head ${HEAD_SHA:0:12}: fix; instructions: Drop the --bind alias." \
     "the earlier decision comes back from the durable record"
+  digest=$(digest_of "$out")
+  helper --no-change QD-8 --reason "satisfied" --fix QD-13 --confirm "$digest" >/dev/null 2>&1 \
+    || fail "the explicit carried no-op decision should send"
+  assert_grep "- QD-8 [no-op]: no change - satisfied" "$HOME_DIR/state/t1.inbox/002.msg" \
+    "the delivered steer retains the carried no-op decision"
+  assert_grep "round 2 firstmate decision at head ${HEAD_SHA:0:12}: fix" "$HOME_DIR/state/t1.inbox/002.msg" \
+    "the delivered steer retains the earlier decision"
+  python3 -I - "$HOME_DIR/data/t1/gate-decisions.jsonl" <<'PY' || fail "the no-op decision was not recorded"
+import json, sys
+records = [json.loads(line) for line in open(sys.argv[1])]
+assert len(records) == 2
+assert records[-1]["round"] == 3
+assert {d["id"]: d["action"] for d in records[-1]["decisions"]} == {"QD-8": "no-change", "QD-13": "fix"}
+PY
   assert_no_respond
   pass "fm-gate-decide: a later round reads back the earlier decision and fix evidence"
 }
@@ -306,7 +322,7 @@ test_command_is_argument_safe() {
   local out cmd tricky got
   setup_world quoting
   tricky=$'Use it\'s "quoted" text; $(touch pwned) `id` \\ and\na second line'
-  out=$(helper --fix QD-8,QD-11 --instructions "$tricky" 2>&1)
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12 --instructions "$tricky" 2>&1)
   cmd=$(printf '%s\n' "$out" | sed -n '/^Run exactly this command/,/^Never add --yes/p' | sed '1d;$d')
   ( cd "$TMP_ROOT" && env PATH="$FB:$PATH" FM_FAKE_NM_DIR="$NM_DIR" bash -c "$cmd" ) \
     || fail "the composed command should run in a POSIX shell"
@@ -324,7 +340,7 @@ PY
 test_approve_only_maps_to_approve() {
   local out
   setup_world approve
-  out=$(helper --approve QD-8,QD-11 --reason "accepted by design" 2>&1)
+  out=$(helper --approve QD-8,QD-11,QD-12 --reason "accepted by design" 2>&1)
   assert_contains "$out" "no-mistakes axi respond --step review --action approve"$'\n' \
     "an all-approve review decision maps to a bare approve"
   assert_contains "$out" "(Context only: an approval sends no instructions to the fixer.)" \
@@ -365,7 +381,7 @@ findings[3]{id,severity,file,line,action,description}:
 help[1]:
   Run \`no-mistakes axi respond --action approve\` to accept this step and continue
 EOF
-  out=$(helper --fix QD-11 --no-change QD-8 2>&1) || fail "the scalar gate form should resolve: $out"
+  out=$(helper --fix QD-11 --no-change QD-8,QD-12 2>&1) || fail "the scalar gate form should resolve: $out"
   assert_contains "$out" "--step review --action fix --findings QD-11" "the scalar form yields the step and ids"
   pass "fm-gate-decide: reads the scalar gate form with unquoted descriptions"
 }
@@ -378,6 +394,41 @@ expect_refusal() {  # <label> <needle> <args...>
   assert_contains "$out" "$needle" "$label"
 }
 
+test_no_op_requires_explicit_decisions() {
+  local form out
+  for form in block scalar database; do
+    setup_world "no-op-$form"
+    python3 -I - "$NM_DIR" "$form" <<'PY'
+import json, sqlite3, sys
+from pathlib import Path
+root, form = Path(sys.argv[1]), sys.argv[2]
+p = root / "status.toon"
+s = p.read_text().replace("QD-8,warning,app.py,ask-user", "QD-8,warning,app.py,no-op")
+if form == "scalar":
+    s = s.replace("gate:\n  step: review", "gate: review")
+elif form == "database":
+    s = s.split("  findings[", 1)[0]
+    with sqlite3.connect(root / "state.sqlite") as db:
+        db.execute("UPDATE step_rounds SET findings_json = ? WHERE round = 2",
+                   (json.dumps({"findings": [{"id": "QD-8", "action": "no-op"},
+                                            {"id": "QD-11", "action": "auto-fix"},
+                                            {"id": "QD-12", "action": "no-op"}]}),))
+p.write_text(s)
+PY
+    expect_refusal "$form carried no-op omission" "incomplete decision: no decision for QD-8,QD-12" --fix QD-11
+    expect_refusal "$form approval omission" "incomplete decision: no decision for QD-12" --approve QD-8,QD-11 --reason "accepted"
+    expect_refusal "$form no-change omission" "incomplete decision: no decision for QD-12" --no-change QD-8,QD-11
+    assert_absent "$HOME_DIR/state/t1.inbox" "an omitted no-op sends nothing"
+    assert_absent "$HOME_DIR/data/t1/gate-decisions.jsonl" "an omitted no-op records nothing"
+    out=$(helper --fix QD-11 --no-change QD-8,QD-12 2>&1) || fail "$form complete decision should preview: $out"
+    assert_contains "$out" "- QD-8 [no-op]: no change" "the steer retains the carried no-op decision"
+    assert_contains "$out" "- QD-8: in round 1; round 1 selected it for a fix; fix round 2 moved" "the steer retains carried no-op fix evidence"
+    assert_contains "$out" "re-verify each at pipeline head ${HEAD_SHA:0:12}" "the evidence includes the current pipeline head"
+    assert_no_respond
+  done
+  pass "fm-gate-decide: requires explicit no-op decisions in every findings representation"
+}
+
 test_refusals() {
   local out digest
   setup_world refusals
@@ -387,12 +438,12 @@ test_refusals() {
   expect_refusal "duplicate id" "QD-8 is decided more than once" --fix QD-8,QD-11 --no-change QD-8
   expect_refusal "incomplete" "incomplete decision: no decision for QD-11" --fix QD-8
   expect_refusal "approve without reason" "--approve QD-8 needs a --reason" --approve QD-8 --fix QD-11
-  expect_refusal "instructions without fix" "only reach the fixer" --no-change QD-8,QD-11 --instructions "x"
+  expect_refusal "instructions without fix" "only reach the fixer" --no-change QD-8,QD-11,QD-12 --instructions "x"
   expect_refusal "key override" "unknown argument '--key'" --fix QD-8,QD-11 --key other
   expect_refusal "skip alias" "unknown argument '--skip'" --skip QD-8,QD-11
   expect_refusal "no decision" "no decision given"
-  out=$(helper --fix QD-8,QD-11); digest=$(digest_of "$out")
-  expect_refusal "stale digest" "the gate changed since the preview" --fix QD-8,QD-11 --instructions "different" --confirm "$digest"
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12); digest=$(digest_of "$out")
+  expect_refusal "stale digest" "the gate changed since the preview" --fix QD-8,QD-11 --no-change QD-12 --instructions "different" --confirm "$digest"
   assert_absent "$HOME_DIR/state/t1.inbox" "no refusal sends anything"
   assert_absent "$HOME_DIR/data/t1/gate-decisions.jsonl" "no refusal records anything"
   assert_no_respond
@@ -431,5 +482,6 @@ test_later_round_reads_the_earlier_decision
 test_command_is_argument_safe
 test_approve_only_maps_to_approve
 test_scalar_gate_form
+test_no_op_requires_explicit_decisions
 test_refusals
 test_refuses_unparked_drifted_or_disagreeing_state

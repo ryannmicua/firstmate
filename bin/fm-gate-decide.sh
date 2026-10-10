@@ -43,7 +43,7 @@
 #
 # Refusals (exit 1, nothing sent or recorded): --yes or -y anywhere in the
 # arguments; an id not in the current round; an id decided twice; a current
-# finding left undecided (only `no-op` findings may be omitted); --approve
+# finding left undecided; --approve
 # without --reason; --instructions with no --fix; no decision at all.
 #
 # Carried-over findings: an id that also appeared in an earlier round of the
@@ -433,7 +433,7 @@ for d in decisions:
     if d["id"] in seen:
         die("finding %s is decided more than once" % d["id"])
     seen.add(d["id"])
-undecided = [i for i in current_ids if i not in seen and gate_action.get(i) != "no-op"]
+undecided = [i for i in current_ids if i not in seen]
 if undecided:
     die("incomplete decision: no decision for %s" % ",".join(undecided))
 fixes = [d for d in decisions if d["action"] == "fix"]
@@ -461,8 +461,6 @@ short = lambda s: (s or "")[:12]
 excerpt = lambda s, n=240: (" ".join(s.split())[:n] + ("..." if len(" ".join(s.split())) > n else ""))
 carried = []
 for fid in current_ids:
-    if fid not in seen:
-        continue
     prior = [h for h in history[:-1] if fid in {f["id"] for f in h["findings"]}]
     if not prior:
         continue
