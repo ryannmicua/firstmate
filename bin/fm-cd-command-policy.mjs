@@ -36,7 +36,7 @@ function persistentCdReason(command, target, context) {
   if (/[\n\r\t]/.test(command)) {
     return `${base} Wrap the whole multi-line command in ( and ) on their own lines, ${SUBSHELL_ALTERNATIVES}.`;
   }
-  if (command.length <= MAX_QUOTED_COMMAND) {
+  if (command.length <= MAX_QUOTED_COMMAND && !command.includes("#")) {
     return `${base} Run it scoped to a subshell instead: (${command}) - ${SUBSHELL_ALTERNATIVES}.`;
   }
   return `${base} Wrap the whole command in ( and ), ${SUBSHELL_ALTERNATIVES}.`;

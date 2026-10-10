@@ -387,6 +387,11 @@ test_refusal_reason_names_the_next_step() {
   assert_contains "$out" '(cd projects/foo && make test)' "a one-line command must be quoted back in a subshell"
   case "$out" in *'already at the home'*) fail "a clone cd must not claim the shell is at the home" ;; esac
 
+  out=$("$dir/bin/fm-cd-pretool-check.sh" --claude --command 'cd projects/foo && make # run' 2>&1); rc=$?
+  expect_code 2 "$rc" "a cd with a trailing comment must still be denied"
+  assert_contains "$out" 'Wrap the whole command in ( and )' "a command with a comment must get the generic subshell advice"
+  case "$out" in *'(cd projects/foo && make # run)'*) fail "a command with a comment must not be quoted into an unparseable subshell" ;; esac
+
   out=$("$dir/bin/fm-cd-pretool-check.sh" --claude --command "cd projects/foo${nl}make test" 2>&1); rc=$?
   expect_code 2 "$rc" "a multi-line cd must still be denied"
   assert_contains "$out" 'multi-line command in ( and ) on their own lines' "a multi-line command must be told to wrap in parentheses"

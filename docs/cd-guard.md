@@ -73,7 +73,7 @@ The reason is short and tells the caller the concrete next step:
 
 - When the `cd` target and the shell's cwd both resolve to the home, it says the shell is already at the home and the `cd` should be dropped.
 - Otherwise a one-line command is quoted back wrapped in a subshell, such as `(cd <dir> && rest)`, and a multi-line command is to be wrapped in `(` and `)` on their own lines.
-- A very long command is not quoted; the reason says to wrap it in a subshell, use `git -C <dir>`, or place an absolute path on the command itself.
+- A very long command, or one containing `#` (whose comment would swallow the closing `)`), is not quoted; the reason says to wrap it in a subshell, use `git -C <dir>`, or place an absolute path on the command itself.
 
 The transport passes the home and the payload's cwd to the policy only to word the reason; the deny decision never depends on them and stays deny-only, with no rewritten command returned to the harness.
 It does not permit `cd /home/project`, because an absolute-path `cd` remains a persistent directory change and is denied.
