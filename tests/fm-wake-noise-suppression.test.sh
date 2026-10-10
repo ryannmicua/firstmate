@@ -412,6 +412,57 @@ test_probe_missing_indexes_and_failed_reads() {
   pass "the probe reads coverage without migration and preserves indeterminate evidence"
 }
 
+test_probe_capture_coverage_matches_presenting_drain() {
+  local dir kind seq row epoch expected out before after
+  for kind in failed captured legacy-before legacy-equal legacy-after; do
+    dir=$(new_home "capture-coverage-$kind" enforce)
+    printf 'done [at=1]: ready for review\n' > "$dir/state/ap1.status"
+    touch -t 202001010000 "$dir/state/ap1.status"
+    if [ "$kind" = failed ]; then
+      mv "$dir/state/ap1.status" "$dir/capture.status"
+      ln -s "$dir/capture.status" "$dir/state/ap1.status"
+    fi
+    seq=$(append "$dir" routine "$STALE_WAKE" "AP-1 handled")
+    row=$(in_home "$dir" "$OUTCOMES" lookup --seqs "$seq")
+    epoch=$(printf '%s\n' "$row" | jq -r '.epoch')
+    expected=1
+    case "$kind" in
+      failed)
+        assert_equals '0 -' "$(printf '%s\n' "$row" | jq -r '"\(.statusEndpoint) \(.statusIdent)"')" \
+          "a failed capture must carry the modern sentinel"
+        rm "$dir/state/ap1.status"
+        mv "$dir/capture.status" "$dir/state/ap1.status"
+        expected=0
+        ;;
+      legacy-*)
+        printf '%s\n' "$row" | jq -c 'del(.statusEndpoint, .statusIdent)' > "$dir/state/branch-outcomes.jsonl"
+        rm "$dir/state/.branch-outcome-index-ready" "$dir/state/.ap1.branch-outcome-index"
+        case "$kind" in
+          legacy-before) epoch=$((epoch - 1)) ;;
+          legacy-equal) expected=0 ;;
+          legacy-after) epoch=$((epoch + 1)); expected=0 ;;
+        esac
+        python3 -c 'import os, sys; os.utime(sys.argv[1], (int(sys.argv[2]), int(sys.argv[2])))' "$dir/state/ap1.status" "$epoch"
+        ;;
+    esac
+    before=$(find "$dir/state" -type f -exec cksum {} + | sort)
+    assert_equals "$expected" "$(probe "$dir")" "$kind: probe coverage must match capture semantics"
+    after=$(find "$dir/state" -type f -exec cksum {} + | sort)
+    assert_equals "$before" "$after" "$kind: the probe must leave persisted state untouched"
+    out=$(in_home "$dir" "$DRAIN" 2>/dev/null)
+    if [ "$expected" -eq 0 ]; then
+      assert_contains "$out" 'STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome)' \
+        "$kind: the presenting drain must surface the uncovered status"
+    else
+      case "$out" in
+        *'STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome)'*)
+          fail "$kind: the presenting drain must preserve established coverage" ;;
+      esac
+    fi
+  done
+  pass "probe and presenting drain agree on modern captures and legacy timestamp coverage"
+}
+
 test_enrichment_has_one_budget() {
   local dir out started i
   dir="$TMP_ROOT/enrichment-budget"
@@ -449,3 +500,5 @@ test_probe_missing_indexes_and_failed_reads
 test_enrichment_has_one_budget
 
 test_identical_protected_summaries_stay_captain
+
+test_probe_capture_coverage_matches_presenting_drain

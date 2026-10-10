@@ -334,7 +334,7 @@ EOF
 }
 
 print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
-  local snapshot=$1 task endpoint ident event event_endpoint line verb key receipt store lock ready coverage_rows= coverage epoch
+  local snapshot=$1 task endpoint ident event event_endpoint line verb key receipt store lock ready coverage_rows= coverage epoch legacy_capture
   local output='' used=0 shown=0 omitted=0 bytes item_bytes=220 global_bytes=4000 rc=0
   [ "$ACTOR" = main ] || return 0
 
@@ -393,10 +393,12 @@ print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
       BRANCH_OUTCOME_INDEX_IDENT=
       coverage=$(printf '%s\n' "$coverage_rows" | jq -sr --arg task "$task" '
         map(select(.task == $task)) | last // empty
-        | [.epoch, (.statusEndpoint // 0), (.statusIdent // "-")] | @tsv') || { rc=1; break; }
+        | [.epoch, (.statusEndpoint // 0), (.statusIdent // "-"),
+           (has("statusEndpoint") and has("statusIdent") | not)] | @tsv') || { rc=1; break; }
       if [ -n "$coverage" ]; then
-        IFS=$'\t' read -r epoch BRANCH_OUTCOME_INDEX_ENDPOINT BRANCH_OUTCOME_INDEX_IDENT <<< "$coverage"
-        if [ "$BRANCH_OUTCOME_INDEX_IDENT" = - ] && [ "$FM_STATUS_SNAPSHOT_EVENT_MTIME" -lt "$epoch" ]; then
+        IFS=$'\t' read -r epoch BRANCH_OUTCOME_INDEX_ENDPOINT BRANCH_OUTCOME_INDEX_IDENT legacy_capture <<< "$coverage"
+        if [ "$legacy_capture" = true ] \
+          && [ "$FM_STATUS_SNAPSHOT_EVENT_MTIME" -lt "$epoch" ]; then
           BRANCH_OUTCOME_INDEX_ENDPOINT=$endpoint
           BRANCH_OUTCOME_INDEX_IDENT=$ident
         fi
