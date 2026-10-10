@@ -24,7 +24,41 @@ make_fakebin() {  # <dir> -> echoes fakebin
   cat > "$fb/no-mistakes" <<'SH'
 #!/usr/bin/env bash
 case "$*" in
-  "axi status") cat "$FM_FAKE_NM_DIR/status.toon" ;;
+  "axi status")
+    if [ -f "$FM_FAKE_NM_DIR/change-mode" ]; then
+      count=$(cat "$FM_FAKE_NM_DIR/status-count" 2>/dev/null || printf 0)
+      count=$((count + 1))
+      printf '%s' "$count" > "$FM_FAKE_NM_DIR/status-count"
+      if [ "$count" = 2 ]; then
+        python3 -I - "$FM_FAKE_NM_DIR" <<'PY'
+import json, sqlite3, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+mode = (root / "change-mode").read_text()
+p = root / "status.toon"
+s = p.read_text()
+if mode == "run":
+    s = s.replace("01TESTRUN0000000000000000A", "01TESTRUN0000000000000000B")
+elif mode == "step":
+    s = s.replace("step: review", "step: test")
+elif mode == "parked":
+    s = s.replace("awaiting_agent: parked 2m", "awaiting_agent: running")
+    s = s.split("gate:", 1)[0]
+elif mode == "head":
+    s += "branch_sync:\n  pipeline:\n    current_head: " + "c" * 40 + "\n"
+elif mode in ("round", "findings"):
+    with sqlite3.connect(root / "state.sqlite") as db:
+        if mode == "round":
+            db.execute("UPDATE step_rounds SET round = 3 WHERE round = 2")
+        else:
+            db.execute("UPDATE step_rounds SET findings_json = ? WHERE round = 2",
+                       (json.dumps({"findings": [{"id": "QD-8"}, {"id": "QD-11"}, {"id": "QD-13"}]}),))
+            s = s.replace("QD-12,info", "QD-13,info")
+p.write_text(s)
+PY
+      fi
+    fi
+    cat "$FM_FAKE_NM_DIR/status.toon" ;;
   "axi") cat "$FM_FAKE_NM_DIR/overview.toon" ;;
   *)
     printf '%s\0' "$@" >> "$FM_FAKE_NM_DIR/other-calls"
@@ -181,16 +215,61 @@ PY
   pass "fm-gate-decide: --confirm sends through fm-send, closes the key, and records the decision"
 }
 
-test_failed_send_records_nothing() {
+test_failed_send_preserves_decision() {
   local out digest rc
   setup_world failed-send
   : > "$HOME_DIR/state/t1.status"
   out=$(helper --fix QD-8,QD-11); digest=$(digest_of "$out")
   out=$(helper --fix QD-8,QD-11 --confirm "$digest" 2>&1); rc=$?
   expect_code 3 "$rc" "a send fm-send refuses (no open decision for the key) exits 3"
-  assert_contains "$out" "nothing was recorded, so a resend is safe" "the failure says a resend is safe"
-  assert_absent "$HOME_DIR/data/t1/gate-decisions.jsonl" "a failed send records nothing"
-  pass "fm-gate-decide: a send fm-send refuses records nothing"
+  assert_contains "$out" "delivery may have occurred" "failure does not guarantee nondelivery"
+  [ -f "$HOME_DIR/data/t1/gate-decisions.jsonl" ] || fail "a failed send preserves the decision"
+  assert_absent "$HOME_DIR/state/t1.inbox" "a pre-delivery refusal sends nothing"
+  pass "fm-gate-decide: a send refusal preserves the attempted decision"
+
+}
+
+test_partial_delivery_preserves_decision() {
+  local out digest rc
+  setup_world partial-send
+  cat > "$FB/tr" <<'SH'
+#!/usr/bin/env bash
+if [ -f "$FM_HOME/state/t1.inbox/001.msg" ] && [ -f "$FM_HOME/state/t1.status" ]; then
+  mv "$FM_HOME/state/t1.status" "$FM_HOME/state/t1.status.saved"
+  mkdir "$FM_HOME/state/t1.status"
+fi
+command -p tr "$@"
+SH
+  chmod +x "$FB/tr"
+  out=$(helper --fix QD-8,QD-11); digest=$(digest_of "$out")
+  out=$(helper --fix QD-8,QD-11 --confirm "$digest" 2>&1); rc=$?
+  expect_code 3 "$rc" "a post-delivery closure failure exits 3"
+  assert_contains "$out" "the answer was delivered" "the real send fails after enqueue"
+  assert_contains "$out" "check the worker inbox and decision closure before any resend" "the failure requires checking delivery"
+  [ -f "$HOME_DIR/state/t1.inbox/001.msg" ] || fail "the decision was delivered"
+  assert_absent "$HOME_DIR/state/t1.inbox/002.msg" "the helper does not resend"
+  python3 -I - "$HOME_DIR/data/t1/gate-decisions.jsonl" <<'PY' || fail "the delivered decision was lost"
+import json, sys
+records = [json.loads(line) for line in open(sys.argv[1])]
+assert len(records) == 1
+assert records[0]["respond"]["findings"] == ["QD-8", "QD-11"]
+PY
+  pass "fm-gate-decide: partial delivery retains the decision without inviting duplication"
+}
+
+test_final_verification_refuses_changes() {
+  local axis out digest rc
+  for axis in run step parked round findings head; do
+    setup_world "final-$axis"
+    out=$(helper --fix QD-8,QD-11); digest=$(digest_of "$out")
+    printf '%s' "$axis" > "$NM_DIR/change-mode"
+    out=$(helper --fix QD-8,QD-11 --confirm "$digest" 2>&1); rc=$?
+    [ "$rc" -ne 0 ] || fail "a $axis change immediately before send must refuse: $out"
+    assert_absent "$HOME_DIR/state/t1.inbox" "a $axis change sends nothing"
+    assert_absent "$HOME_DIR/data/t1/gate-decisions.jsonl" "a $axis change records nothing"
+    assert_no_respond
+  done
+  pass "fm-gate-decide: final verification refuses run, step, parked state, round, finding, and head changes"
 }
 
 test_later_round_reads_the_earlier_decision() {
@@ -309,6 +388,8 @@ test_refusals() {
   expect_refusal "incomplete" "incomplete decision: no decision for QD-11" --fix QD-8
   expect_refusal "approve without reason" "--approve QD-8 needs a --reason" --approve QD-8 --fix QD-11
   expect_refusal "instructions without fix" "only reach the fixer" --no-change QD-8,QD-11 --instructions "x"
+  expect_refusal "key override" "unknown argument '--key'" --fix QD-8,QD-11 --key other
+  expect_refusal "skip alias" "unknown argument '--skip'" --skip QD-8,QD-11
   expect_refusal "no decision" "no decision given"
   out=$(helper --fix QD-8,QD-11); digest=$(digest_of "$out")
   expect_refusal "stale digest" "the gate changed since the preview" --fix QD-8,QD-11 --instructions "different" --confirm "$digest"
@@ -343,7 +424,9 @@ EOF
 
 test_preview_is_read_only_and_annotates_carried_ids
 test_confirm_sends_closes_and_records
-test_failed_send_records_nothing
+test_failed_send_preserves_decision
+test_partial_delivery_preserves_decision
+test_final_verification_refuses_changes
 test_later_round_reads_the_earlier_decision
 test_command_is_argument_safe
 test_approve_only_maps_to_approve

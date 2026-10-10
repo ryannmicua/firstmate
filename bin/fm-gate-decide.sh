@@ -5,13 +5,11 @@
 # Usage:
 #   fm-gate-decide.sh <task-id> [--fix <ids>]... [--no-change <ids> [--reason <text>]]...
 #                     [--approve <ids> --reason <text>]... [--instructions <text>]
-#                     [--key <decision-key>] [--confirm <digest>]
+#                     [--confirm <digest>]
 #   <ids> is a comma-separated list of finding ids from the CURRENT gate.
-#   --skip is an alias of --no-change. A --reason applies to the --approve or
-#   --no-change group immediately before it, and every --approve needs one.
+#   A --reason applies to the --approve or --no-change group immediately
+#   before it, and every --approve needs one.
 #   --instructions is firstmate's guidance for the findings being fixed.
-#   --key overrides the default decision key nm-<run>-<step>, the key the
-#   worker's brief tells it to open the needs-decision record with.
 #
 # Firstmate still makes every decision and the worker still drives the
 # pipeline: this script never runs `no-mistakes axi respond` itself. It only
@@ -23,6 +21,8 @@
 # everything, recomposes the steer, and sends it only when the digest of the
 # fresh steer still equals the previewed one, so a gate that moved between
 # preview and send is refused rather than answered with a stale decision.
+# The run, parked step, round, finding IDs/actions, and pipeline head are read
+# again and compared immediately before recording and attempting delivery.
 #
 # Resolution (read-only, bin/fm-nm-run-lib.sh owns the attribution rules):
 #   - the task's worktree from state/<task>.meta and its checked-out branch;
@@ -66,18 +66,18 @@
 # one fixed template, and is sent through fm-send.sh with --resolve-key for the
 # decision key, so the worker's open decision record closes at answer time.
 #
-# Durable record: after fm-send confirms delivery, one JSON line (schema
+# Durable record: before attempting delivery, one JSON line (schema
 # fm-gate-decision.v1: task, run, step, round, key, pipeline head, per-finding
 # decisions, firstmate's instructions, the respond arguments, the command, the
 # digest) is appended to <data>/<task>/gate-decisions.jsonl, where later rounds
-# read it back as the earlier decision.
+# read it back as the earlier decision, not as proof of delivery.
 #
 # Environment: FM_HOME must be set explicitly, as fm-send.sh requires.
 # FM_STATE_OVERRIDE and FM_DATA_OVERRIDE relocate state/ and data/.
-# FM_GATE_DECIDE_NM_TIMEOUT bounds each no-mistakes read (default 20 seconds).
+# Each no-mistakes CLI read has a fixed 20-second timeout.
 # Exit: 0 preview printed or steer sent and recorded; 1 refused or unresolved;
-# 2 usage; 3 fm-send failed (nothing recorded; resend is safe); 4 steer sent
-# but the durable record append failed (do not resend).
+# 2 usage; 3 fm-send failed (delivery uncertain; do not resend without checking);
+# 4 durable record append failed (nothing sent).
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -85,7 +85,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
 
 usage() {
-  sed -n '4,15p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '4,13p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 die() {
@@ -105,7 +105,6 @@ ORIG_ARGS=("$@")
 DECISIONS=()   # "<action>"$'\t'"<id>" entries; reasons attach per group
 REASONS=()     # parallel to DECISIONS
 INSTRUCTIONS=''
-KEY=''
 CONFIRM=''
 last_group_start=-1
 last_group_action=''
@@ -137,7 +136,7 @@ while [ $# -gt 0 ]; do
     --yes|-y|--yes=*)
       die "--yes is banned fleet-wide: it auto-resolves gates, including ask-user findings, without a decision" ;;
     --fix) need_value "$1" $#; add_group fix "$2"; shift 2 ;;
-    --no-change|--skip) need_value "$1" $#; add_group no-change "$2"; shift 2 ;;
+    --no-change) need_value "$1" $#; add_group no-change "$2"; shift 2 ;;
     --approve) need_value "$1" $#; add_group approve "$2"; shift 2 ;;
     --reason)
       need_value "$1" $#
@@ -155,7 +154,6 @@ while [ $# -gt 0 ]; do
       need_value "$1" $#
       [ -z "$INSTRUCTIONS" ] || { echo "error: --instructions given twice" >&2; exit 2; }
       INSTRUCTIONS=$2; shift 2 ;;
-    --key) need_value "$1" $#; KEY=$2; shift 2 ;;
     --confirm) need_value "$1" $#; CONFIRM=$2; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown argument '$1'" >&2; usage >&2; exit 2 ;;
@@ -175,9 +173,6 @@ while [ "$i" -lt "${#DECISIONS[@]}" ]; do
   esac
   i=$((i + 1))
 done
-if [ -n "$KEY" ]; then
-  case "$KEY" in *[!A-Za-z0-9._-]*) echo "error: invalid decision key '$KEY'" >&2; exit 2 ;; esac
-fi
 case "$CONFIRM" in ''|[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;; *) echo "error: --confirm takes the digest a preview printed" >&2; exit 2 ;; esac
 
 if [ -z "${FM_HOME:-}" ]; then
@@ -186,13 +181,16 @@ if [ -z "${FM_HOME:-}" ]; then
 fi
 STATE=${FM_STATE_OVERRIDE:-$FM_HOME/state}
 DATA=${FM_DATA_OVERRIDE:-$FM_HOME/data}
-NM_TIMEOUT=${FM_GATE_DECIDE_NM_TIMEOUT:-20}
-case "$NM_TIMEOUT" in ''|*[!0-9]*) NM_TIMEOUT=20 ;; esac
+NM_TIMEOUT=20
 command -v python3 >/dev/null 2>&1 || die "python3 is required to read the gate and its round history"
 command -v no-mistakes >/dev/null 2>&1 || die "no-mistakes is not on PATH"
 
 # --- resolve the task's run and parked gate (read-only) ---------------------
 
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/fm-gate-decide.XXXXXX") || die "cannot create a scratch directory"
+trap 'rm -rf "$WORK"' EXIT
+
+read_gate() {
 META="$STATE/$TASK.meta"
 [ -f "$META" ] || die "no metadata for task '$TASK' at $META"
 meta_value() {  # <key>
@@ -206,12 +204,12 @@ META_BRANCH=$(meta_value branch)
 [ -z "$META_BRANCH" ] || [ "$META_BRANCH" = "$BRANCH" ] \
   || die "worktree branch '$BRANCH' does not match the recorded ship branch '$META_BRANCH'"
 
+OVERVIEW=$(fm_nm_run_checked "$WT" "$NM_TIMEOUT" axi) || die "no-mistakes axi overview failed or timed out in $WT"
+CHOICE=$(fm_nm_select_run "$BRANCH" "$OVERVIEW" "$WT" "$NM_TIMEOUT")
 STATUS_OUT=$(fm_nm_run_checked "$WT" "$NM_TIMEOUT" axi status) || die "no-mistakes axi status failed or timed out in $WT"
 case "$STATUS_OUT" in
   error:*|*$'\n'error:*) die "no-mistakes axi status reported: $(printf '%s\n' "$STATUS_OUT" | sed -n 's/^error: //p' | head -1)" ;;
 esac
-OVERVIEW=$(fm_nm_run_checked "$WT" "$NM_TIMEOUT" axi) || die "no-mistakes axi overview failed or timed out in $WT"
-CHOICE=$(fm_nm_select_run "$BRANCH" "$OVERVIEW" "$WT" "$NM_TIMEOUT")
 case "$CHOICE" in
   selected\|*) SELECTED_ID=$(printf '%s' "$CHOICE" | cut -d'|' -f2) ;;
   absent) die "no no-mistakes run exists for branch '$BRANCH'" ;;
@@ -235,8 +233,6 @@ case "$PIPELINE_HEAD" in *[!0-9a-fA-F]*|'') die "run $RUN_ID reports no readable
 
 RECORD="$DATA/$TASK/gate-decisions.jsonl"
 DB=$(fm_nm_state_db "$WT")
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/fm-gate-decide.XXXXXX") || die "cannot create a scratch directory"
-trap 'rm -rf "$WORK"' EXIT
 printf '%s' "$STATUS_OUT" > "$WORK/status.toon"
 : > "$WORK/decisions.bin"
 i=0
@@ -248,7 +244,7 @@ done
 
 # --- compose (deterministic; refuses on any inconsistency) ------------------
 
-python3 -I - "$WORK" "$DB" "$RUN_ID" "$RECORD" "$TASK" "$KEY" "$PIPELINE_HEAD" "$INSTRUCTIONS" <<'PY' || exit 1
+python3 -I - "$WORK" "$DB" "$RUN_ID" "$RECORD" "$TASK" "$PIPELINE_HEAD" "$INSTRUCTIONS" "$1" <<'PY' || exit 1
 import hashlib
 import json
 import os
@@ -258,7 +254,7 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
-work, db_path, run_id, record_path, task, key, head, instructions = sys.argv[1:]
+work, db_path, run_id, record_path, task, head, instructions, mode = sys.argv[1:]
 
 
 def die(msg):
@@ -418,6 +414,12 @@ elif sorted(f["id"] for f in gate) != sorted(db_ids):
 current_ids = [f["id"] for f in gate]
 gate_action = {f["id"]: f["action"] for f in gate}
 
+snapshot = {"run": run_id, "step": step, "round": current["round"],
+            "findings": sorted(gate, key=lambda f: f["id"]), "pipeline_head": head}
+Path(work, "snapshot.json").write_text(json.dumps(snapshot, sort_keys=True))
+if mode == "verify":
+    sys.exit(0)
+
 # Validate the decision against the current round.
 raw = Path(work, "decisions.bin").read_bytes().split(b"\0")[:-1]
 decisions = []
@@ -518,7 +520,7 @@ else:
 command = " ".join(a if re.fullmatch(r"[A-Za-z0-9_.,/=:+-]+", a) else sq(a) for a in argv)
 
 round_no = current["round"]
-key = key or "nm-%s-%s" % (run_id, step)
+key = "nm-%s-%s" % (run_id, step)
 msg = ["Gate decision from firstmate for no-mistakes run %s, step %s, round %s, pipeline head %s."
        % (run_id, step, round_no, head),
        "This answers decision key %s." % key, "", "Decisions:"]
@@ -541,6 +543,9 @@ Path(work, "key").write_text(key)
 Path(work, "digest").write_text(digest)
 Path(work, "record.json").write_text(json.dumps(record, sort_keys=True) + "\n")
 PY
+}
+
+read_gate compose
 
 MESSAGE=$(cat "$WORK/message.txt")
 DIGEST=$(cat "$WORK/digest")
@@ -558,13 +563,18 @@ fi
 [ "$CONFIRM" = "$DIGEST" ] \
   || die "the gate changed since the preview (digest $CONFIRM, now $DIGEST); preview again before sending"
 
-FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-send.sh" "$TASK" --resolve-key "$KEY" "$MESSAGE" || {
-  echo "error: fm-send did not deliver the decision; nothing was recorded, so a resend is safe" >&2
-  exit 3
-}
+cp "$WORK/snapshot.json" "$WORK/expected-snapshot.json" || die "cannot retain the gate snapshot"
+read_gate verify
+cmp -s "$WORK/expected-snapshot.json" "$WORK/snapshot.json" \
+  || die "the gate changed immediately before delivery; preview again before sending"
+
 if ! { mkdir -p "$DATA/$TASK" && cat "$WORK/record.json" >> "$RECORD"; }; then
-  echo "error: the decision was sent but could not be recorded in $RECORD; do not resend" >&2
+  echo "error: the decision could not be recorded in $RECORD; nothing was sent" >&2
   exit 4
 fi
+FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-send.sh" "$TASK" --resolve-key "$KEY" "$MESSAGE" || {
+  echo "error: fm-send failed; the decision is preserved in $RECORD, but delivery may have occurred; check the worker inbox and decision closure before any resend" >&2
+  exit 3
+}
 printf 'sent: decision for task %s, run %s (key %s, digest %s); recorded in %s\n' \
   "$TASK" "$RUN_ID" "$KEY" "$DIGEST" "$RECORD"
