@@ -22,7 +22,7 @@
 # fresh steer still equals the previewed one, so a gate that moved between
 # preview and send is refused rather than answered with a stale decision.
 # The run, parked step, round, finding IDs/actions, and pipeline head are read
-# again and compared immediately before recording and attempting delivery.
+# again and compared immediately before attempting delivery.
 #
 # Resolution (read-only, bin/fm-nm-run-lib.sh owns the attribution rules):
 #   - the task's worktree from state/<task>.meta and its checked-out branch;
@@ -66,18 +66,24 @@
 # one fixed template, and is sent through fm-send.sh with --resolve-key for the
 # decision key, so the worker's open decision record closes at answer time.
 #
-# Durable record: before attempting delivery, one JSON line (schema
+# Durable record: only after fm-send.sh succeeds, one JSON line (schema
 # fm-gate-decision.v1: task, run, step, round, key, pipeline head, per-finding
 # decisions, firstmate's instructions, the respond arguments, the command, the
-# digest) is appended to <data>/<task>/gate-decisions.jsonl, where later rounds
-# read it back as the earlier decision, not as proof of delivery.
+# digest, and delivery "delivered") is appended to
+# <data>/<task>/gate-decisions.jsonl, where later rounds read it back as the
+# earlier decision. When fm-send.sh fails, the record is appended with delivery
+# "delivered-unconfirmed" only if the exact steer body is in the task's
+# steering inbox (state/<task>.inbox/*.msg or handled/); otherwise nothing is
+# recorded, so every fm-send refusal leaves no record.
 #
 # Environment: FM_HOME must be set explicitly, as fm-send.sh requires.
 # FM_STATE_OVERRIDE and FM_DATA_OVERRIDE relocate state/ and data/.
 # Each no-mistakes CLI read has a fixed 20-second timeout.
 # Exit: 0 preview printed or steer sent and recorded; 1 refused or unresolved;
-# 2 usage; 3 fm-send failed (delivery uncertain; do not resend without checking);
-# 4 durable record append failed (nothing sent).
+# 2 usage; 3 refused as a gate agent (bin/fm-gate-refuse-lib.sh); 4 fm-send
+# failed and the steer is not in the inbox (nothing sent or recorded; a resend
+# is safe); 5 the steer reached the inbox but fm-send or the record append
+# failed (do not resend).
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -457,7 +463,8 @@ if os.path.isfile(record_path):
             for d in rec.get("decisions", []):
                 earlier.setdefault(d.get("id"), []).append(
                     {"round": rec.get("round"), "action": d.get("action"), "reason": d.get("reason", ""),
-                     "instructions": rec.get("instructions", ""), "head": rec.get("pipeline_head", "")})
+                     "instructions": rec.get("instructions", ""), "head": rec.get("pipeline_head", ""),
+                     "unconfirmed": rec.get("delivery") == "delivered-unconfirmed"})
 
 short = lambda s: (s or "")[:12]
 excerpt = lambda s, n=240: (" ".join(s.split())[:n] + ("..." if len(" ".join(s.split())) > n else ""))
@@ -480,7 +487,8 @@ for fid in current_ids:
         said = e["action"] + (": " + excerpt(e["reason"], 160) if e["reason"] else "")
         if e["action"] == "fix" and e["instructions"]:
             said += "; instructions: " + excerpt(e["instructions"])
-        parts.append("round %s firstmate decision at head %s: %s" % (e["round"], short(e["head"]), said))
+        parts.append("round %s firstmate decision%s at head %s: %s"
+                     % (e["round"], " (delivered-unconfirmed)" if e["unconfirmed"] else "", short(e["head"]), said))
     carried.append("- %s: %s" % (fid, "; ".join(parts)))
 
 
@@ -570,13 +578,36 @@ read_gate verify
 cmp -s "$WORK/expected-snapshot.json" "$WORK/snapshot.json" \
   || die "the gate changed immediately before delivery; preview again before sending"
 
-if ! { mkdir -p "$DATA/$TASK" && cat "$WORK/record.json" >> "$RECORD"; }; then
-  echo "error: the decision could not be recorded in $RECORD; nothing was sent" >&2
-  exit 4
+steer_in_inbox() {
+  local f
+  for f in "$STATE/$TASK.inbox"/*.msg "$STATE/$TASK.inbox/handled"/*.msg; do
+    [ -f "$f" ] || continue
+    sed '1,/^--$/d' "$f" | cmp -s - "$WORK/message.txt" && return 0
+  done
+  return 1
+}
+
+append_record() {  # <delivery>
+  python3 -I -c 'import json, sys; r = json.load(open(sys.argv[1])); r["delivery"] = sys.argv[2]; print(json.dumps(r, sort_keys=True))' \
+    "$WORK/record.json" "$1" > "$WORK/record.line" \
+    && mkdir -p "$DATA/$TASK" && cat "$WORK/record.line" >> "$RECORD"
+}
+
+if ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-send.sh" "$TASK" --resolve-key "$KEY" "$MESSAGE"; then
+  if ! steer_in_inbox; then
+    echo "error: fm-send failed and the steer is not in the worker inbox; nothing was sent or recorded, so a resend is safe" >&2
+    exit 4
+  fi
+  if append_record delivered-unconfirmed; then
+    echo "error: fm-send failed after the steer reached the worker inbox; the decision is recorded as delivered-unconfirmed in $RECORD; do not resend - check the decision key's closure instead" >&2
+  else
+    echo "error: fm-send failed after the steer reached the worker inbox, and the decision could not be recorded in $RECORD; do not resend - check the decision key's closure instead" >&2
+  fi
+  exit 5
 fi
-FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-send.sh" "$TASK" --resolve-key "$KEY" "$MESSAGE" || {
-  echo "error: fm-send failed; the decision is preserved in $RECORD, but delivery may have occurred; check the worker inbox and decision closure before any resend" >&2
-  exit 3
+append_record delivered || {
+  echo "error: the steer was sent, but the decision could not be recorded in $RECORD; do not resend" >&2
+  exit 5
 }
 printf 'sent: decision for task %s, run %s (key %s, digest %s); recorded in %s\n' \
   "$TASK" "$RUN_ID" "$KEY" "$DIGEST" "$RECORD"

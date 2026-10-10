@@ -282,18 +282,17 @@ test_gate_authority_before_recording() {
   pass "fm-gate-decide: authority refusal precedes home mutation and preserves marked labs"
 }
 
-test_failed_send_preserves_decision() {
+test_refused_send_records_nothing() {
   local out digest rc
   setup_world failed-send
   : > "$HOME_DIR/state/t1.status"
   out=$(helper --fix QD-8,QD-11 --no-change QD-12); digest=$(digest_of "$out")
   out=$(helper --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1); rc=$?
-  expect_code 3 "$rc" "a send fm-send refuses (no open decision for the key) exits 3"
-  assert_contains "$out" "delivery may have occurred" "failure does not guarantee nondelivery"
-  [ -f "$HOME_DIR/data/t1/gate-decisions.jsonl" ] || fail "a failed send preserves the decision"
+  expect_code 4 "$rc" "a send fm-send refuses (no open decision for the key) exits 4"
+  assert_contains "$out" "a resend is safe" "a refusal before enqueue says a resend is safe"
+  assert_absent "$HOME_DIR/data/t1/gate-decisions.jsonl" "a refused send records nothing"
   assert_absent "$HOME_DIR/state/t1.inbox" "a pre-delivery refusal sends nothing"
-  pass "fm-gate-decide: a send refusal preserves the attempted decision"
-
+  pass "fm-gate-decide: a send refusal leaves no decision record"
 }
 
 test_partial_delivery_preserves_decision() {
@@ -310,9 +309,10 @@ SH
   chmod +x "$FB/tr"
   out=$(helper --fix QD-8,QD-11 --no-change QD-12); digest=$(digest_of "$out")
   out=$(helper --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1); rc=$?
-  expect_code 3 "$rc" "a post-delivery closure failure exits 3"
+  expect_code 5 "$rc" "a post-delivery closure failure exits 5"
   assert_contains "$out" "the answer was delivered" "the real send fails after enqueue"
-  assert_contains "$out" "check the worker inbox and decision closure before any resend" "the failure requires checking delivery"
+  assert_contains "$out" "recorded as delivered-unconfirmed" "the enqueued steer is recorded as unconfirmed"
+  assert_contains "$out" "do not resend" "the failure forbids a resend"
   [ -f "$HOME_DIR/state/t1.inbox/001.msg" ] || fail "the decision was delivered"
   assert_absent "$HOME_DIR/state/t1.inbox/002.msg" "the helper does not resend"
   python3 -I - "$HOME_DIR/data/t1/gate-decisions.jsonl" <<'PY' || fail "the delivered decision was lost"
@@ -320,6 +320,7 @@ import json, sys
 records = [json.loads(line) for line in open(sys.argv[1])]
 assert len(records) == 1
 assert records[0]["respond"]["findings"] == ["QD-8", "QD-11"]
+assert records[0]["delivery"] == "delivered-unconfirmed"
 PY
   pass "fm-gate-decide: partial delivery retains the decision without inviting duplication"
 }
@@ -546,7 +547,7 @@ EOF
 test_preview_is_read_only_and_annotates_carried_ids
 test_confirm_sends_closes_and_records
 test_gate_authority_before_recording
-test_failed_send_preserves_decision
+test_refused_send_records_nothing
 test_partial_delivery_preserves_decision
 test_final_verification_refuses_changes
 test_later_round_reads_the_earlier_decision
