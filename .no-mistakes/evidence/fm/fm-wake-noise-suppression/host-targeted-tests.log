@@ -1,0 +1,2 @@
+not ok - empty close: the host did not suppress it: 1791598983	start	gen=host-3258846-1791598983	primary=claude
+1791598985	pass-through	attended	main-only	check: rearm-resurface

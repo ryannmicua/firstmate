@@ -1,0 +1,183 @@
+
+=== Repeat reports in enforce mode ===
+$ FM_HOME=<enforce> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 200s) --summary PR remains under review
+1
+exit: 0
+$ FM_HOME=<enforce> bin/fm-branch-outcome.sh lookup --seqs 1
+{"seq":1,"epoch":1791599156,"task":"labtask","wake":"stale: labtask (idle 200s)","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637945:2026-10-10 10:25:56.343199291 +0800"}
+exit: 0
+$ FM_HOME=<enforce> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary PR remains under review
+2
+stderr: note: outcome 2 repeats captain outcome 1 with the task's status and PR state unchanged, so it was stored as routine
+exit: 0
+$ FM_HOME=<enforce> bin/fm-branch-outcome.sh lookup --seqs 2
+{"seq":2,"epoch":1791599156,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"routine","summary":"Repeat of captain outcome 1 (status and PR state unchanged), not raised to main again: PR remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637945:2026-10-10 10:25:56.343199291 +0800"}
+exit: 0
+TRIAGE: [2026-10-10T10:25:56+0800] suppressed repeat captain outcome 2 for labtask: same as captain outcome 1 with status and PR state unchanged; stored as routine
+
+
+=== Repeat reports in shadow mode ===
+$ FM_HOME=<shadow> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 200s) --summary PR remains under review
+1
+exit: 0
+$ FM_HOME=<shadow> bin/fm-branch-outcome.sh lookup --seqs 1
+{"seq":1,"epoch":1791599157,"task":"labtask","wake":"stale: labtask (idle 200s)","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637978:2026-10-10 10:25:56.935201752 +0800"}
+exit: 0
+$ FM_HOME=<shadow> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary PR remains under review
+2
+exit: 0
+$ FM_HOME=<shadow> bin/fm-branch-outcome.sh lookup --seqs 2
+{"seq":2,"epoch":1791599157,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637978:2026-10-10 10:25:56.935201752 +0800"}
+exit: 0
+TRIAGE: [2026-10-10T10:25:57+0800] would suppress repeat captain outcome 2 for labtask (shadow mode): same as captain outcome 1 with status and PR state unchanged
+
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 200s) --summary PR remains under review
+1
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 1
+{"seq":1,"epoch":1791599157,"task":"labtask","wake":"stale: labtask (idle 200s)","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Preserve new summary ===
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary CI is queued
+2
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 2
+{"seq":2,"epoch":1791599157,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"captain","summary":"CI is queued","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Preserve escalation ===
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary escalation 1: needs inspection
+3
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 3
+{"seq":3,"epoch":1791599158,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"captain","summary":"escalation 1: needs inspection","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Preserve decision ===
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary waiting on your decision
+4
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 4
+{"seq":4,"epoch":1791599158,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"captain","summary":"waiting on your decision","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Preserve heartbeat ===
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake heartbeat --summary PR remains under review
+5
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 5
+{"seq":5,"epoch":1791599158,"task":"labtask","wake":"heartbeat","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Preserve changed PR ===
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary PR remains under review
+6
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 6
+{"seq":6,"epoch":1791599159,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Preserve new status ===
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary PR remains under review
+7
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 7
+{"seq":7,"epoch":1791599159,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":43,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Preserve away ===
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary PR remains under review
+8
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 8
+{"seq":8,"epoch":1791599159,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":43,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Preserve unreadable metadata ===
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 900s) --summary PR remains under review
+9
+stderr: warning: outcome 9 was stored but its repeat-suppression record could not be written
+exit: 0
+$ FM_HOME=<adversarial> bin/fm-branch-outcome.sh lookup --seqs 9
+{"seq":9,"epoch":1791599159,"task":"labtask","wake":"stale: labtask (idle 900s)","verdict":"captain","summary":"PR remains under review","silent":false,"statusEndpoint":43,"statusIdent":"strong:2049:7637996:2026-10-10 10:25:57.541204272 +0800"}
+exit: 0
+
+=== Empty read-only probe ===
+$ FM_HOME=<probe> bin/fm-wake-drain.sh --would-present
+
+exit: 1
+
+=== Unread status remains actionable without consumption ===
+$ FM_HOME=<probe> bin/fm-wake-drain.sh --would-present
+would present: unread-status
+exit: 0
+$ FM_HOME=<probe> bin/fm-wake-drain.sh --would-present
+would present: unread-status
+exit: 0
+
+=== Open decision remains actionable ===
+$ FM_HOME=<probe> bin/fm-wake-drain.sh --would-present
+would present: open-decisions
+exit: 0
+
+=== Unreadable status is indeterminate ===
+$ FM_HOME=<probe> bin/fm-wake-drain.sh --would-present
+
+exit: 2
+$ FM_HOME=<coverage> bin/fm-branch-outcome.sh append --task labtask --verdict routine --summary Handled
+1
+exit: 0
+
+=== Missing indexes are read without migration ===
+$ FM_HOME=<coverage> bin/fm-wake-drain.sh --would-present
+
+exit: 1
+$ FM_HOME=<failed-capture> bin/fm-branch-outcome.sh append --task labtask --verdict routine --summary Handled
+1
+exit: 0
+
+=== Recovery after failed modern capture stays actionable ===
+$ FM_HOME=<failed-capture> bin/fm-wake-drain.sh --would-present
+would present: status-outcome-backstop
+exit: 0
+$ FM_HOME=<failed-capture> bin/fm-wake-drain.sh
+STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome):
+labtask done [at=1]: ready
+BRANCH OUTCOMES, ROUTINE (handled by the supervision session since your last drain; for your awareness, nothing to acknowledge):
+[seq 1] labtask: Handled
+stderr: ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+exit: 0
+
+=== Current state printed beside captain outcome ===
+$ FM_HOME=<current-state> bin/fm-branch-outcome.sh append --task labtask --verdict captain --wake stale: labtask (idle 200s) --summary Lab task needs review
+1
+exit: 0
+$ FM_HOME=<current-state> bin/fm-branch-outcome.sh lookup --seqs 1
+{"seq":1,"epoch":1791599166,"task":"labtask","wake":"stale: labtask (idle 200s)","verdict":"captain","summary":"Lab task needs review","silent":false,"statusEndpoint":0,"statusIdent":"-"}
+exit: 0
+$ FM_HOME=<current-state> bin/fm-wake-drain.sh
+BRANCH OUTCOMES (captain outcomes the supervision session recorded for you, one line per task, oldest first; each says what was true when it was recorded and is followed by the task's current state from bin/fm-crew-state.sh, so check the task's current state first, including its still-open decisions listed above under OPEN DECISIONS, and sort them into still open and already settled, such as a decision since answered, a PR since merged, or a task since finished - process the still-open ones as firstmate: tell the captain, land or merge what is ready, answer or escalate a decision, or act on a blocker; your reply to the captain covers only those, as if the settled ones had never been listed, and a settled one needs only the acknowledgement):
+[seq 1, recorded 0m ago] labtask: Lab task needs review
+  current: state: unknown · source: none · no metadata for labtask
+BRANCH OUTCOMES: after processing them run bin/fm-branch-outcome.sh mark-processed --through 1; until then every drain presents them again
+exit: 0
+
+=== Answered status with held backlog still presents divergence ===
+$ FM_HOME=<divergence> bin/fm-captain-hold.sh hold question --title Choose export format --reason choose format
+question
+exit: 0
+$ FM_HOME=<divergence> bin/fm-captain-hold.sh diverged
+question	question	question	Choose export format
+exit: 0
+$ FM_HOME=<divergence> bin/fm-wake-drain.sh --would-present
+would present: record-divergence
+exit: 0
+
+All live CLI assertions passed.

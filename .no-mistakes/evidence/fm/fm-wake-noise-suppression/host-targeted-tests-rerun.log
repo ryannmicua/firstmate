@@ -1,0 +1,3 @@
+ok - host: an empty main-only close is retired and the host keeps parking, while a later decision close still reaches main
+ok - host: in shadow mode an empty main-only close still reaches main and is only logged
+ok - host: a host outside the session-lock owner stands down without arming

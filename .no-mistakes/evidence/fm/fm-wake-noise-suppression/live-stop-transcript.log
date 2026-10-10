@@ -1,0 +1,33 @@
+Real Claude normal login in a private fm-lab tmux session; host-off and suppression flags in disposable lab. Temporary supported secondmate-home marker in gate code root made primary hooks applicable without relocating scripts or overriding fleet paths.
+
+lock.out:
+lock acquired: harness pid 3690773
+
+state/.claude-autoarm-epoch:
+epoch=1 owner_pid=3700474 outcome=arming updated_at=1791599475
+linux-starttime=122212793 cmdline-hex=62617368002f686f6d652f72676d2f2e6e6f2d6d697374616b65732f776f726b74726565732f6666356531376236663564652f30314d34485242424d47424d32434a51384242444432325a454e2f62696e2f666d2d636c617564652d73746f702d6175746f61726d2e736800
+
+state/.watcher-down:
+acked:downtime:live.stop.1
+
+state/.watch-triage.log:
+[2026-10-10T10:31:16+0800] suppressed empty wake (watcher-resurface): check: rearm-resurface
+
+Actual Stop-owned watcher alive after empty recovery: 3701131
+
+Injected keyed needs-decision status; real Stop-owned watcher delivered it, then the next Stop firing rearmed:
+
+state/.watch-deliveries.log:
+3701131	linux-starttime=122212835 cmdline-hex=62617368002f686f6d652f72676d2f2e6e6f2d6d697374616b65732f776f726b74726565732f6666356531376236663564652f30314d34485242424d47424d32434a51384242444432325a454e2f62696e2f666d2d77617463682e736800	signal: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HRBBMGBM2CJQ8BBDD22ZEN/.l/state/labtask.status
+
+state/.watch-cycle-exits.log:
+arm_pid=3701048	watcher_pid=3701131	origin=started	started_at=1791599475	ended_at=1791599499	exit_code=0	signal=none	reason=actionable-signal	beacon_age=2	lock_before=pid:3701131|identity:linux-starttime=122212835 cmdline-hex=62617368002f686f6d652f72676d2f2e6e6f2d6d697374616b65732f776f726b74726565732f6666356531376236663564652f30314d34485242424d47424d32434a51384242444432325a454e2f62696e2f666d2d77617463682e736800	lock_after=pid:none|identity:none	successor=started:3724969
+
+state/.claude-autoarm-epoch:
+epoch=2 owner_pid=3743388 outcome=arming updated_at=1791599520
+linux-starttime=122217326 cmdline-hex=62617368002f686f6d652f72676d2f2e6e6f2d6d697374616b65732f776f726b74726565732f6666356531376236663564652f30314d34485242424d47424d32434a51384242444432325a454e2f62696e2f666d2d636c617564652d73746f702d6175746f61726d2e736800
+
+state/.watcher-down:
+acked:handling:3701131.1791599499.EiBOlN
+
+state/.wake-queue:

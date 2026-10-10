@@ -1,0 +1,42 @@
+Real Claude CLI launched as session command on private fm-lab tmux socket, 120x36 terminal. Interactive attempt stopped at workspace trust; non-interactive normal login used without editing trust.
+
+lock.out:
+lock acquired: harness pid 3378282
+
+live-host.out:
+watcher: started pid=3384557 (beacon fresh)
+
+state/.watch-triage.log:
+[2026-10-10T10:25:22+0800] suppressed empty wake (watcher-resurface): check: rearm-resurface
+
+state/.supervision-host.log:
+1791599120	start	gen=host-3383898-1791599120	primary=claude
+
+state/.watcher-down:
+acked:downtime:live.1.abc
+
+Watcher alive before decision: 3384557
+
+Injected actual keyed needs-decision status, then observed real host main-only pass-through:
+
+live-host.out:
+watcher: started pid=3384557 (beacon fresh)
+signal: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HRBBMGBM2CJQ8BBDD22ZEN/.l/state/labtask.status
+
+state/.supervision-host.log:
+1791599120	start	gen=host-3383898-1791599120	primary=claude
+1791599214	pass-through	attended	main-only	signal: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HRBBMGBM2CJQ8BBDD22ZEN/.l/state/labtask.status
+
+state/.wake-queue:
+1791599212	1	signal	labtask.status	needs-decision: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HRBBMGBM2CJQ8BBDD22ZEN/.l/state/labtask.status
+1791599212	2	signal	labtask.status	needs-decision: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HRBBMGBM2CJQ8BBDD22ZEN/.l/state/labtask.status
+
+state/.watch-triage.log:
+[2026-10-10T10:25:22+0800] suppressed empty wake (watcher-resurface): check: rearm-resurface
+
+Real primary output:
+Captain, I ran `bash .l/live-host.sh` once, with the 120-second timeout. It printed nothing and finished on its own instead of blocking until you stopped it. It didn't hit the timeout, but it may have exited early, so it's worth checking.
+
+The tool didn't report an exit status, so I can't tell whether it succeeded or failed. I also can't confirm from here whether the supervision host actually ran. Your lab logs or state should show whether it took the lock and started the host.
+
+I didn't run anything else or change any files.

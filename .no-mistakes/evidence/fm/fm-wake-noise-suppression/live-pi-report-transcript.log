@@ -1,0 +1,47 @@
+Real Pi 0.87.1 on private fm-lab socket; session-only --approve; actual tracked branch extension, actual provider/model, actual outcome store. A disposable probe emitted the public dispatch event and awaited its settlement. No SDK or provider stubs.
+
+LOCK 0 lock acquired: harness pid 3592958
+
+ACCEPTED
+SETTLED
+
+TOOL CALL bash {"command": "bin/fm-wake-drain.sh", "timeout": 30}
+
+TOOL RESULT bash
+1	1	signal	labtask.status	signal: labtask.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 3384557.1791599212.AVnUfT
+wake annotation: latest wake-EVENT observed at drain, not current state: labtask.status: paused [at=1]: awaiting external review
+
+
+TOOL CALL bash {"command": "bin/fm-lease.sh claim labtask && bin/fm-crew-state.sh labtask", "timeout": 30}
+
+TOOL RESULT bash
+state: unknown · source: none · worktree gone (torn down?)
+
+
+TOOL CALL fm_branch_report {"task": "labtask", "verdict": "captain", "summary": "PR https://example.com/pr/9 remains under review", "wake": "stale: labtask (idle 200s)"}
+
+TOOL RESULT fm_branch_report
+recorded seq 1 and delivered [captain] into main
+
+TOOL CALL fm_branch_report {"task": "labtask", "verdict": "captain", "summary": "PR https://example.com/pr/9 remains under review", "wake": "stale: labtask (idle 300s)"}
+
+TOOL RESULT fm_branch_report
+recorded seq 2 and delivered [routine] into main
+
+TOOL CALL bash {"command": "bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 3384557.1791599212.AVnUfT && bin/fm-lease.sh release labtask", "timeout": 30}
+
+TOOL RESULT bash
+(no output)
+
+BRANCH OUTPUT recorded seq 1 and delivered [captain] into main
+
+recorded seq 2 and delivered [routine] into main
+
+PERSISTED OUTCOME ROWS
+{"seq":1,"epoch":1791599353,"task":"labtask","wake":"stale: labtask (idle 200s)","verdict":"captain","summary":"PR https://example.com/pr/9 remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7639634:2026-10-10 10:26:21.429303535 +0800"}
+{"seq":2,"epoch":1791599355,"task":"labtask","wake":"stale: labtask (idle 300s)","verdict":"routine","summary":"Repeat of captain outcome 1 (status and PR state unchanged), not raised to main again: PR https://example.com/pr/9 remains under review","silent":false,"statusEndpoint":40,"statusIdent":"strong:2049:7639634:2026-10-10 10:26:21.429303535 +0800"}
+
+SUPPRESSION LOG
+[2026-10-10T10:25:22+0800] suppressed empty wake (watcher-resurface): check: rearm-resurface
+[2026-10-10T10:29:15+0800] suppressed repeat captain outcome 2 for labtask: same as captain outcome 1 with status and PR state unchanged; stored as routine

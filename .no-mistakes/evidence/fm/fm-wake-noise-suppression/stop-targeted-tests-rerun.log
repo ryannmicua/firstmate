@@ -1,0 +1,2 @@
+ok - auto-arm: without the host, an empty close is retired and the hook keeps parking until a close main needs
+ok - auto-arm: in shadow mode an empty close still rewakes once and is only logged

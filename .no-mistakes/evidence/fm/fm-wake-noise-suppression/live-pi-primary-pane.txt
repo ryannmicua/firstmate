@@ -1,0 +1,36 @@
+ ?? .test-tmp/
+ ?? tests/.phase-fm-claude-stop-autoarm.sh
+ ?? tests/.phase-fm-pi-branch-extension.sh
+ ?? tests/.phase-fm-supervision-host.sh
+ 5763ccb (HEAD) no-mistakes(review): Report Pi outcomes using their stored verdict
+
+ Took 0.0s
+
+
+ Planning PR URL validation
+
+
+ $ curl -L --max-time 5 -sS -o /tmp/pr9.out -w '%{http_code}\n' https://example.com/pr/9 && head -c 200 /tmp/pr9.out
+ (timeout 10s)
+
+ 404
+ <!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport
+ content="width=device-width,initial-scale=1"><title>Example Domain</title><style>html{color-scheme
+
+ Took 0.5s
+
+
+ Confirming PR status and marking processed
+
+
+ fm_branch_processed
+ processed through seq 1; no captain outcome remains unprocessed
+
+
+ PR #9 remains under review; no action is currently required.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/.no-mistakes/worktrees/ff5e17b6f5de/01M4HRBBMGBM2CJQ8BBDD22ZEN (detached)
+↑7.5k ↓571 R3.1k CH0.0% $0.002 (sub) 1.0%/272k (auto)                                                gpt-5.6-luna • high

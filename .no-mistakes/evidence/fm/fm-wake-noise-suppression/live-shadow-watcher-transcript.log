@@ -1,0 +1,10 @@
+Real bin/fm-watch.sh as private fm-lab session command, actual tmux; config/wake-noise-suppression absent.
+
+shadow-watcher.out:
+check: rearm-resurface
+
+state/.watch-triage.log:
+[2026-10-10T10:34:08+0800] would suppress empty wake (watcher-resurface, shadow mode): check: rearm-resurface
+
+state/.watcher-down:
+announced:downtime:shadow.live.1

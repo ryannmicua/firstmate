@@ -1,0 +1,14 @@
+ok - a repeat captain outcome with unchanged status and PR state is stored as routine and logged
+ok - without config/wake-noise-suppression a repeat captain outcome is only logged
+ok - changed status or PR state, a different fingerprint, escalations, heartbeats, decisions, and missing evidence are never suppressed
+ok - routine rows between two captain outcomes leave the repeat comparison bound to the newest captain row
+ok - the supervision host's receipt carries the stored routine verdict for a suppressed repeat
+ok - --would-present answers for queued rows, unread status, decisions, and captain outcomes, ignores routine rows, and writes nothing
+ok - an empty wake is retired and logged when enforced, and only logged in shadow mode
+ok - heartbeats, escalations, decisions, host lines, away records, and open work always reach main
+ok - the watcher retires an empty recovery and keeps watching when enforced, and still announces in shadow mode or with work open
+ok - each BRANCH OUTCOMES captain line is followed by the task's current crew state
+ok - the probe reads coverage without migration and preserves indeterminate evidence
+ok - current-state enrichment shares one deadline across the section
+ok - identical escalation and decision summaries remain captain outcomes
+ok - probe and presenting drain agree on modern captures and legacy timestamp coverage
