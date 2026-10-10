@@ -1,0 +1,12 @@
+$ (cd /tmp && FM_SUPERVISION_ACTOR=branch /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HK0883SR1R2CGGXHTGBT7C/bin/fm-wake-drain.sh)
+1791592225	1	signal	lab-task.status	signal: lab-task.status
+WAKE_ACK_REQUIRED: after handling completes run /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HK0883SR1R2CGGXHTGBT7C/bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 1624312.1791592225.9LMrks
+wake annotation: latest wake-EVENT observed at drain, not current state: lab-task.status: done: lab task finished
+exit=0
+
+# Copy-pasting the printed recipe verbatim from an unrelated cwd (/):
+$ cd / && FM_SUPERVISION_ACTOR=branch /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4HK0883SR1R2CGGXHTGBT7C/bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 1624312.1791592225.9LMrks
+exit=0
+# queue after ack:
+-rw------- 1 rgm rgm    0 Oct 10 08:30 .wake-queue
+-rw-rw-r-- 1 rgm rgm    2 Oct 10 08:30 .wake-queue.seq

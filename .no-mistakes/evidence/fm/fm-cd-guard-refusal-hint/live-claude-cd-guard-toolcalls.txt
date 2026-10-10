@@ -1,0 +1,10 @@
+# Bash tool calls issued by live Claude primary (from session transcript)
+"bin/fm-status.sh --help"
+"cd projects/foo && ls"
+"cd /tmp/fm-cdtest.YIMV/link && ls bin/fm-cd-pretool-check.sh"
+"ls bin/fm-cd-pretool-check.sh"
+# Tool results
+"Exit code 127\n/bin/bash: line 1: bin/fm-status.sh: No such file or directory"
+"PreToolUse:Bash hook error: [[ -z \"${GROK_AGENT:-}${GROK_HOOK_EVENT:-}\" ] || exit 0; exec \"$CLAUDE_PROJECT_DIR\"/bin/fm-cd-pretool-check.sh --claude]: {\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\"},\"systemMessage\":\"[persistent-cd] a persistent top-level cd would move the shell out of the home, so a later firstmate command runs inside a project clone. Run it scoped to a subshell instead: (cd projects/foo && ls) - or use git -C <dir> or an absolute path on the command itself.\"}\n"
+"PreToolUse:Bash hook error: [[ -z \"${GROK_AGENT:-}${GROK_HOOK_EVENT:-}\" ] || exit 0; exec \"$CLAUDE_PROJECT_DIR\"/bin/fm-cd-pretool-check.sh --claude]: {\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\"},\"systemMessage\":\"[persistent-cd] the shell is already at the home, so drop the cd and run the rest of the command directly.\"}\n"
+"bin/fm-cd-pretool-check.sh"

@@ -1,0 +1,53 @@
+### S1 redundant cd to home wrapping relative bin call
+$ command: cd /tmp/fm-cdtest.YIMV/home && bin/fm-status.sh
+  payload cwd: /tmp/fm-cdtest.YIMV/home
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] the shell is already at the home, so drop the cd and run the rest of the command directly."}
+  exit=2
+
+### S2 one-line cd into clone
+$ command: cd projects/foo && make test
+  payload cwd: /tmp/fm-cdtest.YIMV/home
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] a persistent top-level cd would move the shell out of the home, so a later firstmate command runs inside a project clone. Run it scoped to a subshell instead: (cd projects/foo && make test) - or use git -C <dir> or an absolute path on the command itself."}
+  exit=2
+
+### S3 multi-line cd
+$ command: cd projects/foo
+make test
+  payload cwd: /tmp/fm-cdtest.YIMV/home
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] a persistent top-level cd would move the shell out of the home, so a later firstmate command runs inside a project clone. Wrap the whole multi-line command in ( and ) on their own lines, or use git -C <dir> or an absolute path on the command itself."}
+  exit=2
+
+### S4 adversarial: cd to home while shell is in a clone (must NOT say already at home)
+$ command: cd /tmp/fm-cdtest.YIMV/home && bin/fm-status.sh
+  payload cwd: /tmp/fm-cdtest.YIMV/home/projects/foo
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] a persistent top-level cd would move the shell out of the home, so a later firstmate command runs inside a project clone. Run it scoped to a subshell instead: (cd /tmp/fm-cdtest.YIMV/home && bin/fm-status.sh) - or use git -C <dir> or an absolute path on the command itself."}
+  exit=2
+
+### S5 adversarial: trailing comment not quoted into broken subshell
+$ command: cd projects/foo && make # run
+  payload cwd: /tmp/fm-cdtest.YIMV/home
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] a persistent top-level cd would move the shell out of the home, so a later firstmate command runs inside a project clone. Wrap the whole command in ( and ), or use git -C <dir> or an absolute path on the command itself."}
+  exit=2
+
+### S6 long one-line command (>160) gets generic advice (kept by decision)
+$ command: cd projects/foo && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && true
+  payload cwd: /tmp/fm-cdtest.YIMV/home
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] a persistent top-level cd would move the shell out of the home, so a later firstmate command runs inside a project clone. Wrap the whole command in ( and ), or use git -C <dir> or an absolute path on the command itself."}
+  exit=2
+
+### S7 symlinked path to home
+$ command: cd /tmp/fm-cdtest.YIMV/link && ls
+  payload cwd: /tmp/fm-cdtest.YIMV/home
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] the shell is already at the home, so drop the cd and run the rest of the command directly."}
+  exit=2
+
+### S8 allow: subshell-scoped cd
+$ command: (cd projects/foo && make test)
+  payload cwd: /tmp/fm-cdtest.YIMV/home
+  exit=0
+
+### S9 allow: git -C
+$ command: git -C projects/foo status
+  payload cwd: /tmp/fm-cdtest.YIMV/home
+  exit=0
+
