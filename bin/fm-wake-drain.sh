@@ -863,9 +863,10 @@ print_status_presentation() {  # [<deduped-raw-rows>]
   fi
   snapshot=$(status_presentation_snapshot "$STATE") || {
     printf 'STATUS PRESENTATION INCOMPLETE: status snapshot could not be read.\n'
+    snapshot=''
     rc=1
   }
-  if [ "$rc" -eq 0 ] && [ -n "$rows" ]; then
+  if [ -n "$rows" ]; then
     fm_wake_print_annotations "$rows" "$snapshot" || rc=1
     if [ "$rc" -eq 0 ]; then
       annotation_manifest=$(fm_wake_annotation_manifest "$rows") || rc=1
@@ -877,7 +878,6 @@ print_status_presentation() {  # [<deduped-raw-rows>]
   return "$rc"
 }
 
-# shellcheck disable=SC2317,SC2329 # Invoked by trap handlers below.
 # --would-present: answer, without presenting, consuming, or acknowledging
 # anything, whether main's next drain would present anything that needs main:
 # a queued row (any, including one a live branch grant holds), UNREAD STATUS,
@@ -921,6 +921,7 @@ if [ "$WOULD_PRESENT" = true ]; then
   exit $?
 fi
 
+# shellcheck disable=SC2317,SC2329 # Invoked by trap handlers below.
 cleanup() {
   local status=$?
   [ -z "$DRAIN_TMP" ] || rm -f -- "$DRAIN_TMP" 2>/dev/null || true

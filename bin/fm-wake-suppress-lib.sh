@@ -231,6 +231,7 @@ _fm_wake_suppress_status_holds_decision() {  # <task>
 # position was captured. Sets FM_WAKE_REPEAT_OF to that outcome's sequence
 # when it does, and empty otherwise. <newest-captain-seq> is the sequence of
 # the task's newest captain row in the validated store (empty when none).
+# shellcheck disable=SC2034 # FM_WAKE_REPEAT_OF is an output global read by the outcome-store caller.
 fm_wake_suppress_repeat_of() {  # <task> <wake> <summary> <status-endpoint> <status-ident> <newest-captain-seq>
   local task=$1 wake=$2 summary=$3 endpoint=$4 ident=$5 newest=$6 path data
   local version seq fp rec_endpoint rec_ident pr extra current_pr
