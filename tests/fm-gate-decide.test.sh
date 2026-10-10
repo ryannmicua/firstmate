@@ -223,6 +223,16 @@ PY
   pass "fm-gate-decide: --confirm sends through fm-send, closes the key, and records the decision"
 }
 
+signal_helper() {  # <signal> <args...>: run the helper with the gate signal set per invocation
+  local signal=$1; shift
+  case "$signal" in
+    env|lab) NO_MISTAKES_GATE=1 helper "$@" ;;
+    lab-override) NO_MISTAKES_GATE=1 FM_DATA_OVERRIDE="$HOME_DIR/data" helper "$@" ;;
+    empty) NO_MISTAKES_GATE='' helper "$@" ;;
+    *) helper "$@" ;;
+  esac
+}
+
 test_gate_authority_before_recording() {
   local signal out digest rc caller status_before gate_repo gate_cwd v
   for signal in env empty path lab lab-override normal; do
@@ -244,12 +254,7 @@ test_gate_authority_before_recording() {
       cd "$caller" || exit 1
       unset FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE
       for v in "${!FM_@}"; do case "$v" in *_OVERRIDE) unset "$v" ;; esac; done
-      case "$signal" in
-        env|lab|lab-override) export NO_MISTAKES_GATE=1 ;;
-        empty) export NO_MISTAKES_GATE='' ;;
-      esac
-      if [ "$signal" = lab-override ]; then export FM_DATA_OVERRIDE="$HOME_DIR/data"; fi
-      helper --fix QD-8,QD-11 --no-change QD-12
+      signal_helper "$signal" --fix QD-8,QD-11 --no-change QD-12
     ); rc=$?
     expect_code 0 "$rc" "$signal read-only preview remains available"
     digest=$(digest_of "$out")
@@ -258,12 +263,7 @@ test_gate_authority_before_recording() {
       cd "$caller" || exit 1
       unset FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE
       for v in "${!FM_@}"; do case "$v" in *_OVERRIDE) unset "$v" ;; esac; done
-      case "$signal" in
-        env|lab|lab-override) export NO_MISTAKES_GATE=1 ;;
-        empty) export NO_MISTAKES_GATE='' ;;
-      esac
-      if [ "$signal" = lab-override ]; then export FM_DATA_OVERRIDE="$HOME_DIR/data"; fi
-      helper --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1
+      signal_helper "$signal" --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1
     ); rc=$?
     case "$signal" in
       lab|normal)
