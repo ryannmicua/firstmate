@@ -24,6 +24,7 @@ Once ownership is settled, validate exactly once against that final head so no o
 An ask-user finding returns as `needs-decision`; firstmate loads `ask-user-authority` and either decides or escalates per that skill.
 Send the decision through [`bin/fm-gate-decide.sh`](../../../bin/fm-gate-decide.sh) rather than a hand-written steer: preview it, then send it with the printed `--confirm` digest; its header owns the steer shape, the respond command, the standing etiquette, the `--resolve-key` close, carried-over finding annotation, and the durable decision record.
 When the helper refuses, report its refusal message to firstmate.
+When `config/gate-ab` exists, the gate A/B experiment is on: run `bin/fm-gate-ab.sh assign <key>` for the decision key, use the helper for `helper`, and for `manual` hand-write the steer as before and then run `bin/fm-gate-ab.sh log` for it; the helper refuses a `manual` key, and its header owns the log and report.
 Resume fleet supervision immediately after the decision lands.
 
 Judge validation by the resolved state line from [`bin/fm-crew-state.sh`](../../../bin/fm-crew-state.sh), whose header owns outcome mappings and CI-monitor/daemon exceptions, never by shell liveness, the last status event, or a raw run record.
