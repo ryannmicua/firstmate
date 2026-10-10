@@ -44,6 +44,7 @@ CMD=""
 CMD_SET=0
 CLAUDE_MODE=0
 CURSOR_MODE=0
+PAYLOAD_CWD=
 
 usage() {
   cat <<'EOF'
@@ -108,6 +109,7 @@ if [ "$CMD_SET" -eq 0 ]; then
     exit 0
   fi
   CMD=$(printf '%s' "$PAYLOAD" | jq -r '(.toolInput.command // .tool_input.command // empty)' 2>/dev/null) || exit 0
+  PAYLOAD_CWD=$(printf '%s' "$PAYLOAD" | jq -r '(.cwd // empty)' 2>/dev/null) || PAYLOAD_CWD=
 fi
 
 [ -n "$CMD" ] || exit 0
@@ -163,7 +165,9 @@ POLICY="$FM_ROOT/bin/fm-cd-command-policy.mjs"
 command -v node >/dev/null 2>&1 || exit 0
 [ -f "$POLICY" ] || exit 0
 
-POLICY_OUTPUT=$(node "$POLICY" --command "$CMD" 2>/dev/null) || exit 0
+# --home and --cwd only let the policy word its reason (drop a redundant cd to
+# the home); the deny decision itself never depends on them.
+POLICY_OUTPUT=$(node "$POLICY" --command "$CMD" --home "$FM_ROOT" --cwd "${PAYLOAD_CWD:-$PWD}" 2>/dev/null) || exit 0
 [ -n "$POLICY_OUTPUT" ] || exit 0
 
 TAB=$(printf '\t')

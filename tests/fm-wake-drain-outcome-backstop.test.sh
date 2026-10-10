@@ -134,6 +134,8 @@ test_branch_annotation_cannot_consume_the_main_resurfacing_backstop() {
   sequence=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation [A-Za-z0-9._-][A-Za-z0-9._-]*$/\1/p' "$branch_err")
   generation=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through [0-9][0-9]* --recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' "$branch_err")
   [ -n "$sequence" ] && [ -n "$generation" ] || fail "branch drain omitted its acknowledgement boundary"
+  grep -F "run $ROOT/bin/fm-wake-drain.sh --ack-through" "$branch_err" >/dev/null \
+    || fail "the acknowledgement recipe must name the drain by absolute path: $(cat "$branch_err")"
   FM_STATE_OVERRIDE="$state" FM_SUPERVISION_ACTOR=branch "$DRAIN" \
     --ack-through "$sequence" --recovery-generation "$generation" \
     || fail "branch acknowledgement failed"
