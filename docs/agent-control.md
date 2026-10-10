@@ -16,7 +16,7 @@ The failure repeated across harnesses and homes, and the workaround (remember to
 
 `bin/fm-control-lib.sh` is the single executable owner of the control-plane capability tables and their read-only state checks, so they can be read as a contract:
 
-- The **verb allowlist**: `interrupt`, `exit`, `relaunch`, and the one-task `handoff` exception below.
+- The **verb allowlist**: `interrupt`, `exit`, and `relaunch`.
   There is no arbitrary-text and no generic raw-key entry point.
   A caller either names an allowlisted verb or is refused.
 - **Per-harness mechanics**: the key that cancels a running turn, how many times it must be delivered, whether the composer needs clearing afterwards, the command that exits the agent, and which task kinds the adapter is verified to run.
@@ -24,7 +24,7 @@ The failure repeated across harnesses and homes, and the workaround (remember to
   `bin/fm-send.sh`'s `--key` path reads the composer-clear table from this owner too, rather than keeping a second copy of it.
 - **Per-backend capability**: which named keys a runtime backend can deliver, and whether it has a recovery-grade agent-state classifier able to prove an agent stopped.
 
-The two state checks are the [endpoint-absence proof](#reclaiming-a-task-whose-endpoint-is-gone) and the handoff-journal validator; both read state without mutating it, and sourcing the file is still free.
+The state check is the [endpoint-absence proof](#reclaiming-a-task-whose-endpoint-is-gone); it reads state without mutating it, and sourcing the file is still free.
 
 A recorded `harness=` is not always an exact adapter name: a task launched from a raw command records that command's basename instead.
 `fm_control_harness_family` is the one place that prefix rule is stated, and an unrecognized value resolves to no adapter rather than being guessed into one.
@@ -36,7 +36,6 @@ A recorded `harness=` is not always an exact adapter name: a task launched from 
 | `interrupt` | Deliver the harness's verified interrupt sequence while leaving the agent running. | Delivery succeeds while the endpoint still exists and the agent is still alive where the backend can classify that; cancellation is confirmed only from an adapter-owned acknowledgement and otherwise reports `cancel=unconfirmed`. |
 | `exit` | Stop the agent, preserving the endpoint, the worktree, and every uncommitted change where the backend can prove that outcome. | A recovery-grade backend reports the agent gone; Paseo uses native stop/status proof and falls back to archiving the agent when that proof is unavailable. Already-stopped is idempotent success. An endpoint reading `missing` goes through the same [absence proof](#reclaiming-a-task-whose-endpoint-is-gone) the reclaim uses before anything is claimed about it, and only Herdr can supply one: proven gone reports `endpoint-gone` (the agent went with it, and the endpoint this verb normally preserves did not survive), a pane that turns out to be there and idle is the ordinary `already-stopped`, one whose agent is back takes the ordinary interrupt-then-exit path. A tmux `missing` always refuses rather than claim a stop it cannot see. |
 | `relaunch` | Replace the running agent with a new one in the same worktree - and the same endpoint whenever that endpoint still exists - on the exact recorded adapter or an explicitly chosen harness, model, and effort. | The new agent passes the backend-specific readiness check on the endpoint the task's record now names, and that record names the harness that is actually running; Paseo readiness does not prove worker liveness. |
-| `handoff` | Rebind only the pinned legacy task `paseo-backend-adapter` after an attended, journaled operator confirmation, preserving the task's exact worktree and current changes. | The old tmux endpoint still reads `missing`, the task record matches its pinned identity, no second local task record claims its endpoint or worktree, and one unique tmux session is created for the replacement. This does not make tmux's absence proof stronger; the task-specific human attestations are the authority for this one handoff. |
 
 An exit that delivers lifecycle input but cannot prove the agent stopped fails with `exit=unconfirmed`, reports the observed agent state and any interrupt cancellation claim, and never claims that nothing changed, except that Paseo attempts its documented archive fallback before failing.
 Interrupt never rewrites busy state as proof of its own success.
@@ -67,7 +66,7 @@ A relaunch does take one session reference when the endpoint's own runtime recor
 
 ## Transactional relaunch
 
-`relaunch` and the pinned `handoff` run as transactions with a journal at `state/<id>.control-relaunch`, the prior record preserved beside it, and a ship or scout's prior instructions preserved when a progress note is appended.
+`relaunch` runs as a transaction with a journal at `state/<id>.control-relaunch`, the prior record preserved beside it, and a ship or scout's prior instructions preserved when a progress note is appended.
 
 1. **Resolve the profile.**
    An explicit `--harness`, `--model`, or `--effort` wins.
@@ -93,8 +92,6 @@ A relaunch does take one session reference when the endpoint's own runtime recor
    [`docs/herdr-backend.md`](herdr-backend.md#agent-status-authority-and-relaunch) owns the mechanism and measured behavior.
 
 Switching harness is therefore one ordinary relaunch rather than a separate mechanism.
-The legacy handoff shares this transaction and checkpoint, but skips lifecycle input to the unavailable endpoint and creates a unique tmux session only after the task-specific identity and operator-confirmation gates pass.
-Its one-task scope and exact operator procedure are below.
 
 ### Reclaiming a task whose endpoint is gone
 
@@ -102,7 +99,6 @@ A Herdr pane or workspace can be destroyed out from under a live task by churn o
 The task's worktree, branch, commits, and uncommitted changes all survive that; only its terminal does not.
 
 **Proof-based reclaim is Herdr-only.** On tmux, ordinary `exit` and `relaunch` refuse a `missing` endpoint, because it may still be reachable through another server.
-The single `paseo-backend-adapter` handoff described below is an attended, task-pinned exception; it records operator attestations and does not change this backend limit for any other task.
 
 Two endpoint verdicts are agent-free, and both license a relaunch:
 
@@ -156,41 +152,6 @@ The worktree and the task's records are unaffected either way.
 - If the launch owner already published the new record but no running agent can be confirmed, the new record is kept: the task is recorded on the new harness with no agent confirmed, which is exactly what recovery reconciles.
   Rewriting it back to the old harness would be a second, worse inaccuracy.
 
-### The one-task attended legacy handoff
-
-`handoff` is limited to the existing `paseo-backend-adapter` task, its recorded tmux endpoint `firstmate:fm-paseo-backend-adapter`, Codex ship identity, no-mistakes delivery mode, and the `fm/paseo-backend-adapter` branch.
-It is not a general way to bypass endpoint-absence proof.
-
-Before using it, inspect the task's current run status and confirm no no-mistakes run is active or parked on the branch.
-Confirm independently that the former worker has stopped.
-If either check is ambiguous, stop without invoking the handoff.
-
-Pass the exact recorded worktree path and the full current `HEAD` from that worktree as explicit expectations.
-The command refuses if either value, the endpoint, task metadata, branch, or task identity differs.
-It allows a dirty worktree because it neither resets nor cleans the checkout; the journal records its observed `HEAD` and dirty status, and the replacement uses that same worktree.
-It refuses if another readable task record claims the same local copy or endpoint.
-
-Run the command from the owning Firstmate home:
-
-```sh
-FM_HOME=/home/rgm/firstmate bin/fm-control.sh paseo-backend-adapter handoff \
-  --expect-endpoint firstmate:fm-paseo-backend-adapter \
-  --expect-worktree <recorded-worktree-path> \
-  --expect-head <full-current-HEAD> \
-  --note 'The prior terminal is unreachable after reboot; continue in this exact local copy and preserve all existing changes.'
-```
-
-The command asks for the exact typed confirmations `STOP paseo-backend-adapter` and `TERMINAL paseo-backend-adapter`.
-The first records the operator's confirmation that the old worker has stopped.
-The second records that current run status was checked and no active run owns the branch.
-Both confirmations, the old endpoint, expected worktree and `HEAD`, observed dirty state, new session, and transaction id are kept in `state/paseo-backend-adapter.control-relaunch`.
-
-The launch owner creates one transaction-unique tmux session rather than reusing the old session name, then republishes the same task id on that new endpoint.
-The task's worktree, branch, commit history, uncommitted edits, task poll, and status log are not replaced or discarded.
-If the endpoint state changes from `missing`, the identity checks fail, or a confirmation is wrong, no replacement endpoint is created.
-If launch delivery fails before task-record publication begins, spawn cleanup retires the newly created session and leaves the old record and local copy authoritative.
-If publication begins but its outcome is ambiguous, the endpoint is retained for reconciliation rather than risk closing one the task record may name.
-
 ## Fail-closed boundaries
 
 - Targeting is exact.
@@ -213,9 +174,7 @@ If publication begins but its outcome is ambiguous, the endpoint is retained for
 - `exit`'s composer-empty check, above, is itself a fail-closed boundary that `relaunch` inherits by stopping the old agent through `exit`.
 - `fm-spawn --relaunch` independently refuses unless the endpoint is positively agent-free - either a `dead` endpoint that survives, or a Herdr endpoint proven gone by the absence proof above - so a replacement can never join a live agent.
   An `alive`, `ambiguous`, or `unreadable` verdict all refuse, and so does any endpoint whose absence is not provable, which on tmux is every `missing`; absence is claimed only from positive evidence of it.
-  The operator-attested exception is limited to the [one-task legacy handoff](#the-one-task-attended-legacy-handoff).
   It also requires the shell to be in the recorded worktree: every backend but Orca and Paseo (which own their task worktrees with no current-path probe) gets one explicit `cd` to the recorded path, then a pre-launch path read that refuses before any harness starts unless it confirms the endpoint is sitting in the recorded copy.
-- The operator-attested handoff is rejected for every task except `paseo-backend-adapter`, and its launcher accepts only the live transaction journal from that task's `fm-control handoff`.
 
 ## Capability matrix
 
@@ -236,5 +195,5 @@ The empirical basis for each adapter's value is the `harness-adapters` skill's v
 ## Verification
 
 - `tests/fm-control.test.sh` - the adapter contract for its verified-harness lane (adapters outside the lane pin their control mechanics in their own harness suites), the backend capability matrix, exact-id scoping, the closed verb list, the busy, idle, dead, and idempotent lifecycle cases, and marker non-regression, all against a stubbed session provider.
-- `tests/fm-control-relaunch.test.sh` - the relaunch transaction: identity preservation, harness switching, the progress note, checkpoint refusals, rollback after a failed launch, and the endpoint-absence proof both verbs share - the Herdr reclaim of a destroyed endpoint, tmux refusing one it cannot prove absent, and the task-pinned handoff's identity refusals and preservation of dirty work.
+- `tests/fm-control-relaunch.test.sh` - the relaunch transaction: identity preservation, harness switching, the progress note, checkpoint refusals, rollback after a failed launch, and the endpoint-absence proof both verbs share - the Herdr reclaim of a destroyed endpoint, and tmux refusing one it cannot prove absent.
 - `tests/fm-control-herdr-smoke.test.sh` - the second state-verified backend against the real herdr binary, on an isolated throwaway lab session.
