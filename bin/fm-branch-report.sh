@@ -123,6 +123,15 @@ if ! SEQ=$("$SCRIPT_DIR/fm-branch-outcome.sh" "$@"); then
   echo "outcome store append failed (nothing recorded)" >&2
   exit 1
 fi
+# The store may record a repeat captain outcome as routine
+# (bin/fm-wake-suppress-lib.sh); the receipt carries the stored verdict, so the
+# host wakes MAIN only for captain rows. An unreadable row keeps the reported
+# verdict, which wakes MAIN.
+if [ "$VERDICT" = captain ] \
+  && STORED=$("$SCRIPT_DIR/fm-branch-outcome.sh" lookup --seqs "$SEQ" 2>/dev/null | jq -r '.verdict' 2>/dev/null) \
+  && [ "$STORED" = routine ]; then
+  VERDICT=routine
+fi
 printf '%s\t%s\t%s\t%s\n' "$TURN" "$SEQ" "$VERDICT" "$TASK" >> "$RECEIPTS" || {
   echo "recorded seq $SEQ, but the host receipt could not be written; the host will hand this wake to MAIN" >&2
   exit 1

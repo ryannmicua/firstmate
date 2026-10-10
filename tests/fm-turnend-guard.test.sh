@@ -1219,6 +1219,7 @@ install_integrated_autoarm() {
   cp "$ROOT/bin/fm-cursor-lib.sh" "$dir/bin/fm-cursor-lib.sh"
   cp "$ROOT/bin/fm-lock.sh" "$dir/bin/fm-lock.sh"
   cp "$ROOT/bin/fm-supervision-engine-lib.sh" "$dir/bin/fm-supervision-engine-lib.sh"
+  cp "$ROOT/bin/fm-wake-suppress-lib.sh" "$dir/bin/fm-wake-suppress-lib.sh"
   chmod +x "$dir/bin/fm-claude-stop-autoarm.sh" "$dir/bin/fm-lock.sh"
   ln -s /bin/bash "$dir/fake-claude"
   # These cases drive the watcher arm, so the home opts out of the supervision

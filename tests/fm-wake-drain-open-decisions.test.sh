@@ -167,15 +167,32 @@ test_status_symlink_is_not_followed() {
   printf 'needs-decision [key=local]: keep this visible\n' > "$state/local.status"
   printf 'needs-decision [key=foreign]: do not expose this\n' > "$dir/outside/foreign.status"
   ln -s ../outside/foreign.status "$state/linked.status"
+  ln -s ../outside/missing.status "$state/dangling.status"
+  printf 'note: local answer\n' >> "$state/local.status"
+  printf 'note: foreign answer\n' >> "$dir/outside/foreign.status"
+
+  bash -c '. "$1/bin/fm-classify-lib.sh"; scan_unread_surface_lines "$2"' \
+    _ "$ROOT" "$state" > "$out" || fail "unread scan failed alongside rejected status symlinks"
+  grep -F 'local answer' "$out" >/dev/null || fail "unread scan lost the local answer"
+  if grep -F 'foreign answer' "$out" >/dev/null; then
+    fail "unread scan followed a status symlink outside the state directory"
+  fi
 
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$out" || fail "drain failed with a symlinked status file"
 
   grep -F 'local [key=local] needs-decision: keep this visible' "$out" >/dev/null \
     || fail "the valid local decision did not surface alongside a rejected status symlink"
+  grep -F 'local note: local answer' "$out" >/dev/null || fail "drain lost the local unread answer"
   if grep -F 'do not expose this' "$out" >/dev/null; then
     fail "the fleet scan followed a status symlink outside the state directory"
   fi
-  pass "the fleet-wide decision scan does not follow status symlinks"
+  mkdir -p "$dir/data"
+  printf '# Backlog\n\n' > "$dir/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
+  FM_HOME="$dir" FM_STATE_OVERRIDE="$state" "$DRAIN" --would-present > "$out" \
+    || fail "the read-only probe lost the local decision alongside rejected status symlinks"
+  grep -F 'open-decisions' "$out" >/dev/null || fail "the read-only probe did not identify the local decision"
+  pass "the drain and read-only probe preserve local decisions while excluding live and dangling status symlinks"
 }
 
 # The per-item cut now comes from bin/fm-line-cap-lib.sh, shared with the

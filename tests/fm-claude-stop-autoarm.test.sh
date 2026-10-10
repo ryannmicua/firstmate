@@ -39,6 +39,7 @@ install_autoarm_scripts() {
   cp "$ROOT/bin/fm-classify-lib.sh" "$dir/bin/fm-classify-lib.sh"
   cp "$ROOT/bin/fm-timeout-lib.sh" "$dir/bin/fm-timeout-lib.sh"
   cp "$ROOT/bin/fm-supervision-engine-lib.sh" "$dir/bin/fm-supervision-engine-lib.sh"
+  cp "$ROOT/bin/fm-wake-suppress-lib.sh" "$dir/bin/fm-wake-suppress-lib.sh"
   chmod +x "$dir/bin/fm-claude-stop-autoarm.sh" "$dir/bin/fm-lock.sh" "$dir/bin/fm-afk-contract.sh"
 }
 
@@ -126,6 +127,23 @@ SH
       cat >> "$dir/bin/fm-watch-arm.sh" <<'SH'
 printf 'watcher: FAILED - no live watcher with a fresh beacon\n'
 exit 1
+SH
+      ;;
+    empty-then-decision)
+      # The first foreground arm closes on an unqueued recovery announcement
+      # with nothing for main's drain; the next opens a decision and closes.
+      cat >> "$dir/bin/fm-watch-arm.sh" <<'SH'
+touch "$FM_HOME/state/.last-watcher-beat"
+printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+if [ "$(wc -l < "$FM_HOME/state/arm-ran")" -le 1 ]; then
+  printf 'pending:downtime:fixture-generation\n' > "$FM_HOME/state/.watcher-down"
+  printf 'check: rearm-resurface\n'
+else
+  printf 'pending:downtime:fixture-generation-2\n' > "$FM_HOME/state/.watcher-down"
+  printf 'needs-decision [at=1] [key=k1]: choose\n' >> "$FM_HOME/state/task.status"
+  printf 'stale: fixture-win actionable\n'
+fi
+exit 0
 SH
       ;;
     clean)
@@ -437,6 +455,55 @@ test_actionable_close_rewakes_with_reason() {
   [ ! -e "$dir/state/.claude-autoarm.lock" ] || fail "owner lock must be released after the cycle"
   [ -e "$dir/state/arm-ran" ] || fail "hook never foregrounded the arm wrapper"
   pass "auto-arm: actionable close translates to exactly one exit-2 rewake with reason"
+}
+
+# Wake-noise suppression (bin/fm-wake-suppress-lib.sh) on a home without the
+# supervision host: the fixture bin gains the real drain and its libraries so
+# the hook can ask whether main's drain would present anything.
+# Copies, never symlinks: a fixture write such as write_arm_fixture must never
+# reach through to the real script.
+link_real_bin() {  # <dir>
+  local f
+  mkdir -p "$1/data"
+  printf '# Backlog\n\n' > "$1/data/backlog.md"
+  cp "$ROOT/.tasks.toml" "$1/.tasks.toml"
+  for f in "$ROOT"/bin/*; do
+    [ -e "$1/bin/${f##*/}" ] || [ -L "$1/bin/${f##*/}" ] || cp -Rp "$f" "$1/bin/${f##*/}"
+  done
+}
+
+test_empty_close_keeps_parking_instead_of_rewaking() {
+  local dir out status
+  dir=$(make_primary_dir "$TMP_ROOT/empty-close-enforced")
+  : > "$dir/state/task.meta"
+  : > "$dir/config/wake-noise-suppression"
+  link_real_bin "$dir"
+  write_arm_fixture "$dir" empty-then-decision
+  out=$(run_autoarm "$dir" 2>/dev/null); status=$?
+  expect_code 2 "$status" "the later decision close must still rewake"
+  assert_contains "$out" "stale: fixture-win actionable" "the rewake must carry the later close"
+  assert_not_contains "$out" "check: rearm-resurface" "the empty close must not reach main"
+  [ "$(wc -l < "$dir/state/arm-ran")" -eq 2 ] || fail "the hook must keep parking after the empty close: $(cat "$dir/state/arm-ran")"
+  [ -s "$dir/state/successor-ran" ] || fail "the hook must start the handling successor before suppressing"
+  assert_grep 'suppressed empty wake (stop-hook): check: rearm-resurface' "$dir/state/.watch-triage.log" \
+    "the suppression must be logged to the triage log"
+  pass "auto-arm: without the host, an empty close is retired and the hook keeps parking until a close main needs"
+}
+
+test_empty_close_shadow_mode_still_rewakes() {
+  local dir out status
+  dir=$(make_primary_dir "$TMP_ROOT/empty-close-shadow")
+  : > "$dir/state/task.meta"
+  link_real_bin "$dir"
+  write_arm_fixture "$dir" empty-then-decision
+  out=$(run_autoarm "$dir" 2>/dev/null); status=$?
+  expect_code 2 "$status" "shadow mode must rewake for the empty close"
+  assert_contains "$out" "check: rearm-resurface" "shadow mode must deliver the empty close unchanged"
+  [ "$(wc -l < "$dir/state/arm-ran")" -eq 1 ] || fail "shadow mode must not keep parking"
+  [ "$(wc -l < "$dir/state/successor-ran")" -eq 1 ] || fail "shadow mode must start exactly one handling successor"
+  assert_grep 'would suppress empty wake (stop-hook, shadow mode): check: rearm-resurface' "$dir/state/.watch-triage.log" \
+    "shadow mode must log what it would have suppressed"
+  pass "auto-arm: in shadow mode an empty close still rewakes once and is only logged"
 }
 
 # pi-code (Pi's Claude-hook compatibility extension) delivers a Claude-shaped
@@ -1717,6 +1784,8 @@ test_stale_lock_recovery_preserves_afk_and_need_gates
 test_resolves_outermost_claude_pid_in_nested_bgspare_chain
 test_inert_when_fleet_idle
 test_actionable_close_rewakes_with_reason
+test_empty_close_keeps_parking_instead_of_rewaking
+test_empty_close_shadow_mode_still_rewakes
 test_actionable_close_with_live_successor_rewakes_once
 test_attached_cycle_end_starts_handling_successor
 test_unconfirmed_handling_successor_still_rewakes
