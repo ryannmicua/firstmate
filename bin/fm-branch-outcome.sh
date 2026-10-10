@@ -69,6 +69,10 @@
 #     it from a bounded window of the store's newest complete rows when it is
 #     absent, so a home whose store predates it gains one at its next session
 #     start without scanning lifetime history.
+#   - Repeat captain outcomes: append stores a captain outcome that repeats
+#     the task's newest captain outcome with its status and PR state unchanged
+#     as routine, keeping that evidence in $STATE/.<task>.captain-repeat;
+#     bin/fm-wake-suppress-lib.sh owns the rule, its shadow mode, and its log.
 #   - Every mutation runs under $STATE/.branch-outcomes.lock so the branch
 #     extension and a concurrent session-start replay cannot interleave.
 #   - The store is written BEFORE the outcome is delivered to main
@@ -92,7 +96,7 @@
 #     Advance the processed marker after main acknowledged the captain rows
 #     through <seq>; the target itself must be a currently unprocessed captain
 #     row at or below the read cursor.
-#   fm-branch-outcome.sh present
+#   fm-branch-outcome.sh present [--read-only]
 #     A supervision-host drain's presentation off Pi (bin/fm-wake-drain.sh
 #     "BRANCH OUTCOMES", docs/supervision-host.md "Captain outcomes"): under
 #     the lock, print every unread record and every unprocessed captain record
@@ -102,6 +106,8 @@
 #     mark-read once it has presented the rows; it is the only reader that
 #     advances the cursor there. Prints nothing when nothing is unread or
 #     unprocessed.
+#     --read-only skips locking and state-directory creation for the drain's
+#     probe; it does not provide a locked snapshot or migrate indexes.
 #     "recordedAgo" is how long before this read the row was appended, as
 #     whole minutes under an hour, whole hours under two days, else whole days
 #     (for example "0m", "5h", "6d"; a future epoch reads "0m"). It is the one
@@ -115,8 +121,9 @@
 #     (fm-wake-drain.sh may run its redirected presentation body in a subshell
 #     on Bash 3.2); it skips the nested acquire so drain's bounded lock wait
 #     remains the deadline.
-#   fm-branch-outcome.sh list [--recent <n>]
+#   fm-branch-outcome.sh list [--read-only] [--recent <n>]
 #     Print the last n records (default 20), read or not.
+#     --read-only has the same lock-free semantics as present --read-only.
 #   fm-branch-outcome.sh lookup --seqs <n,...>
 #     Print the requested records in sequence order only when every sequence
 #     exists; validate the full store while holding its lock.
@@ -136,11 +143,15 @@
 #     start, on every harness and away posture, before the drain.
 set -eu
 
+case "${1:-}:${2:-}" in present:--read-only|list:--read-only) export FM_WAKE_READ_ONLY=1 ;; esac
+
 SCRIPT_DIR="$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd "${d:-/}" && pwd)"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
+# shellcheck source=bin/fm-wake-suppress-lib.sh
+. "$SCRIPT_DIR/fm-wake-suppress-lib.sh"
 
 STORE="$STATE/branch-outcomes.jsonl"
 CURSOR="$STATE/.branch-outcomes-cursor"
@@ -163,7 +174,7 @@ RECORDED_AGO_JQ='def recorded_ago: ([$now - .epoch, 0] | max) as $s
     else "\($s / 86400 | floor)d" end;'
 
 usage() {
-  echo "usage: fm-branch-outcome.sh append --task <id> --verdict routine|captain --summary <text> [--wake <text>] [--silent true|false] | unread | mark-read --through <seq> | unprocessed | mark-processed --through <seq> | present | processed-init [--held-lock] | list [--recent <n>] | lookup --seqs <n,...> | startup-replay | seed-tail" >&2
+  echo "usage: fm-branch-outcome.sh append --task <id> --verdict routine|captain --summary <text> [--wake <text>] [--silent true|false] | unread | mark-read --through <seq> | unprocessed | mark-processed --through <seq> | present [--read-only] | processed-init [--held-lock] | list [--read-only] [--recent <n>] | lookup --seqs <n,...> | startup-replay | seed-tail" >&2
   exit 2
 }
 
@@ -232,6 +243,9 @@ read_processed() {
 
 last_seq() { # [<file> [<first expected seq, or null for a bounded suffix>]]
   local file=${1:-$STORE} start=${2:-1}
+  if [ -e "$file" ] || [ -L "$file" ]; then
+    [ -f "$file" ] && [ -r "$file" ] && [ ! -L "$file" ] || return 1
+  fi
   [ -s "$file" ] || { printf '0\n'; return 0; }
   jq -Rse --argjson start "$start" '
     def valid:
@@ -535,6 +549,26 @@ case "$CMD" in
     fi
     SEQ=$(( LAST_SEQ + 1 ))
     capture_status_position "$TASK"
+    # A repeat captain outcome is stored as routine (bin/fm-wake-suppress-lib.sh
+    # owns the rule, its shadow mode, and its log).
+    FM_WAKE_REPEAT_OF=
+    if [ "$VERDICT" = captain ] && [ "$TASK" != fleet ]; then
+      NEWEST_CAPTAIN=
+      [ ! -s "$STORE" ] || NEWEST_CAPTAIN=$(jq -r --arg task "$TASK" \
+        'select(.task == $task and .verdict == "captain") | .seq' "$STORE" 2>/dev/null | tail -n 1) || NEWEST_CAPTAIN=
+      fm_wake_suppress_repeat_of "$TASK" "$WAKE" "$SUMMARY" "$CAPTURED_STATUS_ENDPOINT" \
+        "$CAPTURED_STATUS_IDENT" "$NEWEST_CAPTAIN"
+    fi
+    if [ -n "$FM_WAKE_REPEAT_OF" ]; then
+      if [ "$(fm_wake_suppress_mode)" = enforce ]; then
+        fm_wake_suppress_log "suppressed repeat captain outcome $SEQ for $TASK: same as captain outcome $FM_WAKE_REPEAT_OF with status and PR state unchanged; stored as routine"
+        VERDICT=routine
+        SUMMARY="Repeat of captain outcome $FM_WAKE_REPEAT_OF (status and PR state unchanged), not raised to main again: $SUMMARY"
+        echo "note: outcome $SEQ repeats captain outcome $FM_WAKE_REPEAT_OF with the task's status and PR state unchanged, so it was stored as routine" >&2
+      else
+        fm_wake_suppress_log "would suppress repeat captain outcome $SEQ for $TASK (shadow mode): same as captain outcome $FM_WAKE_REPEAT_OF with status and PR state unchanged"
+      fi
+    fi
     rm -f -- "$OUTCOME_INDEX_READY" || { fm_lock_release "$LOCK"; exit 1; }
     printf '{"seq":%s,"epoch":%s,"task":"%s","wake":"%s","verdict":"%s","summary":"%s","silent":%s,"statusEndpoint":%s,"statusIdent":"%s"}\n' \
       "$SEQ" "$(date +%s)" "$(json_escape "$TASK")" "$(json_escape "$WAKE")" \
@@ -555,6 +589,13 @@ case "$CMD" in
       fm_lock_release "$LOCK"
       echo "error: outcome was stored but its bounded task index could not be updated" >&2
       exit 1
+    fi
+    # Best effort: without this record the next repeat is simply not suppressed.
+    if [ "$VERDICT" = captain ] && [ "$TASK" != fleet ] \
+        && { [ -e "$STATE/$TASK.meta" ] || [ -e "$STATE/$TASK.status" ]; }; then
+      fm_wake_suppress_repeat_record "$TASK" "$SEQ" "$WAKE" "$SUMMARY" \
+        "$CAPTURED_STATUS_ENDPOINT" "$CAPTURED_STATUS_IDENT" \
+        || echo "warning: outcome $SEQ was stored but its repeat-suppression record could not be written" >&2
     fi
     fm_lock_release "$LOCK"
     printf '%s\n' "$SEQ"
@@ -597,19 +638,21 @@ case "$CMD" in
     fm_lock_release "$LOCK"
     ;;
   present)
+    READ_ONLY=false
+    if [ "${1:-}" = --read-only ]; then READ_ONLY=true; shift; fi
     [ "$#" -eq 0 ] || usage
-    fm_lock_acquire_wait "$LOCK"
+    [ "$READ_ONLY" = true ] || fm_lock_acquire_wait "$LOCK"
     if ! LAST_SEQ=$(last_seq); then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       echo "error: refusing presentation because the outcome store is malformed or non-sequential" >&2
       exit 1
     fi
     if ! CURSOR_SEQ=$(read_cursor) || ! PROCESSED_SEQ=$(read_processed); then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       exit 1
     fi
     if [ "$CURSOR_SEQ" -gt "$LAST_SEQ" ] || [ "$PROCESSED_SEQ" -gt "$CURSOR_SEQ" ]; then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       echo "error: refusing presentation because the outcome cursor or processed marker is out of order" >&2
       exit 1
     fi
@@ -618,10 +661,10 @@ case "$CMD" in
         select(.seq > $cursor or (.verdict == "captain" and .seq > $processed))
         | . + {unread: (.seq > $cursor)}
         | if .verdict == "captain" then . + {recordedAgo: recorded_ago} else . end' "$STORE"; then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       exit 1
     fi
-    fm_lock_release "$LOCK"
+    [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
     ;;
   unprocessed)
     [ "$#" -eq 0 ] || usage
@@ -699,6 +742,8 @@ case "$CMD" in
     fi
     ;;
   list)
+    READ_ONLY=false
+    if [ "${1:-}" = --read-only ]; then READ_ONLY=true; shift; fi
     RECENT=20
     if [ "${1:-}" = --recent ]; then
       RECENT=${2:-}
@@ -706,16 +751,16 @@ case "$CMD" in
       shift 2 || usage
     fi
     [ "$#" -eq 0 ] || usage
-    fm_lock_acquire_wait "$LOCK"
+    [ "$READ_ONLY" = true ] || fm_lock_acquire_wait "$LOCK"
     if ! last_seq >/dev/null; then
-      fm_lock_release "$LOCK"
+      [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
       echo "error: refusing read because the outcome store is malformed or non-sequential" >&2
       exit 1
     fi
     if [ -s "$STORE" ]; then
-      tail -n "$RECENT" "$STORE"
+      tail -n "$RECENT" "$STORE" || { [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"; exit 1; }
     fi
-    fm_lock_release "$LOCK"
+    [ "$READ_ONLY" = true ] || fm_lock_release "$LOCK"
     ;;
   lookup)
     [ "$#" -eq 2 ] && [ "$1" = --seqs ] || usage

@@ -85,7 +85,11 @@
 #     ledger write; the failure notice additionally requires its marker write.
 #     A refused generation exits 0 silently even after printing. A close that
 #     reports no actionable reason is benign when a live identity-matched
-#     watcher still has a fresh beacon.
+#     watcher still has a fresh beacon. Without the supervision host, an
+#     actionable close for which main's drain would present nothing has its
+#     recovery episode retired and the hook parks on the handling successor's
+#     cycle instead of exiting 2 (bin/fm-wake-suppress-lib.sh owns the rule,
+#     its exemptions, and its default shadow mode).
 #   - Failure handling: a typed failure is rechecked against the same live,
 #     fresh watcher predicate and retried a bounded number of times in this
 #     hook. Only an exhausted failure with no verified watcher emits one
@@ -159,6 +163,8 @@ esac
 . "$SCRIPT_DIR/fm-hook-host-lib.sh"
 # shellcheck source=bin/fm-supervision-engine-lib.sh
 . "$SCRIPT_DIR/fm-supervision-engine-lib.sh"
+# shellcheck source=bin/fm-wake-suppress-lib.sh
+. "$SCRIPT_DIR/fm-wake-suppress-lib.sh"
 
 # fm-watch.sh touches the liveness beacon once per cycle, immediately before
 # its terminal wait, so a healthy watcher's beacon can legitimately age up to
@@ -394,6 +400,25 @@ start_handling_successor() {  # <closed-arm-pid>
   return 1
 }
 
+# Without the supervision host, an actionable close with nothing for main's
+# drain to present is retired and this hook keeps parking on the handling
+# successor's cycle instead of rewaking (bin/fm-wake-suppress-lib.sh owns the
+# rule). True when the close was suppressed. SUCCESSOR_STARTED records that the
+# handling successor already started, so the rewake does not start a second.
+SUCCESSOR_STARTED=0
+autoarm_suppress_empty_close() {  # <arm output file>
+  local reason
+  [ -n "$1" ] || return 1
+  [ ! -e "$FAILURE_ALARM" ] || return 1
+  fm_autoarm_still_owner "$STATE" "$MY_GEN" || return 1
+  reason=$(grep -E '^(signal:|stale:|check:|heartbeat($|:))' "$1" 2>/dev/null | head -n 8)
+  fm_wake_suppress_candidate "$reason" || return 1
+  SUCCESSOR_STARTED=1
+  start_handling_successor "$CLOSED_ARM_PID" || return 1
+  fm_wake_suppress_commit stop-hook "$reason" || return 1
+  SUCCESSOR_STARTED=0
+}
+
 OUT=
 ACTIONABLE=0
 HEALTHY=0
@@ -437,7 +462,15 @@ while [ "$attempt" -lt "$AUTOARM_ATTEMPTS" ]; do
   if [ -n "$OUT" ]; then
     grep -Eq "$ACTIONABLE_RE" "$OUT" 2>/dev/null && ACTIONABLE=1
   fi
-  [ "$ACTIONABLE" -eq 1 ] && break
+  if [ "$ACTIONABLE" -eq 1 ]; then
+    if [ "$HOST_MODE" -eq 0 ] && autoarm_suppress_empty_close "$OUT"; then
+      rm -f "$OUT" 2>/dev/null || true
+      OUT=
+      attempt=0
+      continue
+    fi
+    break
+  fi
   if [ "$HOST_MODE" -eq 1 ]; then
     # The host stood down because this session or generation no longer owns
     # supervision: whoever does owns continuity now.
@@ -516,7 +549,7 @@ if [ "$ACTIONABLE" -eq 1 ]; then
     exit 0
   fi
   # The host owns its own successors and stops its cycle before handing back.
-  if [ "$HOST_MODE" -eq 0 ]; then
+  if [ "$HOST_MODE" -eq 0 ] && [ "$SUCCESSOR_STARTED" -eq 0 ]; then
     start_handling_successor "$CLOSED_ARM_PID" || true
   fi
   {

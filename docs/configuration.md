@@ -607,6 +607,17 @@ The bound is required rather than cosmetic because churn and pane staleness read
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which run their own crew mix.
 [`architecture.md`](architecture.md) owns the triage contract and `bin/fm-watch.sh`'s `signal_turnend_panes_churned` owns the exact evidence and fail-closed boundaries.
 
+## Wake-noise suppression (config/wake-noise-suppression)
+
+The optional local, gitignored `config/wake-noise-suppression` presence flag lets this home keep two kinds of no-op supervision wake away from the main session without a model turn.
+With the flag present, eligible repeat captain outcomes are stored as routine and eligible empty wakes are retired without opening a main turn.
+
+With the flag absent both run in shadow mode: suppression changes neither outcome verdicts nor wake delivery, but records comparison evidence and logs what it would have suppressed.
+Every suppression, and every shadow decision, is logged to `state/.watch-triage.log`.
+
+The flag is a home-local supervision-noise preference and is not inherited by secondmate homes.
+The [suppression contract](../bin/fm-wake-suppress-lib.sh) owns eligibility, fingerprint matching, recorded PR state, safety exemptions, and recovery retirement; the [drain's read-only probe](../bin/fm-wake-drain.sh) owns what would be presented.
+
 ## Parked-gate wait deferral (config/wedge-defer-parked-gate)
 
 The optional local, gitignored `config/wedge-defer-parked-gate` presence flag opts this home into a default-off second form of wait evidence in the watcher's wedge timer.

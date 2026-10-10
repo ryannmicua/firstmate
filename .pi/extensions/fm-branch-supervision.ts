@@ -1266,8 +1266,24 @@ export default function (pi: ExtensionAPI) {
               isError: true,
             };
           }
+          const stored = await runOutcomeScript(["lookup", "--seqs", String(seq)]);
+          let storedRow: OutcomeRow | null = null;
+          if (stored.ok) {
+            try {
+              storedRow = parseOutcomeRow(JSON.parse(stored.stdout));
+            } catch {
+              storedRow = null;
+            }
+          }
+          if (!storedRow || storedRow.seq !== seq) {
+            return {
+              content: [{ type: "text", text: `recorded seq ${appended.stdout}, but the stored outcome could not be read for the delivery receipt` }],
+              details: undefined,
+              isError: true,
+            };
+          }
           return {
-            content: [{ type: "text", text: `recorded seq ${appended.stdout} and delivered [${verdict}] into main` }],
+            content: [{ type: "text", text: `recorded seq ${appended.stdout} and delivered [${storedRow.verdict}] into main` }],
             details: undefined,
           };
         });
