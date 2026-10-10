@@ -17,12 +17,46 @@
 
 import { Lexer, splitProgram, commandPosition } from "./fm-arm-command-policy.mjs";
 import { realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const REASONS = {
-  "persistent-cd":
-    "a persistent top-level directory change in the primary firstmate checkout is blocked; it would move the shell out of the home so a later firstmate-owned command runs inside a project clone. Reach the target without moving the shell - use git -C <dir> or an absolute path on the command itself - or scope the cd to a subshell like (cd <dir> && ...).",
-};
+const MAX_QUOTED_COMMAND = 160;
+const SUBSHELL_ALTERNATIVES = "or use git -C <dir> or an absolute path on the command itself";
+
+// Short, actionable deny reason. The shell is only treated as already at the
+// home when both the cd target and the shell's cwd resolve to it, so the advice
+// never hides a real relocation.
+function persistentCdReason(command, target, context) {
+  if (target && context.home && sameDirectory(target, context.home, context.cwd)
+      && sameDirectory(".", context.home, context.cwd)) {
+    return "the shell is already at the home, so drop the cd and run the rest of the command directly.";
+  }
+  const base = "a persistent top-level cd would move the shell out of the home, so a later firstmate command runs inside a project clone.";
+  if (/[\n\r\t]/.test(command)) {
+    return `${base} Wrap the whole multi-line command in ( and ) on their own lines, ${SUBSHELL_ALTERNATIVES}.`;
+  }
+  if (command.length <= MAX_QUOTED_COMMAND && !command.includes("#")) {
+    return `${base} Run it scoped to a subshell instead: (${command}) - ${SUBSHELL_ALTERNATIVES}.`;
+  }
+  return `${base} Wrap the whole command in ( and ), ${SUBSHELL_ALTERNATIVES}.`;
+}
+
+function realOrResolved(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+function sameDirectory(target, home, cwd) {
+  if (/[$`*?[\]{}]/.test(target)) return false;
+  let expanded = target;
+  if (expanded === "~" || expanded.startsWith("~/")) expanded = homedir() + expanded.slice(1);
+  else if (expanded.startsWith("~")) return false;
+  return realOrResolved(resolve(cwd, expanded)) === realOrResolved(resolve(home));
+}
 
 // Directory-changing builtins that mutate the calling shell's own cwd.
 const CD_BUILTINS = new Set(["cd", "pushd", "popd"]);
@@ -46,8 +80,8 @@ function nodePersists(separators, index) {
   return true;
 }
 
-function deny(code) {
-  return { decision: "deny", code, reason: REASONS[code] };
+function deny(code, reason) {
+  return { decision: "deny", code, reason };
 }
 
 function hasPathQualifiedCommandPrefix(position) {
@@ -68,7 +102,8 @@ function hasCommandQueryPrefix(position) {
   return false;
 }
 
-function decision(command) {
+function decision(command, context = {}) {
+  const submitted = command;
   const lexed = new Lexer(command).tokenize();
   // Fail open on syntax this classifier cannot tokenize. The cd-guard's threat
   // model is agent mistakes - an accidental bare `cd projects/foo` always
@@ -94,13 +129,16 @@ function decision(command) {
     if (!command) continue;
     if (!CD_BUILTINS.has(command.value)) continue;
     if (position.wrappers.some((wrapper) => FORKING_WRAPPERS.has(wrapper))) continue;
-    return deny("persistent-cd");
+    const target = command.value === "cd"
+      ? position.words.slice(wordIndex + 1).map((word) => word.value).find((value) => value !== "--" && !value.startsWith("-"))
+      : undefined;
+    return deny("persistent-cd", persistentCdReason(submitted, target, { home: context.home, cwd: context.cwd || process.cwd() }));
   }
   return { decision: "allow" };
 }
 
 function parseArguments(argv) {
-  const result = { command: "", commandSet: false };
+  const result = { command: "", commandSet: false, home: "", cwd: "" };
   for (let i = 0; i < argv.length; i += 1) {
     const name = argv[i];
     if (name === "--command") {
@@ -113,6 +151,12 @@ function parseArguments(argv) {
     if (name.startsWith("--command=")) {
       result.command = name.slice("--command=".length);
       result.commandSet = true;
+      continue;
+    }
+    if (name === "--home" || name === "--cwd") {
+      if (i + 1 >= argv.length) throw new Error(`${name} requires a value`);
+      result[name.slice(2)] = argv[i + 1];
+      i += 1;
       continue;
     }
     throw new Error(`unknown argument: ${name}`);
@@ -137,7 +181,7 @@ if (invokedDirectly()) {
     if (!args.commandSet || !args.command) {
       process.stdout.write("allow\n");
     } else {
-      const result = decision(args.command);
+      const result = decision(args.command, { home: args.home, cwd: args.cwd });
       if (result.decision === "allow") {
         process.stdout.write("allow\n");
       } else {

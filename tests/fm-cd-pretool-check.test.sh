@@ -371,6 +371,33 @@ test_policy_cli_direct() {
   pass "cd-guard: fm-cd-command-policy.mjs CLI honors the deny/allow output contract"
 }
 
+test_refusal_reason_names_the_next_step() {
+  local dir out rc nl
+  dir=$(make_secondmate_fixture "$TMP_ROOT/reason-home")
+  nl=$'\n'
+
+  out=$(jq -cn --arg command "cd $dir && bin/fm-status.sh" --arg cwd "$dir" '{tool_input:{command:$command},cwd:$cwd}' \
+    | "$dir/bin/fm-cd-pretool-check.sh" --claude 2>&1); rc=$?
+  expect_code 2 "$rc" "a redundant cd to the home must still be denied"
+  assert_contains "$out" 'already at the home' "a cd to the home must say the shell is already there"
+  assert_contains "$out" 'drop the cd' "a cd to the home must say to drop the cd"
+
+  out=$("$dir/bin/fm-cd-pretool-check.sh" --claude --command 'cd projects/foo && make test' 2>&1); rc=$?
+  expect_code 2 "$rc" "a cd into a clone must still be denied"
+  assert_contains "$out" '(cd projects/foo && make test)' "a one-line command must be quoted back in a subshell"
+  case "$out" in *'already at the home'*) fail "a clone cd must not claim the shell is at the home" ;; esac
+
+  out=$("$dir/bin/fm-cd-pretool-check.sh" --claude --command 'cd projects/foo && make # run' 2>&1); rc=$?
+  expect_code 2 "$rc" "a cd with a trailing comment must still be denied"
+  assert_contains "$out" 'Wrap the whole command in ( and )' "a command with a comment must get the generic subshell advice"
+  case "$out" in *'(cd projects/foo && make # run)'*) fail "a command with a comment must not be quoted into an unparseable subshell" ;; esac
+
+  out=$("$dir/bin/fm-cd-pretool-check.sh" --claude --command "cd projects/foo${nl}make test" 2>&1); rc=$?
+  expect_code 2 "$rc" "a multi-line cd must still be denied"
+  assert_contains "$out" 'multi-line command in ( and ) on their own lines' "a multi-line command must be told to wrap in parentheses"
+  pass "cd-guard: refusal reason names the concrete next step and stays deny-only"
+}
+
 # --- per-harness wiring -----------------------------------------------------
 
 # Delegated to bin/fm-lint.sh, the single owner of the lint definition including
@@ -397,4 +424,5 @@ test_fail_open_missing_node
 test_fail_open_missing_jq_on_stdin
 test_prefilter_skips_node_without_cd_substring
 test_policy_cli_direct
+test_refusal_reason_names_the_next_step
 test_scripts_are_shellcheck_clean

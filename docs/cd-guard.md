@@ -69,7 +69,13 @@ Every deny carries one stable code in square brackets before its prose reason.
 | --- | --- |
 | `persistent-cd` | A top-level `cd`/`pushd`/`popd` would persistently change the primary shell's own working directory. |
 
-The reason directs the caller to reach the target without moving the shell by using `git -C <dir>`, placing an absolute path on the intended command itself, or scoping the `cd` to a subshell.
+The reason is short and tells the caller the concrete next step:
+
+- When the `cd` target and the shell's cwd both resolve to the home, it says the shell is already at the home and the `cd` should be dropped.
+- Otherwise a one-line command is quoted back wrapped in a subshell, such as `(cd <dir> && rest)`, and a multi-line command is to be wrapped in `(` and `)` on their own lines.
+- A very long command, or one containing `#` (whose comment would swallow the closing `)`), is not quoted; the reason says to wrap it in a subshell, use `git -C <dir>`, or place an absolute path on the command itself.
+
+The transport passes the home and the payload's cwd to the policy only to word the reason; the deny decision never depends on them and stays deny-only, with no rewritten command returned to the harness.
 It does not permit `cd /home/project`, because an absolute-path `cd` remains a persistent directory change and is denied.
 
 ## Transport and fail-open behavior
