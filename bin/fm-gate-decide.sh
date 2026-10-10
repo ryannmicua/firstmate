@@ -616,8 +616,11 @@ append_record() {  # <delivery>
 
 ab_log() {
   [ "$AB_ENABLED" = 1 ] || return 0
-  local -a args
-  mapfile -t args < "$WORK/ab-args"
+  local arg
+  local -a args=()
+  while IFS= read -r arg; do
+    args+=("$arg")
+  done < "$WORK/ab-args"
   FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-gate-ab.sh" log "$KEY" --task "$TASK" --round "$(cat "$WORK/round")" \
     --arm helper --digest "$DIGEST" "${args[@]}" >/dev/null \
     || echo "warning: the decision was sent and recorded, but the A/B experiment log append failed" >&2

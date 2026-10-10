@@ -32,16 +32,16 @@
 #                 ~/.claude/projects/<FM_HOME with / and . as ->/ (or
 #                 --transcripts): the whole turn holding the tool call that
 #                 sent the decision (helper: `--confirm <digest>`; manual and
-#                 baseline: the decision key with fm-send.sh or this log).
+#                 baseline: the decision key with fm-send.sh).
 #                 Reported as output tokens and as output + input + cache
 #                 creation; cache reads are left out. The turn also holds any
 #                 unrelated work done in it, so read it as an upper bound.
 #   extra rounds  later rounds of the same step that selected findings for a
 #                 fix again, and decided findings re-selected in them, from
 #                 no-mistakes' step_rounds (selected_finding_ids).
-#   park->done    seconds from the decided round's creation to the step's
-#                 completion (step_results.completed_at); steps still open are
-#                 left out. park->decision is the same start to the log time.
+#   park->done    seconds from a timestamped needs-decision event for the
+#                 round to the step's completion (step_results.completed_at);
+#                 missing park events and steps still open are left out.
 #   respond lines blocked/failed worker status lines between the round's
 #                 creation and its resolution that name a respond problem
 #                 (reject, refus, malformed, invalid, unknown, error, ...).
@@ -49,7 +49,9 @@
 # the experiment started, from --baseline-days (default 30) before its start,
 # that are in no helper record. The start is config/gate-ab's mtime unless
 # --since is given. Approvals leave no selection row, so the baseline holds
-# fix decisions only, and a user selection made by anyone is counted.
+# fix decisions only, attributable to tasks in this home through status or
+# retained decision/event logs. Missing status history leaves respond lines
+# unavailable; missing or ambiguous transcript delivery leaves tokens unavailable.
 # The report states sample sizes and makes no significance claim.
 #
 # The no-mistakes state database (fm_nm_state_db) is read with SQLite mode=ro;
@@ -186,12 +188,12 @@ PY
     fi
     DB=$(fm_nm_state_db "$FM_HOME")
     NOW=${FM_GATE_AB_NOW:-$(date +%s)}
-    python3 -I - "$DB" "$LOG" "$DATA" "$STATE" "$TRANSCRIPTS" "$SINCE" "$BASE_DAYS" "$NOW" <<'PY'
-import glob, json, os, re, sqlite3, statistics, sys
+    python3 -I - "$DB" "$LOG" "$DATA" "$STATE" "$TRANSCRIPTS" "$SINCE" "$BASE_DAYS" "$NOW" "$SCRIPT_DIR/fm-classify-lib.sh" <<'PY'
+import datetime, glob, json, os, re, sqlite3, statistics, subprocess, sys
 from contextlib import closing
 from pathlib import Path
 
-db_path, log_path, data, state, transcripts, since, base_days, now = sys.argv[1:]
+db_path, log_path, data, state, transcripts, since, base_days, now, classify = sys.argv[1:]
 since, base_days, now = int(since), int(base_days), int(now)
 
 
@@ -251,8 +253,8 @@ def read_jsonl(path):
 
 
 ab = read_jsonl(log_path)
-helper_seen = {(r.get("run"), r.get("step"), r.get("round"))
-               for p in glob.glob(os.path.join(data, "*", "gate-decisions.jsonl")) for r in read_jsonl(p)}
+helper_records = [r for p in glob.glob(os.path.join(data, "*", "gate-decisions.jsonl")) for r in read_jsonl(p)]
+helper_seen = {(r.get("run"), r.get("step"), r.get("round")) for r in helper_records}
 helper_seen |= {(r["run"], r["step"], r["round"]) for r in ab if r.get("arm") == "helper"}
 
 decisions = []
@@ -269,30 +271,57 @@ for (run, step), s in steps.items():
             decisions.append({"arm": "baseline", "key": "nm-%s-%s" % (run, step), "task": None, "run": run,
                               "step": step, "round": rnd, "at": None, "ids": ids, "digest": ""})
 
-# Tasks for baseline decisions: the status file that opened the decision key.
 status_files = sorted(glob.glob(os.path.join(state, "*.status")))
+history = {}
+raw = []
+for p in status_files:
+    task = os.path.basename(p)[:-len(".status")]
+    history[task] = []
+    with open(p, errors="replace") as fh:
+        raw.extend(task + "\t" + line.rstrip("\n") + "\n" for line in fh)
+parsed = subprocess.run(["bash", "-c", r'''
+. "$1"
+while IFS=$(printf '\t') read -r task line; do
+  epoch=$(status_line_at_epoch "$line") || epoch=''
+  verb=$(status_line_verb "$line")
+  key=$(_fm_decision_key "$line" '') || key=''
+  printf '%s\t%s\t%s\t%s\t%s\n' "$task" "$epoch" "$verb" "$key" "$line"
+done
+''', "fm-gate-ab", classify], input="".join(raw), text=True, capture_output=True, check=True)
+for line in parsed.stdout.splitlines():
+    task, at, verb, key, text = line.split("\t", 4)
+    history[task].append((verb, int(at) if at else None, key, text))
 
-
-def status_lines(task):
-    p = os.path.join(state, task + ".status")
-    if not os.path.isfile(p):
-        return []
-    out = []
-    for line in open(p, errors="replace"):
-        m = re.match(r"^([a-z-]+) \[at=(\d+)\]", line)
-        if m:
-            out.append((m.group(1), int(m.group(2)), line))
-    return out
+tasks_by_key = {}
+for task, lines in history.items():
+    for verb, at, key, text in lines:
+        if key:
+            tasks_by_key.setdefault(key, set()).add(task)
+for r in ab + helper_records:
+    if r.get("key") and r.get("task"):
+        tasks_by_key.setdefault(r["key"], set()).add(r["task"])
+for r in read_jsonl(os.path.join(state, "fleet-ledger.jsonl")):
+    if r.get("event") == "task.status" and r.get("key") and r.get("task"):
+        tasks_by_key.setdefault(r["key"], set()).add(r["task"])
 
 
 PROBLEM = re.compile(r"respond.*(reject|refus|malform|invalid|unknown|error|usage|unrecogni|unexpected)"
                      r"|(reject|refus|malform|invalid|unknown|error|usage|unrecogni|unexpected).*respond", re.I)
 for d in decisions:
     if d["task"] is None:
-        for p in status_files:
-            if d["key"] in open(p, errors="replace").read():
-                d["task"] = os.path.basename(p)[:-len(".status")]
-                break
+        tasks = tasks_by_key.get(d["key"], set())
+        if len(tasks) == 1:
+            d["task"] = next(iter(tasks))
+decisions = [d for d in decisions if d["arm"] != "baseline" or d["task"] is not None]
+
+
+def round_bounds(d):
+    s = steps.get((d["run"], d["step"]))
+    if not s or d["round"] not in s["rounds"]:
+        return None, None
+    created = s["rounds"][d["round"]][0]
+    later = [v[0] for n, v in sorted(s["rounds"].items()) if n > d["round"] and v[0] is not None]
+    return created, later[0] if later else (s["completed"] or now)
 
 # Transcript turns holding the sending call.
 needles = {}
@@ -310,18 +339,28 @@ def is_turn_start(e):
     return not (isinstance(c, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c))
 
 
-def sending_call(e, needle, is_digest):
+def event_epoch(e):
+    try:
+        return datetime.datetime.fromisoformat((e.get("timestamp") or "").replace("Z", "+00:00")).timestamp()
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
+def sending_calls(e, needle, is_digest, task):
     if e.get("type") != "assistant":
-        return False
+        return
     for b in (e.get("message") or {}).get("content") or []:
         if isinstance(b, dict) and b.get("type") == "tool_use":
             cmd = json.dumps(b.get("input") or {})
-            if is_digest:
-                if needle in cmd:
-                    return True
-            elif needle in cmd and ("fm-send.sh" in cmd or "fm-gate-ab.sh log" in cmd):
-                return True
-    return False
+            if needle in cmd and task and task in cmd and ("fm-gate-decide.sh" if is_digest else "fm-send.sh") in cmd:
+                yield b.get("id")
+
+
+def delivered(result):
+    text = json.dumps(result.get("content", ""))
+    if "recorded as delivered-unconfirmed" in text:
+        return True
+    return not (result.get("is_error") or re.search(r"error:|Exit code:?\s*[1-9]", text, re.I))
 
 
 def turn_usage(entries, at):
@@ -344,6 +383,7 @@ def turn_usage(entries, at):
 
 
 tokens = {}  # id(decision) -> usage
+candidates = {}
 if needles and os.path.isdir(transcripts):
     for path in sorted(glob.glob(os.path.join(transcripts, "*.jsonl"))):
         with open(path, errors="replace") as fh:
@@ -357,13 +397,31 @@ if needles and os.path.isdir(transcripts):
                 entries.append(json.loads(l))
             except ValueError:
                 entries.append({})
+        results = {}
+        for e in entries:
+            if e.get("type") == "user":
+                for b in (e.get("message") or {}).get("content") or []:
+                    if isinstance(b, dict) and b.get("type") == "tool_result":
+                        results[b.get("tool_use_id")] = b
         for n in hit:
-            at = next((i for i, e in enumerate(entries) if sending_call(e, n, n.startswith("--confirm "))), None)
-            if at is None:
-                continue
             for d in needles[n]:
-                # One decision key spans rounds; keep only its first sender per round of this file.
-                tokens.setdefault(id(d), turn_usage(entries, at))
+                start, end = round_bounds(d)
+                if start is None:
+                    continue
+                for i, e in enumerate(entries):
+                    at = event_epoch(e)
+                    if at is None or not start <= at < end or (d["at"] is not None and at >= d["at"] + 1):
+                        continue
+                    for call in sending_calls(e, n, n.startswith("--confirm "), d["task"]):
+                        if call in results and delivered(results[call]):
+                            candidates.setdefault(id(d), []).append((at, turn_usage(entries, i)))
+for d in decisions:
+    matches = candidates.get(id(d), [])
+    if d["at"] is not None and matches:
+        latest = max(at for at, _ in matches)
+        matches = [(at, usage) for at, usage in matches if at == latest]
+    if len(matches) == 1:
+        tokens[id(d)] = matches[0][1]
 
 # Per-decision measures.
 for d in decisions:
@@ -372,20 +430,21 @@ for d in decisions:
     if not s or d["round"] not in s["rounds"]:
         d["m"]["unmatched"] = True
         continue
-    created = s["rounds"][d["round"]][0]
     later = {n: v for n, v in s["rounds"].items() if n > d["round"]}
     d["m"]["extra_rounds"] = sum(1 for v in later.values() if v[1])
     d["m"]["reselected"] = len({i for v in later.values() for i in v[1]} & set(d["ids"]))
-    if created is not None and s["completed"]:
-        d["m"]["to_done"] = s["completed"] - created
-    if created is not None and d["at"] is not None:
-        d["m"]["to_decision"] = d["at"] - created
-    if d["task"]:
-        nxt = [v[0] for n, v in sorted(later.items()) if v[0] is not None]
-        end = nxt[0] if nxt else (s["completed"] or now)
-        d["m"]["problems"] = sum(1 for st, at, line in status_lines(d["task"])
-                                 if st in ("blocked", "failed") and created is not None
-                                 and created <= at <= end and PROBLEM.search(line))
+    start, end = round_bounds(d)
+    lines = history.get(d["task"])
+    if lines is not None and start is not None:
+        parks = [at for st, at, key, line in lines if st == "needs-decision" and key == d["key"]
+                 and at is not None and start <= at < end and (d["at"] is None or at <= d["at"])]
+        if parks and s["completed"]:
+            d["m"]["to_done"] = s["completed"] - min(parks)
+        if not any(at is None and st in ("blocked", "failed") and PROBLEM.search(line)
+                   for st, at, key, line in lines):
+            d["m"]["problems"] = sum(1 for st, at, key, line in lines
+                                     if st in ("blocked", "failed") and at is not None
+                                     and start <= at < end and PROBLEM.search(line))
     if id(d) in tokens:
         d["m"]["tok_out"] = tokens[id(d)]["out"]
         d["m"]["tok_all"] = tokens[id(d)]["all"]
@@ -402,7 +461,7 @@ def cell(rows, key, fmt="%.0f", agg="mean"):
 cols = [("arm", None), ("decisions", None), ("tok out", ("tok_out", "%.0f", "mean")),
         ("tok total", ("tok_all", "%.0f", "mean")), ("extra rounds", ("extra_rounds", "%.2f", "mean")),
         ("re-selected", ("reselected", "%.2f", "mean")), ("respond lines", ("problems", "%.2f", "mean")),
-        ("park>decision s", ("to_decision", "%.0f", "median")), ("park>done s", ("to_done", "%.0f", "median"))]
+        ("park>done s", ("to_done", "%.0f", "median"))]
 table = [[c[0] for c in cols]]
 for arm in ("helper", "manual", "baseline"):
     rows = [d for d in decisions if d["arm"] == arm]
@@ -412,7 +471,7 @@ for arm in ("helper", "manual", "baseline"):
     table.append(line)
 widths = [max(len(r[i]) for r in table) for i in range(len(cols))]
 print("gate decision A/B - experiment since epoch %d, baseline %d days before it" % (since, base_days))
-print("mean per decision; park>* are medians; (n=) is the decisions with that measure available")
+print("mean per decision; park>done is a median; (n=) is the decisions with that measure available")
 for r in table:
     print("  ".join(c.ljust(widths[i]) for i, c in enumerate(r)).rstrip())
 unmatched = sum(1 for d in decisions if d["m"].get("unmatched"))
