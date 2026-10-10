@@ -49,7 +49,10 @@
 #     engine errors, and the Pi branch's offer rule
 #     (bin/fm-branch-dispatch.mjs offer) says the branch may take this close,
 #     so main-only classes (check triggers, decision-owned triggers, a scan
-#     that is unsafe or holds nothing for the branch) stay main's. That
+#     that is unsafe or holds nothing for the branch) stay main's. A main-only
+#     close for which main's drain would present nothing is instead retired
+#     and the host parks on the successor it started
+#     (bin/fm-wake-suppress-lib.sh owns the rule and its shadow mode). That
 #     pass-through starts the successor watcher cycle and leaves it running
 #     before the close is printed, so supervision continues when the session
 #     drops the handoff. It confirms no handling handoff, so the recovery
@@ -191,6 +194,8 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-supervision-engine-lib.sh"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
+# shellcheck source=bin/fm-wake-suppress-lib.sh
+. "$SCRIPT_DIR/fm-wake-suppress-lib.sh"
 
 FIRST_ARM_RESTART=0
 case "${1:-}" in
@@ -1093,6 +1098,30 @@ while :; do
   # unless the supervision session may take it (attended_acceptor).
   if ! fm_afk_contract_away_present "$STATE"; then
     if ! attended_acceptor "$(printf '%s\n' "$REASON" | head -n 1)"; then
+      # A main-only close with nothing for main's drain to present is retired
+      # and the host parks on the successor instead
+      # (bin/fm-wake-suppress-lib.sh owns the rule).
+      if [ "$ATTENDED_WHY" = main-only ] && fm_wake_suppress_candidate "$REASON"; then
+        if ARM_OWN_GROUP=1 start_successor "$CLOSED_ARM_PID"; then
+          if fm_wake_suppress_commit host-pass-through "$REASON"; then
+            log_line "suppressed	empty main-only close	$(printf '%s\n' "$REASON" | head -n 1)"
+            ARM_PID=$SUCCESSOR_PID
+            ARM_OUT=$SUCCESSOR_OUT
+            SUCCESSOR_PID=
+            SUCCESSOR_OUT=
+            ARM_TEXT=
+            continue
+          fi
+          log_line "pass-through	attended	$ATTENDED_WHY	$(printf '%s\n' "$REASON" | head -n 1)"
+          detach_successor || true
+          emit
+          exit 0
+        fi
+        log_line "pass-through	successor-unverified	$(printf '%s\n' "$REASON" | head -n 1)"
+        log_line "pass-through	attended	$ATTENDED_WHY	$(printf '%s\n' "$REASON" | head -n 1)"
+        emit
+        exit 0
+      fi
       log_line "pass-through	attended	$ATTENDED_WHY	$(printf '%s\n' "$REASON" | head -n 1)"
       if [ "$ATTENDED_WHY" = main-only ]; then
         leave_successor_for_main || true

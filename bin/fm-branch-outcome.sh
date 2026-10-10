@@ -69,6 +69,10 @@
 #     it from a bounded window of the store's newest complete rows when it is
 #     absent, so a home whose store predates it gains one at its next session
 #     start without scanning lifetime history.
+#   - Repeat captain outcomes: append stores a captain outcome that repeats
+#     the task's newest captain outcome with its status and PR state unchanged
+#     as routine, keeping that evidence in $STATE/.<task>.captain-repeat;
+#     bin/fm-wake-suppress-lib.sh owns the rule, its shadow mode, and its log.
 #   - Every mutation runs under $STATE/.branch-outcomes.lock so the branch
 #     extension and a concurrent session-start replay cannot interleave.
 #   - The store is written BEFORE the outcome is delivered to main
@@ -141,6 +145,8 @@ SCRIPT_DIR="$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
+# shellcheck source=bin/fm-wake-suppress-lib.sh
+. "$SCRIPT_DIR/fm-wake-suppress-lib.sh"
 
 STORE="$STATE/branch-outcomes.jsonl"
 CURSOR="$STATE/.branch-outcomes-cursor"
@@ -535,6 +541,26 @@ case "$CMD" in
     fi
     SEQ=$(( LAST_SEQ + 1 ))
     capture_status_position "$TASK"
+    # A repeat captain outcome is stored as routine (bin/fm-wake-suppress-lib.sh
+    # owns the rule, its shadow mode, and its log).
+    FM_WAKE_REPEAT_OF=
+    if [ "$VERDICT" = captain ] && [ "$TASK" != fleet ]; then
+      NEWEST_CAPTAIN=
+      [ ! -s "$STORE" ] || NEWEST_CAPTAIN=$(jq -r --arg task "$TASK" \
+        'select(.task == $task and .verdict == "captain") | .seq' "$STORE" 2>/dev/null | tail -n 1) || NEWEST_CAPTAIN=
+      fm_wake_suppress_repeat_of "$TASK" "$WAKE" "$SUMMARY" "$CAPTURED_STATUS_ENDPOINT" \
+        "$CAPTURED_STATUS_IDENT" "$NEWEST_CAPTAIN"
+    fi
+    if [ -n "$FM_WAKE_REPEAT_OF" ]; then
+      if [ "$(fm_wake_suppress_mode)" = enforce ]; then
+        fm_wake_suppress_log "suppressed repeat captain outcome $SEQ for $TASK: same as captain outcome $FM_WAKE_REPEAT_OF with status and PR state unchanged; stored as routine"
+        VERDICT=routine
+        SUMMARY="Repeat of captain outcome $FM_WAKE_REPEAT_OF (status and PR state unchanged), not raised to main again: $SUMMARY"
+        echo "note: outcome $SEQ repeats captain outcome $FM_WAKE_REPEAT_OF with the task's status and PR state unchanged, so it was stored as routine" >&2
+      else
+        fm_wake_suppress_log "would suppress repeat captain outcome $SEQ for $TASK (shadow mode): same as captain outcome $FM_WAKE_REPEAT_OF with status and PR state unchanged"
+      fi
+    fi
     rm -f -- "$OUTCOME_INDEX_READY" || { fm_lock_release "$LOCK"; exit 1; }
     printf '{"seq":%s,"epoch":%s,"task":"%s","wake":"%s","verdict":"%s","summary":"%s","silent":%s,"statusEndpoint":%s,"statusIdent":"%s"}\n' \
       "$SEQ" "$(date +%s)" "$(json_escape "$TASK")" "$(json_escape "$WAKE")" \
@@ -555,6 +581,13 @@ case "$CMD" in
       fm_lock_release "$LOCK"
       echo "error: outcome was stored but its bounded task index could not be updated" >&2
       exit 1
+    fi
+    # Best effort: without this record the next repeat is simply not suppressed.
+    if [ "$VERDICT" = captain ] && [ "$TASK" != fleet ] \
+        && { [ -e "$STATE/$TASK.meta" ] || [ -e "$STATE/$TASK.status" ]; }; then
+      fm_wake_suppress_repeat_record "$TASK" "$SEQ" "$WAKE" "$SUMMARY" \
+        "$CAPTURED_STATUS_ENDPOINT" "$CAPTURED_STATUS_IDENT" \
+        || echo "warning: outcome $SEQ was stored but its repeat-suppression record could not be written" >&2
     fi
     fm_lock_release "$LOCK"
     printf '%s\n' "$SEQ"

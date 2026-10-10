@@ -221,6 +221,8 @@ WATCH_HOME_EXISTED=0
 # (inbox_steer_check below).
 # shellcheck source=bin/fm-task-inbox-lib.sh
 . "$SCRIPT_DIR/fm-task-inbox-lib.sh"
+# shellcheck source=bin/fm-wake-suppress-lib.sh
+. "$SCRIPT_DIR/fm-wake-suppress-lib.sh"
 # The away-posture record (state/.afk-contract) is the posture in both the
 # attended and the afk session; bin/fm-afk-contract.sh owns its schema and its
 # away-or-quiet reading, which is all this watcher reads (away_record_present
@@ -2673,6 +2675,16 @@ resurface_after_downtime() {
       exit 1
     fi
     [ "$FM_RECOVERY_MARKER_ACTION" = recover ] || return 0
+  fi
+  # A recovery with nothing for main's drain to present is retired here and
+  # this cycle keeps watching (bin/fm-wake-suppress-lib.sh owns the rule). A
+  # stale lock reclaimed from a predecessor that died without cleanup is always
+  # announced.
+  if [ -z "${FM_LOCK_RECOVERED_PID:-}" ] \
+    && fm_wake_suppress_candidate "check: rearm-resurface" \
+    && fm_wake_suppress_commit watcher-resurface "check: rearm-resurface"; then
+    WATCHER_RECOVERY_PENDING=0
+    return 0
   fi
   wake "check: rearm-resurface"
 }

@@ -1048,6 +1048,75 @@ test_main_only_pass_through_leaves_the_successor_watcher_running() {
   pass "host: a main-only pass-through leaves the successor watcher running and the close undelivered for main"
 }
 
+# Wake-noise suppression (bin/fm-wake-suppress-lib.sh): the host's first arm
+# is a stand-in that closes on an unqueued recovery announcement, the main-only
+# check class, while later arms are real. Enforced, the host retires that
+# close's recovery episode and parks on the successor instead of waking main,
+# and a later decision close still reaches main; in shadow mode it only logs.
+make_empty_close_bin() {  # <home> -> fixture bin whose first arm closes empty
+  local root="$1/fixture-root" bin="$1/fixture-root/bin" f
+  mkdir -p "$bin"
+  # bin is copied, never symlinked, so the stand-in arm below cannot reach the
+  # real one; the rest of the checkout (the dispatch modules bin imports) is
+  # linked read-only.
+  for f in "$ROOT"/* "$ROOT"/.pi; do
+    [ "${f##*/}" = bin ] || ln -s "$f" "$root/${f##*/}"
+  done
+  for f in "$ROOT"/bin/*; do
+    [ "${f##*/}" = fm-watch-arm.sh ] || cp -Rp "$f" "$bin/${f##*/}"
+  done
+  cat > "$bin/fm-watch-arm.sh" <<SH
+#!/usr/bin/env bash
+if [ -n "\${FM_WATCH_PREDECESSOR_ARM_PID:-}" ] || [ "\$#" -gt 0 ]; then
+  exec "$ROOT/bin/fm-watch-arm.sh" "\$@"
+fi
+printf 'watcher: started pid=%s\n' "\$\$"
+sleep 1
+printf 'check: rearm-resurface\n'
+SH
+  chmod +x "$bin/fm-watch-arm.sh"
+  printf '%s\n' "$bin"
+}
+
+test_empty_main_only_close_is_retired_and_the_host_keeps_parking() {
+  local home bin
+  home=$(make_home empty-main-only-enforced attended)
+  : > "$home/config/wake-noise-suppression"
+  printf 'pending:downtime:empty.1.aaa\n' > "$home/state/.watcher-down"
+  chmod 600 "$home/state/.watcher-down"
+  bin=$(make_empty_close_bin "$home")
+  HOST="$bin/fm-supervision-host.sh" start_host "$home"
+  wait_until 250 grep -qs '	suppressed	empty main-only close	check: rearm-resurface' "$home/state/.supervision-host.log" \
+    || fail "empty close: the host did not suppress it: $(cat "$home/state/.supervision-host.log")"
+  host_exited "$home" && fail "empty close: the host woke main for a close with nothing to present: $(cat "$home/host.out")"
+  wait_until 150 watcher_live "$home" || fail "empty close: the host parked without a live successor watcher"
+  assert_grep 'suppressed empty wake (host-pass-through): check: rearm-resurface' "$home/state/.watch-triage.log" \
+    "the suppression must be logged to the triage log"
+  assert_re '^acked:' "$home/state/.watcher-down" "the empty close's recovery episode must be retired"
+  [ "$(engine_calls "$home")" -eq 0 ] || fail "empty close: the engine ran for a main-only close"
+  append_status "$home" 'which export format?' needs-decision
+  wait_until 250 host_exited "$home" || fail "empty close: the later decision close did not reach main: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^signal: .*demo.status' "$home/host.out" "the later decision close must reach main as the arm printed it"
+  stop_home_processes "$home"
+  pass "host: an empty main-only close is retired and the host keeps parking, while a later decision close still reaches main"
+}
+
+test_empty_main_only_close_shadow_mode_still_reaches_main() {
+  local home bin
+  home=$(make_home empty-main-only-shadow attended)
+  printf 'pending:downtime:empty.1.bbb\n' > "$home/state/.watcher-down"
+  chmod 600 "$home/state/.watcher-down"
+  bin=$(make_empty_close_bin "$home")
+  HOST="$bin/fm-supervision-host.sh" start_host "$home"
+  wait_until 250 host_exited "$home" || fail "shadow: the empty close did not reach main: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^check: rearm-resurface' "$home/host.out" "shadow mode must deliver the close unchanged"
+  assert_grep 'would suppress empty wake (host-pass-through, shadow mode): check: rearm-resurface' "$home/state/.watch-triage.log" \
+    "shadow mode must log what it would have suppressed"
+  assert_re '^(pending|announced):downtime:' "$home/state/.watcher-down" "shadow mode must leave the recovery episode for main"
+  stop_home_processes "$home"
+  pass "host: in shadow mode an empty main-only close still reaches main and is only logged"
+}
+
 # The session-lock holder's process identity cannot be read (its proc entry
 # is truncated), so no main-session key exists: the close reaches main exactly
 # as the arm printed it, before any mirror feed or engine turn.
@@ -2982,6 +3051,8 @@ test_quiet_record_without_its_daemon_is_a_present_captain
 test_attended_main_only_close_passes_straight_to_main
 test_off_written_while_parked_passes_the_next_attended_close_to_main
 test_main_only_pass_through_leaves_the_successor_watcher_running
+test_empty_main_only_close_is_retired_and_the_host_keeps_parking
+test_empty_main_only_close_shadow_mode_still_reaches_main
 test_attended_close_with_unidentified_main_session_passes_to_main
 test_close_accepted_away_that_turns_attended_passes_to_main
 test_attended_close_that_turns_main_only_before_its_turn_passes_to_main

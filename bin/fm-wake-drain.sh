@@ -5,7 +5,8 @@
 # informational status lines, latest captain-facing statuses not covered by a
 # newer branch outcome, OPEN DECISIONS, captain-call record divergence, and on
 # a supervision-host home the supervision session's new and unprocessed
-# outcomes (BRANCH OUTCOMES), then assert liveness.
+# outcomes (BRANCH OUTCOMES), then assert liveness. --would-present only answers
+# whether such a drain would present anything (see would_present below).
 #
 # Keep sequence-bound row consumption independent from generation-bound episode
 # retirement; docs/watcher-continuity.md owns the recovery contract.
@@ -217,8 +218,13 @@ presented_max_row() { # <rows-file>
   fi
 }
 
+WOULD_PRESENT=false
 case "${1:-}" in
   '') ;;
+  --would-present)
+    [ "$#" -eq 1 ] || { echo "wake drain: unexpected --would-present arguments" >&2; exit 2; }
+    WOULD_PRESENT=true
+    ;;
   --ack-through)
     ACK_THROUGH=${2:-}
     case "$ACK_THROUGH" in ''|*[!0-9]*) echo "wake drain: invalid acknowledgement sequence" >&2; exit 2 ;; esac
@@ -228,7 +234,7 @@ case "${1:-}" in
     case "$ACK_GENERATION" in ''|*[!A-Za-z0-9._-]*) echo "wake drain: invalid recovery generation" >&2; exit 2 ;; esac
     [ "$#" -eq 4 ] || { echo "wake drain: unexpected acknowledgement arguments" >&2; exit 2; }
     ;;
-  *) echo "usage: fm-wake-drain.sh [--ack-through SEQUENCE --recovery-generation GENERATION]" >&2; exit 2 ;;
+  *) echo "usage: fm-wake-drain.sh [--would-present | --ack-through SEQUENCE --recovery-generation GENERATION]" >&2; exit 2 ;;
 esac
 
 [ "$ACTOR" != branch ] || require_branch_eligible_rows || exit 1
@@ -671,10 +677,13 @@ print_branch_outcomes_section() {
 $captain
 ROWS
   if [ "$shown" -gt 0 ]; then
-    text="BRANCH OUTCOMES (captain outcomes the supervision session recorded for you, one line per task, oldest first; each says what was true when it was recorded, so check the task's current state first, including its still-open decisions listed above under OPEN DECISIONS, and sort them into still open and already settled, such as a decision since answered, a PR since merged, or a task since finished - process the still-open ones as firstmate: tell the captain, land or merge what is ready, answer or escalate a decision, or act on a blocker; your reply to the captain covers only those, as if the settled ones had never been listed, and a settled one needs only the acknowledgement):
+    text="BRANCH OUTCOMES (captain outcomes the supervision session recorded for you, one line per task, oldest first; each says what was true when it was recorded and is followed by the task's current state from bin/fm-crew-state.sh, so check the task's current state first, including its still-open decisions listed above under OPEN DECISIONS, and sort them into still open and already settled, such as a decision since answered, a PR since merged, or a task since finished - process the still-open ones as firstmate: tell the captain, land or merge what is ready, answer or escalate a decision, or act on a blocker; your reply to the captain covers only those, as if the settled ones had never been listed, and a settled one needs only the acknowledgement):
 "
-    for line in "${captain_lines[@]}"; do
-      text="$text$line
+    for i in "${!captain_lines[@]}"; do
+      text="$text${captain_lines[$i]}
+"
+      current_crew_state_line "${captain_tasks[$i]}"
+      text="$text$CURRENT_STATE_LINE
 "
     done
     [ "$held" -eq 0 ] || text="${text}BRANCH OUTCOMES: $held newer captain outcome(s) are held back (byte cap); they follow on the next drain once these are acknowledged
@@ -718,6 +727,29 @@ ROWS
     printf 'BRANCH OUTCOMES: the store could not record this presentation, so these outcomes are presented again on the next drain and an acknowledgement above is refused until then.\n' >&2
     return 1
   fi
+}
+
+# The task's current state, printed under its BRANCH OUTCOMES line so main
+# need not look it up: bin/fm-crew-state.sh's one line, bounded by
+# FM_OUTCOME_CREW_STATE_TIMEOUT seconds (default 20) and cut to 300 bytes.
+# Sets CURRENT_STATE_LINE; a read that fails or times out says so.
+current_crew_state_line() {  # <task>
+  local task=$1 bound state
+  bound=${FM_OUTCOME_CREW_STATE_TIMEOUT:-20}
+  case "$bound" in ''|*[!0-9]*|0) bound=20 ;; esac
+  if [ "$task" = fleet ]; then
+    CURRENT_STATE_LINE="  current: fleet-wide outcome, no task state"
+    return 0
+  fi
+  if state=$(fm_run_timed "$bound" "$FM_CREW_STATE_BIN" "$task" 2>/dev/null) \
+    && state=$(printf '%s\n' "$state" | awk 'NF { print; exit }' | tr '\t\r' '  ') \
+    && [ -n "$state" ]; then
+    :
+  else
+    state="unavailable (bin/fm-crew-state.sh $task did not answer within ${bound}s)"
+  fi
+  cap_outcome_line "  current: $state" 300
+  CURRENT_STATE_LINE=$OUTCOME_LINE
 }
 
 # BRANCH OUTCOMES' per-item cut: the shared digest marker in place of the
@@ -810,6 +842,46 @@ print_status_presentation() {  # [<deduped-raw-rows>]
 }
 
 # shellcheck disable=SC2317,SC2329 # Invoked by trap handlers below.
+# --would-present: answer, without presenting, consuming, or acknowledging
+# anything, whether main's next drain would present anything that needs main:
+# a queued row (any, including one a live branch grant holds), UNREAD STATUS,
+# STATUS OUTCOME BACKSTOP, OPEN DECISIONS, RECORD DIVERGENCE, or a captain row
+# in BRANCH OUTCOMES. Routine outcome rows do not count; they never wait on
+# main. Prints the matching section names and exits 0 when something would be
+# presented, exits 1 when nothing would, and exits 2 on any read failure, which
+# callers treat as something to present. Open decisions use the whole-file fold
+# so no incremental cursor moves; the backstop shares the drain's own reader,
+# whose only write is the outcome index cache it would rebuild anyway.
+# bin/fm-wake-suppress-lib.sh is its caller and owns what is done with it.
+would_present() {
+  local found='' snapshot out rows
+  [ "$ACTOR" = main ] || { echo "wake drain: --would-present answers for main only" >&2; return 2; }
+  if [ -s "$FM_WAKE_QUEUE" ]; then found="$found queued-rows"; fi
+  snapshot=$(status_presentation_snapshot "$STATE") || return 2
+  if [ -n "$snapshot" ]; then
+    out=$(scan_unread_surface_snapshot "$STATE" "$snapshot") || return 2
+    [ -z "$out" ] || found="$found unread-status"
+    out=$(print_status_outcome_backstop_section "$snapshot") || return 2
+    [ -z "$out" ] || found="$found status-outcome-backstop"
+  fi
+  out=$(scan_open_decisions "$STATE") || return 2
+  [ -z "$out" ] || found="$found open-decisions"
+  out=$(print_record_divergence_section) || return 2
+  [ -z "$out" ] || found="$found record-divergence"
+  if [ -s "$STATE/branch-outcomes.jsonl" ] && ! fm_afk_contract_away_present "$STATE"; then
+    rows=$("$SCRIPT_DIR/fm-branch-outcome.sh" present 2>/dev/null) || return 2
+    out=$(printf '%s\n' "$rows" | jq -c 'select(.verdict == "captain")' 2>/dev/null) || return 2
+    [ -z "$out" ] || found="$found branch-outcomes"
+  fi
+  [ -n "$found" ] || return 1
+  printf 'would present:%s\n' "$found"
+}
+
+if [ "$WOULD_PRESENT" = true ]; then
+  would_present
+  exit $?
+fi
+
 cleanup() {
   local status=$?
   [ -z "$DRAIN_TMP" ] || rm -f -- "$DRAIN_TMP" 2>/dev/null || true
