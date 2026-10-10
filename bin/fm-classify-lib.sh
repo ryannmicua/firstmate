@@ -1101,6 +1101,7 @@ scan_open_decisions() {  # <state>
   for f in "$state"/*.status; do
     [ -e "$f" ] || [ -L "$f" ] || continue
     [ "$f" = "$exclude" ] && continue
+    [ -L "$f" ] && continue
     task=$(basename "$f"); task="${task%.status}"
     open=$(status_open_decisions "$f") || return 1
     [ -n "$open" ] || continue
@@ -1415,7 +1416,8 @@ status_presentation_snapshot() {  # <state>
   for f in "$state"/*.status; do
     [ -e "$f" ] || [ -L "$f" ] || continue
     [ "$f" = "$exclude" ] && continue
-    [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
+    [ -L "$f" ] && continue
+    [ -f "$f" ] && [ -r "$f" ] || return 1
     task=$(basename "$f"); task="${task%.status}"
     size=$(_fm_status_file_size "$f") || return 1
     size=${size//[[:space:]]/}
@@ -2028,6 +2030,7 @@ scan_unread_surface_lines() {  # <state>
   for f in "$state"/*.status; do
     [ -e "$f" ] || continue
     [ "$f" = "$exclude" ] && continue
+    [ -L "$f" ] && continue
     task=$(basename "$f"); task="${task%.status}"
     lines=$(status_new_lines_since_cursor "$f") || return 1
     [ -n "$lines" ] || continue
