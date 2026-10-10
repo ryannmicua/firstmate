@@ -83,6 +83,8 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-nm-run-lib.sh
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
+# shellcheck source=bin/fm-gate-refuse-lib.sh
+. "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 
 usage() {
   sed -n '4,13p' "$0" | sed 's/^# \{0,1\}//'
@@ -560,6 +562,8 @@ fi
 
 [ "$CONFIRM" = "$DIGEST" ] \
   || die "the gate changed since the preview (digest $CONFIRM, now $DIGEST); preview again before sending"
+
+fm_refuse_if_gate_agent
 
 cp "$WORK/snapshot.json" "$WORK/expected-snapshot.json" || die "cannot retain the gate snapshot"
 read_gate verify

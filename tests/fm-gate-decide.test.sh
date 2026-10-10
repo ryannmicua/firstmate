@@ -88,6 +88,9 @@ SH
 # HOME_DIR, WT, NM_DIR, FB and HEAD_SHA.
 setup_world() {
   local base="$TMP_ROOT/$1"
+  if [ "${2:-}" = lab ]; then
+    bash "$ROOT/bin/fm-lab-home.sh" create "$base/home" >/dev/null || fail "fixture lab home"
+  fi
   mkdir -p "$base/home/state" "$base/home/data" "$base/nm"
   fm_git_worktree "$base/repo" "$base/wt" fm/t1 >/dev/null 2>&1 || fail "fixture worktree"
   HOME_DIR="$base/home"; WT="$base/wt"; NM_DIR="$base/nm"
@@ -213,6 +216,65 @@ assert r["respond"]["findings"] == ["QD-11"]
 PY
   assert_no_respond
   pass "fm-gate-decide: --confirm sends through fm-send, closes the key, and records the decision"
+}
+
+test_gate_authority_before_recording() {
+  local signal out digest rc caller status_before gate_repo gate_cwd v
+  for signal in env empty path lab lab-override normal; do
+    case "$signal" in
+      lab*) setup_world "authority-$signal" lab ;;
+      *) setup_world "authority-$signal" ;;
+    esac
+    caller=$WT
+    if [ "$signal" = path ]; then
+      gate_repo="$NM_DIR/.no-mistakes/repos/fixture.git"
+      gate_cwd="$NM_DIR/gate-worktree"
+      mkdir -p "$NM_DIR/.no-mistakes/repos"
+      git clone -q --bare "$WT" "$gate_repo" || fail "fixture gate repo"
+      git -C "$gate_repo" worktree add -q --detach "$gate_cwd" HEAD || fail "fixture gate checkout"
+      caller=$gate_cwd
+    fi
+    status_before=$(cat "$HOME_DIR/state/t1.status")
+    out=$(
+      cd "$caller" || exit 1
+      unset FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE
+      for v in "${!FM_@}"; do case "$v" in *_OVERRIDE) unset "$v" ;; esac; done
+      case "$signal" in
+        env|lab|lab-override) export NO_MISTAKES_GATE=1 ;;
+        empty) export NO_MISTAKES_GATE='' ;;
+      esac
+      if [ "$signal" = lab-override ]; then export FM_DATA_OVERRIDE="$HOME_DIR/data"; fi
+      helper --fix QD-8,QD-11 --no-change QD-12
+    ); rc=$?
+    expect_code 0 "$rc" "$signal read-only preview remains available"
+    digest=$(digest_of "$out")
+    assert_absent "$HOME_DIR/data/t1" "$signal preview creates no decision directory"
+    out=$(
+      cd "$caller" || exit 1
+      unset FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE
+      for v in "${!FM_@}"; do case "$v" in *_OVERRIDE) unset "$v" ;; esac; done
+      case "$signal" in
+        env|lab|lab-override) export NO_MISTAKES_GATE=1 ;;
+        empty) export NO_MISTAKES_GATE='' ;;
+      esac
+      if [ "$signal" = lab-override ]; then export FM_DATA_OVERRIDE="$HOME_DIR/data"; fi
+      helper --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1
+    ); rc=$?
+    case "$signal" in
+      lab|normal)
+        expect_code 0 "$rc" "$signal decision is authorized: $out"
+        assert_present "$HOME_DIR/data/t1/gate-decisions.jsonl" "$signal decision is recorded"
+        assert_present "$HOME_DIR/state/t1.inbox/001.msg" "$signal decision is delivered" ;;
+      *)
+        expect_code 3 "$rc" "$signal gate agent must refuse"
+        assert_contains "$out" "gate" "$signal reports gate authority refusal"
+        assert_absent "$HOME_DIR/data/t1" "$signal refusal precedes record directory creation"
+        assert_absent "$HOME_DIR/state/t1.inbox" "$signal refusal precedes delivery"
+        [ "$(cat "$HOME_DIR/state/t1.status")" = "$status_before" ] || fail "$signal refusal changed decision status" ;;
+    esac
+    assert_no_respond
+  done
+  pass "fm-gate-decide: authority refusal precedes home mutation and preserves marked labs"
 }
 
 test_failed_send_preserves_decision() {
@@ -475,6 +537,7 @@ EOF
 
 test_preview_is_read_only_and_annotates_carried_ids
 test_confirm_sends_closes_and_records
+test_gate_authority_before_recording
 test_failed_send_preserves_decision
 test_partial_delivery_preserves_decision
 test_final_verification_refuses_changes
