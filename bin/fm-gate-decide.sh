@@ -528,7 +528,7 @@ msg += ["- %s%s: %s" % (d["id"], " [%s]" % gate_action[d["id"]] if gate_action.g
         for d in decisions]
 if carry_text:
     msg += ["", carry_text if fixes else carry_text + "\n(Context only: an approval sends no instructions to the fixer.)"]
-msg += ["", "Run exactly this command in your worktree, backgrounded as your brief describes, without editing it:",
+msg += ["", "Run exactly this command in your worktree, the way your brief describes driving the pipeline, without editing it:",
         command, "",
         "Never add --yes or -y. Process every return of that call and of any reattach until checks-passed, "
         "a final outcome, or a genuinely new escalation; report a new ask-user gate with your brief's "

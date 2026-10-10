@@ -175,8 +175,13 @@ digest_of() {  # <preview-output>
 test_preview_is_read_only_and_annotates_carried_ids() {
   local out rc
   setup_world preview
+  mkdir -p "$HOME_DIR/config"
+  touch "$HOME_DIR/config/wait-no-turns"
   out=$(helper --fix QD-8,QD-11 --no-change QD-12 --instructions "Keep repeatable --host." 2>&1); rc=$?
   expect_code 0 "$rc" "a complete decision previews"
+  assert_contains "$out" "Run exactly this command in your worktree, the way your brief describes driving the pipeline, without editing it:" \
+    "the emitted fix steer defers to the foreground brief"
+  assert_not_contains "$out" "backgrounded" "the emitted fix steer does not override the brief"
   assert_contains "$out" "no-mistakes axi respond --step review --action fix --findings QD-8,QD-11 --instructions '" \
     "the preview shows the exact respond command"
   assert_contains "$out" "- QD-8: in round 1; round 1 selected it for a fix; fix round 2 moved aaaaaaaaaaaa -> bbbbbbbbbbbb (changes applied)" \
@@ -403,6 +408,9 @@ test_approve_only_maps_to_approve() {
   local out
   setup_world approve
   out=$(helper --approve QD-8,QD-11,QD-12 --reason "accepted by design" 2>&1)
+  assert_contains "$out" "Run exactly this command in your worktree, the way your brief describes driving the pipeline, without editing it:" \
+    "the emitted approval steer defers to the default brief"
+  assert_not_contains "$out" "backgrounded" "the emitted approval steer does not prescribe an execution mode"
   assert_contains "$out" "no-mistakes axi respond --step review --action approve"$'\n' \
     "an all-approve review decision maps to a bare approve"
   assert_contains "$out" "(Context only: an approval sends no instructions to the fixer.)" \
