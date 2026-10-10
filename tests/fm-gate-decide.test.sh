@@ -295,6 +295,22 @@ test_refused_send_records_nothing() {
   pass "fm-gate-decide: a send refusal leaves no decision record"
 }
 
+test_refused_send_ignores_earlier_identical_steer() {
+  local out digest rc steer
+  setup_world earlier-steer
+  : > "$HOME_DIR/state/t1.status"
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12); digest=$(digest_of "$out")
+  steer=$(printf '%s\n' "$out" | sed -n '/^--- steer preview/,/^--- end of preview ---$/p' | sed '1d;$d')
+  mkdir -p "$HOME_DIR/state/t1.inbox/handled"
+  printf 'schema=fm-task-inbox.v1\nat=2026-01-01T00:00:00Z\n--\n%s' "$steer" > "$HOME_DIR/state/t1.inbox/handled/001.msg"
+  out=$(helper --fix QD-8,QD-11 --no-change QD-12 --confirm "$digest" 2>&1); rc=$?
+  expect_code 4 "$rc" "a refused send beside an earlier identical steer exits 4: $out"
+  assert_contains "$out" "a resend is safe" "an earlier identical steer is not proof of this delivery"
+  assert_absent "$HOME_DIR/data/t1/gate-decisions.jsonl" "a refused send beside an earlier identical steer records nothing"
+  assert_absent "$HOME_DIR/state/t1.inbox/002.msg" "the refused send enqueues nothing"
+  pass "fm-gate-decide: an earlier identical inbox steer never turns a refusal into a recorded delivery"
+}
+
 test_partial_delivery_preserves_decision() {
   local out digest rc
   setup_world partial-send
@@ -548,6 +564,7 @@ test_preview_is_read_only_and_annotates_carried_ids
 test_confirm_sends_closes_and_records
 test_gate_authority_before_recording
 test_refused_send_records_nothing
+test_refused_send_ignores_earlier_identical_steer
 test_partial_delivery_preserves_decision
 test_final_verification_refuses_changes
 test_later_round_reads_the_earlier_decision

@@ -72,9 +72,10 @@
 # digest, and delivery "delivered") is appended to
 # <data>/<task>/gate-decisions.jsonl, where later rounds read it back as the
 # earlier decision. When fm-send.sh fails, the record is appended with delivery
-# "delivered-unconfirmed" only if the exact steer body is in the task's
-# steering inbox (state/<task>.inbox/*.msg or handled/); otherwise nothing is
-# recorded, so every fm-send refusal leaves no record.
+# "delivered-unconfirmed" only if the exact steer body is in a steering-inbox
+# record (state/<task>.inbox/*.msg or handled/) whose name did not exist
+# before the send; otherwise nothing is recorded, so every fm-send refusal
+# leaves no record.
 #
 # Environment: FM_HOME must be set explicitly, as fm-send.sh requires.
 # FM_STATE_OVERRIDE and FM_DATA_OVERRIDE relocate state/ and data/.
@@ -582,6 +583,7 @@ steer_in_inbox() {
   local f
   for f in "$STATE/$TASK.inbox"/*.msg "$STATE/$TASK.inbox/handled"/*.msg; do
     [ -f "$f" ] || continue
+    ! grep -qxF "${f##*/}" "$WORK/inbox-before" || continue
     sed '1,/^--$/d' "$f" | cmp -s - "$WORK/message.txt" && return 0
   done
   return 1
@@ -593,6 +595,9 @@ append_record() {  # <delivery>
     && mkdir -p "$DATA/$TASK" && cat "$WORK/record.line" >> "$RECORD"
 }
 
+for f in "$STATE/$TASK.inbox"/*.msg "$STATE/$TASK.inbox/handled"/*.msg; do
+  [ ! -e "$f" ] || printf '%s\n' "${f##*/}"
+done > "$WORK/inbox-before" || die "cannot snapshot the worker inbox before delivery"
 if ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-send.sh" "$TASK" --resolve-key "$KEY" "$MESSAGE"; then
   if ! steer_in_inbox; then
     echo "error: fm-send failed and the steer is not in the worker inbox; nothing was sent or recorded, so a resend is safe" >&2
