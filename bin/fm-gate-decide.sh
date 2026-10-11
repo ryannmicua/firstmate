@@ -77,10 +77,9 @@
 # before the send; otherwise nothing is recorded, so every fm-send refusal
 # leaves no record.
 #
-# A/B experiment (bin/fm-gate-ab.sh owns it): while config/gate-ab exists, a
-# decision key assigned to the manual arm is refused here, and a sent decision
-# is also appended to data/gate-ab.jsonl as a helper-arm line. A failed
-# experiment append only warns; the decision itself is already recorded.
+# A/B assignment and experiment logging are owned by bin/fm-gate-ab.sh.
+# A manual-arm key is refused here. A failed experiment append only warns;
+# the decision itself is already recorded.
 #
 # Environment: FM_HOME must be set explicitly, as fm-send.sh requires.
 # FM_STATE_OVERRIDE and FM_DATA_OVERRIDE relocate state/ and data/.
