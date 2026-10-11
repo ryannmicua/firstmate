@@ -1,0 +1,36 @@
+=== CLI default and opt-in assignment ===
+helper
+nm-RUN1-review: helper
+nm-RUN1-review repeated: helper
+nm-RUN2-review: helper
+nm-RUN2-review repeated: helper
+nm-RUN3-review: manual
+nm-RUN3-review repeated: manual
+=== Manual log and duplicate finding refusal ===
+logged: manual decision for nm-RUNM-review round 1 in /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4KRKY652H95K5NQCDHSFY8Q/.test-gate-ab/tmp/fm-gate-ab.fElRFX/live-report/home/data/gate-ab.jsonl
+{"arm": "manual", "at": 200000, "findings": [{"action": "fix", "id": "B-1"}, {"action": "no-change", "id": "B-2"}], "key": "nm-RUNM-review", "round": 1, "run": "RUNM", "schema": "fm-gate-ab.v1", "step": "review", "task": "t2"}
+error: empty or repeated finding id in 'B-1,B-1'
+duplicate exit: 2
+=== Report from disposable SQLite, transcript, and status inputs ===
+gate decision A/B - experiment since epoch 100000, baseline 1 days before it
+mean per decision; park>done is a median; (n=) is the decisions with that measure available
+arm       decisions  tok out    tok total  extra rounds  re-selected  respond lines  park>done s
+helper    1          130 (n=1)  195 (n=1)  0.00 (n=1)    0.00 (n=1)   0.00 (n=1)     390 (n=1)
+manual    1          40 (n=1)   47 (n=1)   1.00 (n=1)    1.00 (n=1)   1.00 (n=1)     590 (n=1)
+baseline  1          -          -          0.00 (n=1)    0.00 (n=1)   0.00 (n=1)     890 (n=1)
+decisions with no matching no-mistakes round: 0
+Descriptive only: samples are small and unpaired, and no significance is claimed.
+Baseline holds fix decisions only (selection rows); tokens cover the whole turn that sent the decision.
+=== Retired task history is unavailable, retained attribution survives ===
+gate decision A/B - experiment since epoch 100000, baseline 1 days before it
+mean per decision; park>done is a median; (n=) is the decisions with that measure available
+arm       decisions  tok out    tok total  extra rounds  re-selected  respond lines  park>done s
+helper    1          130 (n=1)  195 (n=1)  0.00 (n=1)    0.00 (n=1)   -              -
+manual    1          40 (n=1)   47 (n=1)   1.00 (n=1)    1.00 (n=1)   -              -
+baseline  1          -          -          0.00 (n=1)    0.00 (n=1)   -              -
+decisions with no matching no-mistakes round: 0
+Descriptive only: samples are small and unpaired, and no significance is claimed.
+Baseline holds fix decisions only (selection rows); tokens cover the whole turn that sent the decision.
+=== Missing required schema is refused ===
+error: no-mistakes state schema drift: step_rounds lacks selection_source
+schema drift exit: 1

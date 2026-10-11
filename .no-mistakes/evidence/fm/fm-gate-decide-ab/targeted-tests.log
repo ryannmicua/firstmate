@@ -1,0 +1,8 @@
+ok - fm-gate-ab: assignment is stable, balanced, and off without the flag
+ok - fm-gate-ab: log appends one manual-arm record and refuses a disabled or malformed call
+ok - fm-gate-ab: the helper honors the assigned arm, logs its own arm, and is untouched when disabled
+ok - fm-gate-ab: report computes per-arm measures and a baseline with sample sizes
+ok - fm-gate-ab: successive manual and baseline rounds use distinct turns and helper retries exclude failures
+ok - fm-gate-ab: retained decisions attribute retired tasks while missing status measures stay unavailable
+ok - fm-gate-ab: malformed, duplicated and note-only timestamps leave measures unavailable
+ok - fm-gate-ab: report refuses a drifted or missing state database

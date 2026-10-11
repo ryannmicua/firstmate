@@ -1,0 +1,18 @@
+gate decision A/B - experiment since epoch 100000, baseline 1 days before it
+mean per decision; park>done is a median; (n=) is the decisions with that measure available
+arm       decisions  tok out    tok total  extra rounds  re-selected  respond lines  park>done s
+helper    1          130 (n=1)  195 (n=1)  0.00 (n=1)    0.00 (n=1)   0.00 (n=1)     390 (n=1)
+manual    2          220 (n=2)  224 (n=2)  0.50 (n=2)    0.50 (n=2)   0.50 (n=2)     490 (n=2)
+baseline  2          250 (n=2)  250 (n=2)  0.50 (n=2)    0.50 (n=2)   0.00 (n=2)     640 (n=2)
+decisions with no matching no-mistakes round: 0
+Descriptive only: samples are small and unpaired, and no significance is claimed.
+Baseline holds fix decisions only (selection rows); tokens cover the whole turn that sent the decision.
+gate decision A/B - experiment since epoch 100000, baseline 1 days before it
+mean per decision; park>done is a median; (n=) is the decisions with that measure available
+arm       decisions  tok out    tok total  extra rounds  re-selected  respond lines  park>done s
+helper    1          130 (n=1)  195 (n=1)  0.00 (n=1)    0.00 (n=1)   0.00 (n=1)     -
+manual    1          40 (n=1)   47 (n=1)   1.00 (n=1)    1.00 (n=1)   -              590 (n=1)
+baseline  1          -          -          0.00 (n=1)    0.00 (n=1)   0.00 (n=1)     890 (n=1)
+decisions with no matching no-mistakes round: 0
+Descriptive only: samples are small and unpaired, and no significance is claimed.
+Baseline holds fix decisions only (selection rows); tokens cover the whole turn that sent the decision.
