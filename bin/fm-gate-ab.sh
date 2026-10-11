@@ -358,7 +358,7 @@ def sending_calls(e, needle, is_digest, task):
 
 def delivered(result):
     text = json.dumps(result.get("content", ""))
-    if "recorded as delivered-unconfirmed" in text:
+    if "recorded as delivered-unconfirmed" in text or "error: the answer was delivered to " in text:
         return True
     return not (result.get("is_error") or re.search(r"error:|Exit code:?\s*[1-9]", text, re.I))
 

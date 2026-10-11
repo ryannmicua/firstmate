@@ -323,10 +323,14 @@ for e in entries:
     for b in (e.get("message") or {}).get("content") or []:
         if isinstance(b, dict) and b.get("tool_use_id") == "tm1":
             b.update(is_error=True, content="error: the decision is recorded as delivered-unconfirmed; do not resend")
+        if isinstance(b, dict) and b.get("tool_use_id") == "tm3":
+            b.update(is_error=True, content="error: the answer was delivered to sess:fm-t2, but the close for decision key(s) 'nm-RUNM-review' could not be appended to /h/state/t2.status. Close it manually - do not resend the answer.")
 entries = turn("failed-helper", 100140, 900, "bin/fm-gate-decide.sh t1 --confirm deadbeefdeadbeef", True) + entries
 entries += turn("failed-manual", 100435, 900, "bin/fm-send.sh t2 --resolve-key nm-RUNM-review 'fix B-1'", text="Exit code: 1")
-entries += turn("manual-r2", 100440, 400, "bin/fm-send.sh t2 --resolve-key nm-RUNM-review 'fix B-1'")
-entries += turn("baseline-r1", 50200, 100, "bin/fm-send.sh t3 --resolve-key nm-RUNZ-review 'fix C-1'")
+entries += turn("manual-r2", 100440, 400, "bin/fm-send.sh t2 --resolve-key nm-RUNM-review 'fix B-1'", True,
+                [{"type": "text", "text": "error: the answer was delivered to sess:fm-t2, but decision key 'nm-RUNM-review' is still open in /h/state/t2.status; it may have been reopened concurrently or the fold did not accept the close. Close it manually - do not resend the answer.\nExit code: 1"}])
+entries += turn("baseline-r1", 50200, 100, "bin/fm-send.sh t3 --resolve-key nm-RUNZ-review 'fix C-1'", True,
+                "error: the answer was delivered to sess:fm-t3, but this captain-held task could not be closed: nm-RUNZ-review. Close it with fm-captain-hold.sh answer - do not resend the answer.")
 entries += turn("baseline-r2", 50700, 400, "bin/fm-send.sh t3 --resolve-key nm-RUNZ-review 'fix C-1'")
 path.write_text("".join(json.dumps(e) + "\n" for e in entries))
 PY
