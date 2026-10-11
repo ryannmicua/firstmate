@@ -31,7 +31,7 @@ run_for_arm() {  # <arm> -> a run id whose review key is assigned to <arm>
 }
 
 test_assign() {
-  local n arm helpers=0 manuals=0 a b
+  local n helpers=0 manuals=0 a b
   new_home assign
   assert_equals helper "$(ab assign nm-RUN1-review)" "no experiment: the helper is the default"
   touch "$HOME_DIR/config/gate-ab"
@@ -42,7 +42,7 @@ test_assign() {
   done
   [ "$helpers" -gt 5 ] && [ "$manuals" -gt 5 ] || fail "the flip must reach both arms ($helpers/$manuals)"
   ab assign 'not a key' >/dev/null 2>&1; expect_code 2 $? "a non-key is a usage error"
-  arm=$(env -u FM_HOME "$AB" assign nm-RUN1-review 2>&1); expect_code 2 $? "an implicit home is refused"
+  env -u FM_HOME "$AB" assign nm-RUN1-review >/dev/null 2>&1; expect_code 2 $? "an implicit home is refused"
   pass "fm-gate-ab: assignment is stable, balanced, and off without the flag"
 }
 
