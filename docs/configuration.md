@@ -591,6 +591,12 @@ The optional local, gitignored `config/pipeline-spend` presence flag opts this h
 When the flag is absent, teardown skips recording and the recorder exits before reading task metadata, no-mistakes state, or the spend ledger.
 An existing ledger is left untouched while recording is disabled.
 
+## Gate decision A/B experiment (config/gate-ab)
+
+The optional local, gitignored `config/gate-ab` presence flag opts this home into comparing the gate decision helper with hand-written decision steers.
+With it absent, the helper is the default and experiment logging is disabled; the helper's own durable decision recording is unchanged.
+[`bin/fm-gate-ab.sh`](../bin/fm-gate-ab.sh) owns the arm assignment, decision logging procedure and schema, measures, and report.
+
 ## Turn-end pane-churn absorb (config/turnend-churn-absorb)
 
 The optional local, gitignored `config/turnend-churn-absorb` presence flag opts this home into a default-off third form of positive work evidence in watcher triage.

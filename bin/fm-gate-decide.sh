@@ -77,6 +77,10 @@
 # before the send; otherwise nothing is recorded, so every fm-send refusal
 # leaves no record.
 #
+# A/B assignment and experiment logging are owned by bin/fm-gate-ab.sh.
+# A manual-arm key is refused here. A failed experiment append only warns;
+# the decision itself is already recorded.
+#
 # Environment: FM_HOME must be set explicitly, as fm-send.sh requires.
 # FM_STATE_OVERRIDE and FM_DATA_OVERRIDE relocate state/ and data/.
 # Each no-mistakes CLI read has a fixed 20-second timeout.
@@ -547,6 +551,11 @@ digest = hashlib.sha256(message.encode()).hexdigest()[:16]
 record = {"schema": "fm-gate-decision.v1", "task": task, "run": run_id, "step": step, "round": round_no,
           "key": key, "pipeline_head": head, "decisions": decisions, "instructions": instructions,
           "respond": respond, "command": command, "digest": digest}
+groups = {}
+for d in decisions:
+    groups.setdefault(d["action"], []).append(d["id"])
+Path(work, "ab-args").write_text("".join("--%s\n%s\n" % (a, ",".join(ids)) for a, ids in sorted(groups.items())))
+Path(work, "round").write_text(str(round_no))
 Path(work, "message.txt").write_text(message)
 Path(work, "key").write_text(key)
 Path(work, "digest").write_text(digest)
@@ -559,6 +568,15 @@ read_gate compose
 MESSAGE=$(cat "$WORK/message.txt")
 DIGEST=$(cat "$WORK/digest")
 KEY=$(cat "$WORK/key")
+
+AB_ENABLED=0
+[ ! -e "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/gate-ab" ] || AB_ENABLED=1
+if [ "$AB_ENABLED" = 1 ]; then
+  AB_ARM=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-gate-ab.sh" assign "$KEY") \
+    || die "cannot read the A/B arm for decision key $KEY"
+  [ "$AB_ARM" != manual ] \
+    || die "decision key $KEY is assigned to the manual arm of the gate A/B experiment (bin/fm-gate-ab.sh); write this steer by hand and run: fm-gate-ab.sh log $KEY --task $TASK --round $(cat "$WORK/round") ..."
+fi
 
 if [ -z "$CONFIRM" ]; then
   printf '%s\n' "--- steer preview for task $TASK (not sent) ---" "$MESSAGE" "--- end of preview ---"
@@ -595,6 +613,18 @@ append_record() {  # <delivery>
     && mkdir -p "$DATA/$TASK" && cat "$WORK/record.line" >> "$RECORD"
 }
 
+ab_log() {
+  [ "$AB_ENABLED" = 1 ] || return 0
+  local arg
+  local -a args=()
+  while IFS= read -r arg; do
+    args+=("$arg")
+  done < "$WORK/ab-args"
+  FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-gate-ab.sh" log "$KEY" --task "$TASK" --round "$(cat "$WORK/round")" \
+    --arm helper --digest "$DIGEST" "${args[@]}" >/dev/null \
+    || echo "warning: the decision was sent and recorded, but the A/B experiment log append failed" >&2
+}
+
 for f in "$STATE/$TASK.inbox"/*.msg "$STATE/$TASK.inbox/handled"/*.msg; do
   [ ! -e "$f" ] || printf '%s\n' "${f##*/}"
 done > "$WORK/inbox-before" || die "cannot snapshot the worker inbox before delivery"
@@ -604,6 +634,7 @@ if ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-send.sh" "$TASK" --resolve-key "$KEY" "$
     exit 4
   fi
   if append_record delivered-unconfirmed; then
+    ab_log
     echo "error: fm-send failed after the steer reached the worker inbox; the decision is recorded as delivered-unconfirmed in $RECORD; do not resend - check the decision key's closure instead" >&2
   else
     echo "error: fm-send failed after the steer reached the worker inbox, and the decision could not be recorded in $RECORD; do not resend - check the decision key's closure instead" >&2
@@ -614,5 +645,6 @@ append_record delivered || {
   echo "error: the steer was sent, but the decision could not be recorded in $RECORD; do not resend" >&2
   exit 5
 }
+ab_log
 printf 'sent: decision for task %s, run %s (key %s, digest %s); recorded in %s\n' \
   "$TASK" "$RUN_ID" "$KEY" "$DIGEST" "$RECORD"

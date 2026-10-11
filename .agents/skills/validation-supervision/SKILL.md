@@ -22,7 +22,8 @@ Apart from that single supported abort, do not hand-edit, commit, restart, or st
 Once ownership is settled, validate exactly once against that final head so no obsolete or intermediate head is ever treated as authoritative.
 
 An ask-user finding returns as `needs-decision`; firstmate loads `ask-user-authority` and either decides or escalates per that skill.
-Send the decision through [`bin/fm-gate-decide.sh`](../../../bin/fm-gate-decide.sh) rather than a hand-written steer: preview it, then send it with the printed `--confirm` digest; its header owns the steer shape, the respond command, the standing etiquette, the `--resolve-key` close, carried-over finding annotation, and the durable decision record.
+When the [gate A/B experiment](../../../docs/configuration.md#gate-decision-ab-experiment-configgate-ab) is enabled, follow the arm assignment and decision logging procedure owned by [`bin/fm-gate-ab.sh`](../../../bin/fm-gate-ab.sh) before composing the steer.
+Otherwise, or for the helper arm, send the decision through [`bin/fm-gate-decide.sh`](../../../bin/fm-gate-decide.sh): preview it, then send it with the printed `--confirm` digest; its header owns the steer shape, the respond command, the standing etiquette, the `--resolve-key` close, carried-over finding annotation, and the durable decision record.
 When the helper refuses, report its refusal message to firstmate.
 Resume fleet supervision immediately after the decision lands.
 
