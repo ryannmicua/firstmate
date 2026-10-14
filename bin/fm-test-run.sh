@@ -140,11 +140,14 @@
 # a split above that target. Neither figure is an execution timeout or proof of
 # observed headroom: refresh growing files from CI measurements.
 # --changed is conservative: it over-selects related families rather than
-# under-selecting, and never expands to the complete suite unless --all. The one
-# place it is deliberately narrow is a bin/ path with no curated family: a test
+# under-selecting, and never expands to the complete suite unless --all. For a
+# bin/ path with no curated family, selection is deliberately narrow: a test
 # that names it is selected as that SCRIPT, because the reference is per-script
 # evidence. Consumer bin/ scripts still resolve through the curated map, so
 # recorded family-level coupling still expands to the whole family.
+# A tests/*.test.sh change selects that script, except either supervision-host
+# entrypoint selects both fm-supervision-host.test.sh and
+# fm-supervision-host-part2.test.sh because they share the cases and harness.
 # tests/lib.sh, tests/fixtures.sh, tests/*-helpers.sh and tests/*-fixture.sh are
 # shared files that map to the suites naming them; a fixture under
 # tests/fixtures/<dir>/ is mapped by that directory instead. Curated family arms
@@ -404,7 +407,7 @@ family_for_basename() {
       printf '%s\n' pr-forge
       ;;
     fm-afk-contract.test.sh|fm-afk-inject-e2e.test.sh|fm-afk-return.test.sh|\
-    fm-supervision-host.test.sh|fm-host-mirror.test.sh)
+    fm-supervision-host.test.sh|fm-supervision-host-part2.test.sh|fm-host-mirror.test.sh)
       printf '%s\n' afk
       ;;
     fm-bearings-board-render.test.sh|fm-bearings-snapshot.test.sh|fm-contributions.test.sh|\
@@ -859,7 +862,8 @@ tests/fm-subagent-pretool-check.test.sh 998
 tests/fm-supervision-events.test.sh 673
 tests/fm-supervision-host-attended-live-e2e.test.sh 49
 tests/fm-supervision-host-live-e2e.test.sh 75
-tests/fm-supervision-host.test.sh 789123
+tests/fm-supervision-host-part2.test.sh 902000
+tests/fm-supervision-host.test.sh 872000
 tests/fm-tangle-guard.test.sh 8501
 tests/fm-task-delivery.test.sh 32789
 tests/fm-task-inbox.test.sh 31965
@@ -1420,6 +1424,9 @@ families_for_changed_path() {
       printf '%s\n' real-herdr-gated
       printf '%s\n' backend-dispatch
       ;;
+    tests/fm-supervision-host.test.sh|tests/fm-supervision-host-part2.test.sh)
+      printf '%s\n' __script__:fm-supervision-host.test.sh __script__:fm-supervision-host-part2.test.sh
+      ;;
     tests/*.test.sh)
       # A single test file change selects only that script via basename family
       # resolution in the caller; emit a marker family of __script__
@@ -1550,6 +1557,7 @@ families_for_changed_path() {
       printf '%s\n' __script__:fm-wake-queue.test.sh
       printf '%s\n' __script__:fm-pi-primary-types.test.sh
       printf '%s\n' __script__:fm-supervision-host.test.sh
+      printf '%s\n' __script__:fm-supervision-host-part2.test.sh
       # Whether an arriving outcome still lets the captain type is a fact only
       # a real Pi TUI can answer, so the live guards are selected too.
       printf '%s\n' live-harness-optin
