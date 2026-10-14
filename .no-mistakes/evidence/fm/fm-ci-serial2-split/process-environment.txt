@@ -1,0 +1,5 @@
+original_parent_pid=1903002
+orphan_adopted_by_pid=860
+adopter_comm=systemd
+isolated_pid_namespace_exit=1
+unshare: write failed /proc/self/uid_map: Operation not permitted

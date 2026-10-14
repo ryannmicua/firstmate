@@ -1,0 +1,55 @@
+{
+  "families": [
+    {
+      "count": 2,
+      "duration_ms": 1154121,
+      "failed": 0,
+      "name": "afk"
+    },
+    {
+      "count": 1,
+      "duration_ms": 335634,
+      "failed": 1,
+      "name": "pure-contract-unit"
+    }
+  ],
+  "finished_at": "2026-10-14T10:14:39Z",
+  "run_id": "fm-test-run-1791971389653-1452582",
+  "scripts": [
+    {
+      "duration_ms": 335634,
+      "exit": 1,
+      "expected_gate_skip": "none",
+      "family": "pure-contract-unit",
+      "gate_skip": false,
+      "gate_skip_reason": "",
+      "path": "tests/fm-test-run.test.sh"
+    },
+    {
+      "duration_ms": 875853,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "afk",
+      "gate_skip": false,
+      "gate_skip_reason": "",
+      "path": "tests/fm-supervision-host.test.sh"
+    },
+    {
+      "duration_ms": 278268,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "afk",
+      "gate_skip": false,
+      "gate_skip_reason": "",
+      "path": "tests/fm-supervision-host-part2.test.sh"
+    }
+  ],
+  "selection": "scripts;jobs=1",
+  "started_at": "2026-10-14T09:49:49Z",
+  "summary": {
+    "duration_ms": 1489949,
+    "failed": 1,
+    "skipped_gate": 0,
+    "total": 3
+  }
+}

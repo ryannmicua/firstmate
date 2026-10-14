@@ -1,0 +1,4 @@
+ok - changes to either supervision host entrypoint select both parts
+ok - portable serial shards are a deterministic disjoint cover of the serial lane
+ok - coverage guard bounds the unmeasured share and serial packing within twenty minutes
+ok - portable serial shard lanes refuse mismatched, out-of-range, and countless names

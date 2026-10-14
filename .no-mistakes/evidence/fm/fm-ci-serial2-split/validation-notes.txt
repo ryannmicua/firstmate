@@ -1,0 +1,9 @@
+Only CI and test infrastructure changed; no application runtime behavior changes.
+Coverage guard passed: total=257 serial_shards=9 serial_max_ms=1145927 serial_budget_ms=1200000.
+CLI placement: part 1 portable-serial-3of9; part 2 portable-serial-2of9.
+Four focused existing runner cases passed (see targeted-runner.log).
+Both supervision entrypoints passed without skips: part 1 875853ms, part 2 278268ms. Fake harness and engine: automated evidence, not live model validation.
+Removed all selector rejected with exit 2.
+Full runner test file failed in nested ancestry test: expected orphan adoption by PID 1. Disposable probe observed systemd PID 860; unshare refused uid_map.
+Hosted CI timing belongs to the outer CI phase; none was started here.
+No UI-facing changes; screenshots inapplicable.

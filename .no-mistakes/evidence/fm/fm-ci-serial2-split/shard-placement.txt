@@ -1,0 +1,9 @@
+Actual runner shard membership for supervision entrypoints:
+{
+  "tests/fm-supervision-host.test.sh": [
+    "portable-serial-3of9"
+  ],
+  "tests/fm-supervision-host-part2.test.sh": [
+    "portable-serial-2of9"
+  ]
+}
