@@ -1,0 +1,15 @@
+not ok - return-removes-copy: warning did not say the slot is unverified
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 2s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+warning: could not open directory '.test-phase/tmp/fm-contributions.r2U8J1/': No such file or directory
+warning: treehouse return left pool slot 7 (/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/tmp/fm-teardown-tests.xDucJ9/return-removes-copy/pool/7/repo) dirty or unverified; the pool lost this slot. Remaining paths:
+  ?? .test-phase/code/
+  ?? .test-phase/conflicting-caller/.tasks.toml
+[omitted 57074 paths from the enclosing repository discovered by Git]
+  ?? tests/.phase-teardown-diagnostic.sh
+teardown task-x1 finished its cleanup and removed its task record, but a returned pool slot did not come back clean (see the warning above); clear those paths so the pool can reuse the slot

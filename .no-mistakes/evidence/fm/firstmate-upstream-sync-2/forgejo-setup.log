@@ -1,0 +1,7 @@
+2026/10/14 14:27:02 cmd/migrate.go:33:runMigrate() [I] AppPath: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/forgejo
+2026/10/14 14:27:02 cmd/migrate.go:34:runMigrate() [I] AppWorkPath: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/forgejo-data
+2026/10/14 14:27:02 cmd/migrate.go:35:runMigrate() [I] Custom path: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/forgejo-data/custom
+2026/10/14 14:27:02 cmd/migrate.go:36:runMigrate() [I] Log path: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/forgejo-data/log
+2026/10/14 14:27:02 cmd/migrate.go:37:runMigrate() [I] Configuration file: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/forgejo.ini
+2026/10/14 14:27:02 ...2@v2.27.6/command.go:269:Run() [I] PING DATABASE sqlite3
+New user 'fixture' has been successfully created!

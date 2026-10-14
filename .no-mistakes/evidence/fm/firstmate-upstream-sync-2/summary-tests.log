@@ -1,0 +1,4 @@
+ok - watcher-carried status append publishes the real home summary
+ok - large backlog snapshots and home-summary publication stay within exec limits
+ok - fleet snapshot transport does not require or mutate operational state
+not ok - parent fleet snapshot did not preserve the large child invalidity

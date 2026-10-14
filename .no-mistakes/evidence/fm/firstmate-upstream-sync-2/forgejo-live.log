@@ -1,0 +1,58 @@
+$ git clone -q http://fixture:<disposable-password>@localhost:39871/fixture/fixture-repo /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/forge-repo
+
+exit=0
+
+$ git checkout -qb change
+
+exit=0
+
+$ git add feature.txt
+
+exit=0
+
+$ git -c user.name=Fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false commit -qm feature
+
+exit=0
+
+$ git push -q origin change
+remote: 
+remote: Create a new pull request for 'change':        
+remote:   http://localhost:39871/fixture/fixture-repo/compare/main...change        
+remote: 
+
+exit=0
+
+$ bin/fm-lab-home.sh create /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/forge-home
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/forge-home
+
+exit=0
+
+$ bin/fm-pr-merge.sh feature https://localhost/fixture/fixture-repo/pulls/1
+armed: state/feature.check.sh
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+error: refusing to merge https://localhost/fixture/fixture-repo/pulls/1
+  - the combined commit status is "failure", not success
+
+exit=1
+
+$ bin/fm-pr-merge.sh feature https://localhost/fixture/fixture-repo/pulls/1
+armed: state/feature.check.sh
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+verified: https://localhost/fixture/fixture-repo/pulls/1 is open and mergeable, with a successful combined status at head a43a22305bc25fd03827990c3ec11062d31eef8c
+
+exit=0
+
+$ bin/fm-pr-poll.sh --validated forgejo https://localhost/fixture/fixture-repo/pulls/1 localhost fixture/fixture-repo 1
+merged
+
+exit=0
+
+$ bin/fm-pr-poll.sh --validated forgejo https://localhost/fixture/fixture-repo/pulls/9991 localhost fixture/fixture-repo 9991
+
+exit=0

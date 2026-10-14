@@ -1,0 +1,31 @@
+$ bin/fm-lab-home.sh create /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/seed-parent
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/seed-parent
+
+exit=0
+
+$ git clone -q /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/treehouse-project /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/seed-parent/projects/space project
+
+exit=0
+
+$ /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/code/bin/fm-home-seed.sh mate /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/seed-child space project
+scaffolded: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/seed-parent/data/mate/brief.md (secondmate charter)
+home=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/seed-child
+
+exit=0
+
+$ /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/code/bin/fm-project-mode.sh space project
+direct-PR on
+
+exit=0
+
+$ /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/code/bin/fm-backlog-handoff.sh mate routed
+handed off 1 item(s) to mate: routed
+  into /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/seed-child/data/backlog.md
+error: handed off work to secondmate mate, but no live receiver endpoint is recorded; the destination backlog is durable and the receiver was not woken
+
+exit=1
+
+$ /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/code/bin/fm-backlog-receive.sh state/handoff/mate.outbox.md 97 9ae5188ee3b30d1a627718ef4ec6ddee446266cf54e6863e3031b8ea52bc3613 1
+received: mate moved=1 already=0
+
+exit=0

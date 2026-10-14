@@ -1,0 +1,9 @@
+not ok - missing-child-source: the refusal did not name the missing source
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 3s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFUSED: unsafe secondmate home removal target /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M4WGXDNGGQ4VYQ87MTYR9JHP/.test-phase/tmp/fm-teardown-tests.4o33oW/missing-child-adapter-sibling/secondmate-home is inside the active firstmate home
