@@ -100,6 +100,8 @@ init_changed_fixture_repo() {
     fm-documentation-audiences.test.sh \
     fm-test-isolation-proof.test.sh \
     fm-test-run.test.sh \
+    fm-supervision-host.test.sh \
+    fm-supervision-host-part2.test.sh \
     fm-test-fixtures.test.sh \
     fm-cd-pretool-check.test.sh \
     fm-daemon.test.sh \
@@ -238,6 +240,29 @@ test_task_marker_refuses_the_primary_checkout() {
 
   rm -rf "$tmp"
   pass "a task marker refuses execution in the primary checkout and leaves worktrees and inspection alone"
+}
+
+test_changed_supervision_host_selects_both_parts() {
+  local tmp repo script listed expected
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-host-parts.XXXXXX")
+  repo="$tmp/repo"
+  init_changed_fixture_repo "$repo"
+  expected=$(printf '%s\n' tests/fm-supervision-host.test.sh tests/fm-supervision-host-part2.test.sh | LC_ALL=C sort)
+
+  for script in fm-supervision-host.test.sh fm-supervision-host-part2.test.sh; do
+    printf '\n' >>"$repo/tests/$script"
+    listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD | LC_ALL=C sort)
+    [ "$listed" = "$expected" ] || fail "$script change must select both host parts exactly once: $listed"
+    git -C "$repo" add "tests/$script"
+    listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD | LC_ALL=C sort)
+    [ "$listed" = "$expected" ] || fail "staged $script change must select both host parts exactly once: $listed"
+    git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm host-part-change
+    listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD~1 | LC_ALL=C sort)
+    [ "$listed" = "$expected" ] || fail "committed $script change must select both host parts exactly once: $listed"
+  done
+
+  rm -rf "$tmp"
+  pass "changes to either supervision host entrypoint select both parts"
 }
 
 test_changed_runner_surfaces_select_their_family() {
@@ -1831,6 +1856,7 @@ test_family_selection
 test_single_script_selection
 test_changed_file_selection_is_conservative
 test_task_marker_refuses_the_primary_checkout
+test_changed_supervision_host_selects_both_parts
 test_changed_runner_surfaces_select_their_family
 test_shell_line_ending_policy_selects_runner_contract
 test_changed_dependency_selection_and_unmapped_failure
