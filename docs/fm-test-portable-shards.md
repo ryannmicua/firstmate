@@ -10,7 +10,7 @@ The concurrent isolation proof in [fm-test-isolation-proof.md](fm-test-isolation
 Local timings are not interchangeable with CI timings: platform and machine load can affect each script differently and change their relative weights.
 
 Both hint tables were refreshed on 2026-09-30 from five Ubuntu CI runs: [36583881812](https://github.com/kunchenguid/firstmate/actions/runs/36583881812), [36658498535](https://github.com/kunchenguid/firstmate/actions/runs/36658498535), [36663947738](https://github.com/kunchenguid/firstmate/actions/runs/36663947738), [36664663190](https://github.com/kunchenguid/firstmate/actions/runs/36664663190), and [36669175457](https://github.com/kunchenguid/firstmate/actions/runs/36669175457).
-Use the slowest successful `duration_ms` per script across their uploaded portable timing artifacts and completed `FM_TEST_END` log markers, with the two version/platform exceptions below.
+Use the slowest successful `duration_ms` per script across their uploaded portable timing artifacts and completed `FM_TEST_END` log markers, with the exceptions below.
 All artifact records were cross-checked against the corresponding job's markers.
 This covers all 24 parallel and 201 serial members; an existing live-capability skip is a portable-runner measurement, not a timing claim for the unavailable live integration.
 Observed maxima provide conservative packing weights, not an upper bound on future durations.
@@ -24,7 +24,7 @@ Collect successful per-script measurements for every member before calculating a
 The supervision host suite runs in two halves, `tests/fm-supervision-host.test.sh` (part 1) and `tests/fm-supervision-host-part2.test.sh` (part 2, a thin entry that runs the second half of the same file), because the whole suite took about 1700 seconds on `ubuntu-latest` in runs [38091912836](https://github.com/ryannmicua/firstmate/actions/runs/38091912836), [38106771138](https://github.com/ryannmicua/firstmate/actions/runs/38106771138), [38524373126](https://github.com/ryannmicua/firstmate/actions/runs/38524373126), and [38528842740](https://github.com/ryannmicua/firstmate/actions/runs/38528842740), enough to reach the 30-minute job cap with its shard's setup.
 Their hints (872000 ms and 902000 ms) are the observed single-run split of that 1774 s run and have no repeated samples yet, so refresh them from the next green timing artifacts.
 The earlier 789123 ms hint came from a run where the whole suite finished in 817 s and is not representative of main-branch runs.
-The file owns the split point; `bin/fm-test-run.sh --list --changed --base HEAD` selects both entrypoints when either changes.
+[`tests/fm-supervision-host.test.sh`](../tests/fm-supervision-host.test.sh) owns the part selector and split point; the [`bin/fm-test-run.sh`](../bin/fm-test-run.sh) header owns changed-file selection for the shared suite.
 The native-Windows-only `tests/fm-pi-windows-shell-invocation.test.sh` retains its separate 5121 ms measurement from 2026-09-06T21:02Z instead of a portable capability skip.
 The session-start hint retains its pre-optimization maximum until CI measures the shorter fixture-only home-summary bound; do not discount a local speedup from CI packing weights.
 

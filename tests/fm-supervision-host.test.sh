@@ -3025,9 +3025,10 @@ test_superseded_host_leaves_the_owner_untouched() {
   pass "host: a host under a superseded auto-arm generation stands down without touching the owner"
 }
 
-# The suite is split across two CI shards: part 1 is this script's default and
-# tests/fm-supervision-host-part2.test.sh runs part 2 through the same file, so
-# the two halves never share a runner (docs/fm-test-portable-shards.md).
+# Part 1 is this script's default; FM_SUPERVISION_HOST_TEST_PART accepts only
+# 1 or 2. tests/fm-supervision-host-part2.test.sh runs part 2 through this file
+# so both entrypoints share the cases and harness. CI packing is owned by
+# bin/fm-test-run.sh (docs/fm-test-portable-shards.md).
 part=${FM_SUPERVISION_HOST_TEST_PART:-1}
 case "$part" in 1|2) ;; *) printf "unknown FM_SUPERVISION_HOST_TEST_PART: %s\n" "$part" >&2; exit 2 ;; esac
 
