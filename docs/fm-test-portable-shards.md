@@ -21,8 +21,10 @@ A failed script's duration is excluded even when its lane uploaded an artifact.
 In particular, run 36664663190's serial 5 finished in 22m15s with an assertion failure, not a timeout; treating that as a healthy whole-lane sample would hide the failure.
 Collect successful per-script measurements for every member before calculating a split.
 
-`tests/fm-supervision-host.test.sh` uses 789123 ms from run 36669175457, after the merged [host runtime fix](https://github.com/kunchenguid/firstmate/pull/6179), rather than its pre-fix maximum of 1065298 ms.
-That post-fix value has only one sample in this baseline, so further green runs must establish its variance.
+The supervision host suite runs in two halves, `tests/fm-supervision-host.test.sh` (part 1) and `tests/fm-supervision-host-part2.test.sh` (part 2, a thin entry that runs the second half of the same file), because the whole suite took about 1700 seconds on `ubuntu-latest` in runs [38091912836](https://github.com/ryannmicua/firstmate/actions/runs/38091912836), [38106771138](https://github.com/ryannmicua/firstmate/actions/runs/38106771138), [38524373126](https://github.com/ryannmicua/firstmate/actions/runs/38524373126), and [38528842740](https://github.com/ryannmicua/firstmate/actions/runs/38528842740), enough to reach the 30-minute job cap with its shard's setup.
+Their hints (872000 ms and 902000 ms) are the observed single-run split of that 1774 s run and have no repeated samples yet, so refresh them from the next green timing artifacts.
+The earlier 789123 ms hint came from a run where the whole suite finished in 817 s and is not representative of main-branch runs.
+The file owns the split point, and `FM_SUPERVISION_HOST_TEST_PART=all` runs both halves in one process.
 The native-Windows-only `tests/fm-pi-windows-shell-invocation.test.sh` retains its separate 5121 ms measurement from 2026-09-06T21:02Z instead of a portable capability skip.
 The session-start hint retains its pre-optimization maximum until CI measures the shorter fixture-only home-summary bound; do not discount a local speedup from CI packing weights.
 
