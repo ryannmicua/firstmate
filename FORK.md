@@ -58,8 +58,9 @@ A change that needs one is an upstream proposal, or a ledger row here while it i
 Sync by merge, not rebase, about weekly or whenever an upstream fix is wanted.
 Rebasing would rewrite the published default branch that homes fast-forward to.
 
-1. Keep an `upstream` remote on the checkout: `git remote add upstream https://github.com/kunchenguid/firstmate`, then `git fetch upstream`.
-2. As an ordinary ship task, branch from the fork's default branch and run `git merge upstream/main`.
+1. Keep a remote named `kunchenguid` for the original project on the checkout: `git remote add kunchenguid https://github.com/kunchenguid/firstmate`, then `git fetch kunchenguid`.
+   Do not name it `upstream`: firstmate's publication gate (`bin/fm-role-lib.sh`) takes a task's publication target from the first remote named `upstream`, `github`, or `origin`, so an `upstream` remote would point every fork task at the original project.
+2. As an ordinary ship task, branch from the fork's default branch and run `git merge kunchenguid/main`.
 3. Resolve conflicts, preferring upstream's version of shared files and re-applying carried changes on top.
 4. Drop any carried patch that upstream now duplicates, remove its ledger row, and name it in the merge message.
 5. Validate through the normal delivery path for this repository.
@@ -70,10 +71,13 @@ Rebasing would rewrite the published default branch that homes fast-forward to.
 
 Upstream's `CONTRIBUTING.md` owns the contribution rules; this is how the fork applies them.
 
-1. Search first: `git fetch upstream`, then search upstream's log and pull requests for the topic; contribute to an existing thread instead of building a parallel version.
+Each home that ships fork changes declares `maintainer github.com/ryannmicua/firstmate` in its `config/firstmate-role`, written by hand ([`docs/configuration.md`](docs/configuration.md#firstmate-role-configfirstmate-role) owns the schema).
+That standing grant covers only the fork; a contribution to the original project needs its own per-task consent.
+
+1. Search first: `git fetch kunchenguid`, then search upstream's log and pull requests for the topic; contribute to an existing thread instead of building a parallel version.
 2. Use a separate checkout whose `origin` is upstream, initialized for the validation pipeline with the fork as the push fork, as upstream's `CONTRIBUTING.md` describes.
-3. Branch from `upstream/main`, never from the fork's default branch, so the pull request carries only its own change.
+3. Branch from `kunchenguid/main`, never from the fork's default branch, so the pull request carries only its own change.
 4. Keep it to one concern per pull request, opt-in behind a `config/` presence file where behavior changes, with no growth of `AGENTS.md` beyond a pointer.
 5. Include tests and live evidence, and answer upstream review within its stale window.
-6. Each upstream pull request is public and outward-facing, so it needs the captain's go-ahead individually.
+6. Each upstream pull request is public and outward-facing, so it needs the captain's go-ahead individually, recorded on that task as `--upstream-consent github.com/kunchenguid/firstmate`.
 7. Pin the default GitHub repository for fork checkouts to the fork, and name the repository explicitly in fork-targeted pull request commands, so a fork pull request is never opened upstream by mistake.
