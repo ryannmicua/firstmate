@@ -3027,12 +3027,11 @@ test_superseded_host_leaves_the_owner_untouched() {
 
 # The suite is split across two CI shards: part 1 is this script's default and
 # tests/fm-supervision-host-part2.test.sh runs part 2 through the same file, so
-# the two halves never share a runner (docs/fm-test-portable-shards.md). Set
-# FM_SUPERVISION_HOST_TEST_PART=all to run both in one process.
+# the two halves never share a runner (docs/fm-test-portable-shards.md).
 part=${FM_SUPERVISION_HOST_TEST_PART:-1}
-case "$part" in 1|2|all) ;; *) printf "unknown FM_SUPERVISION_HOST_TEST_PART: %s\n" "$part" >&2; exit 2 ;; esac
+case "$part" in 1|2) ;; *) printf "unknown FM_SUPERVISION_HOST_TEST_PART: %s\n" "$part" >&2; exit 2 ;; esac
 
-if [ "$part" = 1 ] || [ "$part" = all ]; then
+if [ "$part" = 1 ]; then
   test_claude_stop_hook_restores_handoff_when_successor_closed_before_exit_to_main
   test_claude_stop_hook_restores_handoff_when_successor_closed_mid_engine_turn
   test_claude_stop_hook_notifies_when_closed_successor_downtime_restore_fails
@@ -3093,7 +3092,7 @@ if [ "$part" = 1 ] || [ "$part" = all ]; then
   test_next_host_clears_a_turn_its_killed_predecessor_left
 fi
 
-if [ "$part" = 2 ] || [ "$part" = all ]; then
+if [ "$part" = 2 ]; then
   test_report_without_acknowledgement_hands_the_wake_to_main
   test_return_during_a_failed_turn_still_hands_its_outcomes_to_main
   test_incomplete_engine_result_hands_the_wake_to_main

@@ -1419,6 +1419,9 @@ families_for_changed_path() {
       printf '%s\n' real-herdr-gated
       printf '%s\n' backend-dispatch
       ;;
+    tests/fm-supervision-host.test.sh|tests/fm-supervision-host-part2.test.sh)
+      printf '%s\n' __script__:fm-supervision-host.test.sh __script__:fm-supervision-host-part2.test.sh
+      ;;
     tests/*.test.sh)
       # A single test file change selects only that script via basename family
       # resolution in the caller; emit a marker family of __script__
