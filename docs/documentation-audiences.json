@@ -583,6 +583,10 @@
       "audience": "agent-runtime"
     },
     {
+      "path": ".agents/skills/output-conventions/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": ".agents/skills/scout-completion/SKILL.md",
       "audience": "agent-runtime"
     },

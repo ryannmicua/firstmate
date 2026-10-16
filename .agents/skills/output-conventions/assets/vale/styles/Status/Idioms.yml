@@ -1,0 +1,16 @@
+extends: existence
+message: "Replace the idiom or filler '%s' with the plain fact."
+ignorecase: true
+level: warning
+tokens:
+  - quick update
+  - go(?:ne)? ahead and
+  - kick(?:ed)? off
+  - circle back
+  - chugging
+  - blows? up
+  - worth flagging
+  - it's worth
+  - assuming nothing
+  - touch base
+  - basically
