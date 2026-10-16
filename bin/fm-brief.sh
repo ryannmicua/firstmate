@@ -122,6 +122,11 @@
 # Every scaffold also carries the steering-inbox receive-and-ack section:
 # process state/<id>.inbox/*.msg in order and acknowledge each by moving it to
 # handled/ (record, doorbell, and ladder owned by bin/fm-task-inbox-lib.sh).
+# Ship and scout scaffolds carry a short output-conventions section: a one-line
+# reinforcement of answer-first and no-fact-dropping for every status line, and
+# a pointer to .agents/skills/output-conventions/SKILL.md (the single owner of
+# the writing profile, notation map, and checklist) and to the advisory
+# bin/fm-prose-lint.sh. Secondmate charters omit it.
 # Ship tasks include a project-memory section bounding crewmate edits to a
 # project's AGENTS.md/CLAUDE.md: only corrections of factually wrong
 # information, including wrong information the task itself introduced - never
@@ -461,6 +466,17 @@ if [ -e "$CONFIG/wait-no-turns" ]; then
 fi
 INBOX_SECTION=${INBOX_SECTION%$'\n'}
 
+# How a ship or scout worker writes for a reader. The skill it names is the
+# single owner of the conventions; this section only reinforces the two rules
+# every status line needs and points at the skill and the advisory lint.
+IFS= read -r -d '' OUTPUT_SECTION <<EOF || true
+# Output conventions
+Write status lines, reports, and summaries in plain language: the first sentence carries the answer, and shortening never drops a fact.
+Before you write a report, a report summary, a diagram, a review page, or an animation, read and follow \`$FM_ROOT/.agents/skills/output-conventions/SKILL.md\`; it owns the full writing profile, the diagram notation map, and the output checklist.
+\`$FM_ROOT/bin/fm-prose-lint.sh <file|->\` checks that prose and only warns; it never blocks.
+EOF
+OUTPUT_SECTION=${OUTPUT_SECTION%$'\n'}
+
 # How a crewmate or scout waits. Every model turn resends the whole context, so
 # a wait must cost no turns: a decision wait ends the turn, and an external
 # wait sleeps in one bounded blocking shell command sized to the harness.
@@ -710,6 +726,8 @@ $SHARED_INFRA_RULE
 
 $WAIT_BLOCK$INBOX_SECTION
 
+$OUTPUT_SECTION
+
 # Definition of done
 Write your findings to \`$DATA/$ID/report.md\`.
 The report must stand alone: what you did, what you found, the evidence (commands run, output, file:line references), and what you recommend.
@@ -789,6 +807,8 @@ $ASK_USER_BLOCK
 $SHARED_INFRA_RULE
 
 $WAIT_BLOCK$INBOX_SECTION
+
+$OUTPUT_SECTION
 
 # Project memory
 A project's \`AGENTS.md\` or \`CLAUDE.md\` is loaded into every agent session in that project, so edit it only to correct information that is factually wrong - including information your own change made wrong - and never to add knowledge because it is missing.

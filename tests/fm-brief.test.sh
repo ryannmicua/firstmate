@@ -1047,6 +1047,40 @@ test_scout_and_secondmate_load_decision_hold_policy() {
   pass "fm-brief.sh: investigation and visual-review completions load the shared decision policy"
 }
 
+# Ship and scout briefs point every worker at the output-conventions skill,
+# which owns the writing profile, notation map, and checklist, and at the
+# advisory prose lint; both named paths must exist in the code root. A
+# secondmate charter is not a worker brief and carries no such section.
+test_ship_and_scout_point_at_output_conventions() {
+  local home brief kind charter
+  home="$TMP_ROOT/output-conventions-home"
+  mkdir -p "$home/data"
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$ROOT/bin/fm-brief.sh" conventions-ship sample --mode no-mistakes >/dev/null 2>&1
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$ROOT/bin/fm-brief.sh" conventions-scout sample --scout >/dev/null 2>&1
+  for kind in ship scout; do
+    brief="$home/data/conventions-$kind/brief.md"
+    grep -qx '# Output conventions' "$brief" \
+      || fail "$kind brief has no Output conventions section"
+    assert_grep "the first sentence carries the answer, and shortening never drops a fact" "$brief" \
+      "$kind brief dropped the answer-first and no-dropped-facts reinforcement"
+    assert_grep "read and follow \`$ROOT/.agents/skills/output-conventions/SKILL.md\`" "$brief" \
+      "$kind brief does not point at the output-conventions skill"
+    assert_grep "\`$ROOT/bin/fm-prose-lint.sh <file|->\` checks that prose and only warns" "$brief" \
+      "$kind brief does not name the advisory prose lint"
+  done
+  assert_present "$ROOT/.agents/skills/output-conventions/SKILL.md" "the skill a brief names is missing"
+  [ -x "$ROOT/bin/fm-prose-lint.sh" ] || fail "the prose lint a brief names is not executable"
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_SECONDMATE_CHARTER='sample reviews' \
+    "$ROOT/bin/fm-brief.sh" conventions-mate --secondmate --no-projects >/dev/null 2>&1
+  charter="$home/data/conventions-mate/brief.md"
+  if grep -qx '# Output conventions' "$charter"; then
+    fail "secondmate charter carries the worker output-conventions section"
+  fi
+  pass "fm-brief.sh: ship and scout briefs point at the output conventions and the advisory lint"
+}
+
 # A scout brief offers the Lavish review loop for every compatible board version,
 # including older builds that use the legacy reply path.
 test_scout_lavish_line_follows_presentation_floor() {
@@ -1567,6 +1601,7 @@ test_secondmate_directory_paths_are_absolute_and_output_is_stable
 test_pause_verb_override_renders_all_brief_scaffolds
 test_ship_and_scout_teach_validation_round_pause
 test_scout_and_secondmate_load_decision_hold_policy
+test_ship_and_scout_point_at_output_conventions
 test_scout_and_secondmate_scaffold
 test_scout_lavish_line_follows_presentation_floor
 test_workers_wait_without_spending_turns

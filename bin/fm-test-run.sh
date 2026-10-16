@@ -1678,6 +1678,10 @@ families_for_changed_path() {
       printf '%s\n' pure-contract-unit
       printf '%s\n' live-harness-optin
       ;;
+    .agents/skills/output-conventions/assets/*)
+      # The Vale config the advisory prose lint copies and runs.
+      printf '%s\n' __script__:fm-prose-lint.test.sh
+      ;;
     .agents/skills/*/SKILL.md)
       printf '%s\n' pure-contract-unit
       ;;
