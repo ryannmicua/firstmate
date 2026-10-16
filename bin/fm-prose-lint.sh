@@ -10,8 +10,8 @@
 #
 # Each input is one message: a status line, a report summary, or a Markdown
 # file. "-" reads standard input. Two checks run on every input:
-#   Status.LeadSentence  the lead sentence has at most 15 words, so the answer
-#                        comes first (BLUF). Leading blank lines, Markdown
+#   Status.LeadSentence  the lead sentence has at most 25 words. Whether it
+#                        gives the answer first needs review. Leading blank lines, Markdown
 #                        heading lines, and horizontal rules are skipped; a
 #                        leading status prefix such as "done [at=<epoch>]: " and
 #                        a list or quote marker are not counted; an inline code
@@ -44,7 +44,6 @@ set -u
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 VALE_ASSETS="$SCRIPT_DIR/../.agents/skills/output-conventions/assets/vale"
 CACHE_DIR=${FM_PROSE_LINT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/firstmate/vale}
-LEAD_MAX_WORDS=15
 
 usage() {
   awk '
@@ -69,9 +68,9 @@ have_vale() {
 }
 
 # Print a Status.LeadSentence finding for one input when its lead sentence is
-# longer than LEAD_MAX_WORDS. $1 is the readable file, $2 the label to print.
+# longer than 25 words. $1 is the readable file, $2 the label to print.
 lead_sentence_check() {
-  awk -v label="$2" -v max="$LEAD_MAX_WORDS" '
+  awk -v label="$2" -v max=25 '
     function count_words(text,    parts, n, i, words) {
       n = split(text, parts, /[^[:alnum:]_\047\/-]+/)
       words = 0

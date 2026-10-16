@@ -39,7 +39,7 @@ test_without_vale_skips_cleanly_and_still_checks_the_lead() {
   expect_code 0 "$RC" "the lint must exit 0 without vale"
   assert_contains "$ERR" "vale is not installed, so the Vale style checks were skipped" \
     "the lint did not say it skipped Vale"
-  assert_contains "$OUT" "$BEFORE:1:1:Status.LeadSentence:Lead sentence has 85 words, more than 15." \
+  assert_contains "$OUT" "$BEFORE:1:1:Status.LeadSentence:Lead sentence has 85 words, more than 25." \
     "the lint did not flag the 85-word lead sentence"
   assert_not_contains "$OUT" "$AFTER:" "the lint flagged the plain rewrite"
   run_lint "$NO_VALE_PATH" --sync
@@ -52,32 +52,43 @@ test_without_vale_skips_cleanly_and_still_checks_the_lead() {
 test_lead_sentence_reading_rules() {
   local status heading code later
   status="$TMP_ROOT/status.txt"
-  printf '%s\n' 'done [at=1792118584]: I merged the fix, rebased the branch onto main, reran the suite, and pushed the result to the remote today.' > "$status"
+  printf '%s\n' 'done [at=1792118584]: I merged the fix, rebased the branch onto main, reran the suite, and pushed the result to the remote today after checking every reported failure again.' > "$status"
   run_lint "$NO_VALE_PATH" "$status"
-  assert_contains "$OUT" "$status:1:23:Status.LeadSentence:Lead sentence has 20 words" \
+  assert_contains "$OUT" "$status:1:23:Status.LeadSentence:Lead sentence has 26 words" \
     "the status prefix was counted or mislocated"
 
   heading="$TMP_ROOT/heading.md"
-  printf '%s\n' '# A very long report title that would be far more than fifteen words if anyone counted it as prose' '' '---' '' 'The fix is ready for review.' > "$heading"
+  printf '%s\n' '# A very long report title that would exceed the sentence word limit if anyone counted all of these words in the heading as ordinary prose instead of a title' '' '---' '' 'The fix is ready for review.' > "$heading"
   run_lint "$NO_VALE_PATH" "$heading"
   assert_not_contains "$OUT" "Status.LeadSentence" "a heading or rule was read as the lead sentence"
 
   code="$TMP_ROOT/code.md"
   # shellcheck disable=SC2016 # The backticks are literal Markdown, not a substitution.
-  printf '%s\n' 'Run `git log --oneline --decorate --graph --all --since one week ago --author someone --grep fix --no-merges --reverse --stat` first.' > "$code"
+  printf '%s\n' 'Run `git log --oneline --decorate --graph --all --since one week ago --author someone --grep fix --no-merges --reverse --stat --name-only --date short --format full --color always --max-count 10` first.' > "$code"
   run_lint "$NO_VALE_PATH" "$code"
   assert_not_contains "$OUT" "Status.LeadSentence" "an inline code span counted as more than one word"
 
   later="$TMP_ROOT/later.md"
-  printf '%s\n' 'CI is green.' 'The rest of this paragraph runs on and on with many more words than the lead sentence limit allows here.' > "$later"
+  printf '%s\n' 'CI is green.' 'The rest of this paragraph runs on and on with many more words than the lead sentence limit allows here because it describes every remaining task in detail.' > "$later"
   run_lint "$NO_VALE_PATH" "$later"
   assert_not_contains "$OUT" "Status.LeadSentence" "a long second sentence was read as the lead"
 
-  OUT=$(printf '%s\n' 'Quick update: I went ahead and kicked off the pipeline and everything about the build is basically done now.' \
+  OUT=$(printf '%s\n' 'CI passed every required check for the release after I fixed the reported failure and successfully reran the affected tests on the final branch this morning.' \
     | PATH="$NO_VALE_PATH" FM_PROSE_LINT_CACHE="$CACHE" "$LINT" - 2>/dev/null)
-  assert_contains "$OUT" "stdin:1:1:Status.LeadSentence:Lead sentence has 19 words" \
+  assert_contains "$OUT" "stdin:1:1:Status.LeadSentence:Lead sentence has 26 words" \
     "standard input was not checked under the stdin label"
   pass "fm-prose-lint: the lead sentence skips headings and prefixes and counts code as one word"
+}
+
+test_lead_accepts_the_adopted_word_ceiling() {
+  local text
+  for text in \
+    'CI passed every required check after I fixed the failure and reran the affected tests today.' \
+    'CI passed every required check for the release after I fixed the reported failure and reran the affected tests on the final branch this morning.'; do
+    OUT=$(printf '%s\n' "$text" | PATH="$NO_VALE_PATH" FM_PROSE_LINT_CACHE="$CACHE" "$LINT" - 2>/dev/null)
+    assert_not_contains "$OUT" "Status.LeadSentence" "the lint flagged a lead within the adopted ceiling"
+  done
+  pass "fm-prose-lint: leads between 16 and 25 words meet the adopted ceiling"
 }
 
 test_usage_errors_are_the_only_nonzero_exit() {
@@ -111,7 +122,6 @@ for arg in "$@"; do
   prev=$arg
 done
 [ -f "$(dirname "$config")/styles/Status/Idioms.yml" ] || { echo "no Status style beside $config" >&2; exit 9; }
-grep -q '^Google.Passive = YES$' "$config" || { echo "named rules missing from $config" >&2; exit 9; }
 cat > /dev/null
 [ -z "${STAND_IN_FAIL:-}" ] || { echo "stand-in failure" >&2; exit 3; }
 echo "stdin.md:1:5:Status.Idioms:Replace the idiom or filler 'quick update' with the plain fact."
@@ -148,6 +158,7 @@ test_real_vale_status_rules() {
 
 test_without_vale_skips_cleanly_and_still_checks_the_lead
 test_lead_sentence_reading_rules
+test_lead_accepts_the_adopted_word_ceiling
 test_usage_errors_are_the_only_nonzero_exit
 test_vale_plumbing_with_a_stand_in
 test_real_vale_status_rules

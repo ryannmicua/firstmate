@@ -68,7 +68,7 @@ C4 covers architecture only; its own FAQ excludes business processes, workflows,
 | What runs where | C4 deployment | Same |
 | Messages and relays in order | UML sequence subset | Mermaid `sequenceDiagram`, or hand SVG with one lifeline per participant |
 | Life of one thing | UML state machine subset | Mermaid `stateDiagram-v2` |
-| Work that crosses people, with handoffs | Swimlanes with BPMN Descriptive semantics | Mermaid `swimlanes`, or hand SVG |
+| Work that crosses people, with handoffs | Swimlanes with BPMN Descriptive semantics | Mermaid [`swimlane-beta`](https://mermaid.js.org/syntax/swimlanes) (11.16.0+), or hand SVG |
 | Branching checks inside one actor | Flowchart (UML activity) | Mermaid `flowchart` |
 | Entities and relations | ER, crow's foot | Mermaid `erDiagram` |
 | Plan without committed dates | Now-Next-Later | Hand SVG or Claude Docs roadmap |
@@ -139,5 +139,6 @@ Run this before you hand over output; each item names its source.
 `bin/fm-prose-lint.sh` checks a status line or report summary against this profile and only warns; its header owns usage, the lead-sentence check, and the Vale setup.
 Its Vale config lives beside this skill in `assets/vale/`: three named rules from the Google and Microsoft packages plus two `Status` rules for the 25-word ceiling and a seed idiom list.
 Vale is optional: without it the lint says so and runs the lead-sentence check alone.
+The lead check counts words against rule 3's ceiling; rule 1's answer-first meaning needs a reviewer.
 Expect some noise, such as passive-voice alerts inside quotes and examples; treat each alert as a prompt to reread, not a verdict.
 Rules 5, 7, and 8 need a reviewer and a fact list, because no lint can check them.
