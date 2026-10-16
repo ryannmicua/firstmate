@@ -1,0 +1,39 @@
+CASE: Vale absent
+INPUT: CI passed every required check for the release after I fixed the reported failure and successfully reran the affected tests on the final branch this morning.
+STDOUT:
+stdin:1:1:Status.LeadSentence:Lead sentence has 26 words, more than 25. Put the answer first.
+STDERR:
+fm-prose-lint: vale is not installed, so the Vale style checks were skipped; the lead-sentence check still ran (install vale from https://vale.sh to enable them)
+exit=0
+
+CASE: Packages not synced
+INPUT: CI passed every required check for the release after I fixed the reported failure and successfully reran the affected tests on the final branch this morning.
+STDOUT:
+stdin:1:1:Status.LeadSentence:Lead sentence has 26 words, more than 25. Put the answer first.
+stdin:1:1:Status.SentenceLength:Sentence has more than 25 words. Split it.
+STDERR:
+fm-prose-lint: Vale package(s) Google Microsoft not synced, so only the Status rules ran; run 'bin/fm-prose-lint.sh --sync' once to enable Google.Passive, Microsoft.Adverbs and Microsoft.Wordiness
+exit=0
+
+CASE: real Vale rejects damaged cached rule
+STDOUT:
+stdin:1:1:Status.LeadSentence:Lead sentence has 26 words, more than 25. Put the answer first.
+STDERR:
+fm-prose-lint: vale failed on stdin (exit 2); its style findings are missing:
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.test-output-guidance/tmp/fm-prose-lint.b95gaZ/styles/Google/Passive.yml:1:E201:'extends' key must be one of [capitalization conditional consistency existence occurrence repetition substitution readability spelling sequence metric script].
+exit=0
+
+$ bin/fm-prose-lint.sh 
+fm-prose-lint: no input given
+fm-prose-lint: run with --help for usage
+exit=2
+
+$ bin/fm-prose-lint.sh --bogus
+fm-prose-lint: unknown option: --bogus
+fm-prose-lint: run with --help for usage
+exit=2
+
+$ bin/fm-prose-lint.sh /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.test-output-guidance/missing.md
+fm-prose-lint: cannot read /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.test-output-guidance/missing.md
+fm-prose-lint: run with --help for usage
+exit=2

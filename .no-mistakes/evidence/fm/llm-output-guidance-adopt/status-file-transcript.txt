@@ -1,0 +1,12 @@
+$ bin/fm-prose-lint.sh status.txt
+INPUT:
+# Report heading
+
+---
+
+done [at=1792118584]: I merged the fix, rebased the branch onto main, reran the suite, and pushed the result to the remote today after checking every reported failure again.
+STDOUT:
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.test-output-guidance/status.txt:5:23:Status.LeadSentence:Lead sentence has 26 words, more than 25. Put the answer first.
+/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.test-output-guidance/status.txt:5:1:Status.SentenceLength:Sentence has more than 25 words. Split it.
+STDERR:
+exit=0

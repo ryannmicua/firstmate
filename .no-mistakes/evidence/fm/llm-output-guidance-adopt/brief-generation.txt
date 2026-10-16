@@ -1,0 +1,23 @@
+$ bin/fm-brief.sh prose-ship sample --mode no-mistakes
+scaffolded: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.test-output-guidance/home/data/prose-ship/brief.md (ship, mode=no-mistakes; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+
+Generated public instructions:
+Write status lines, reports, and summaries in plain language: the first sentence carries the answer, and shortening never drops a fact.
+Before you write a report, a report summary, a diagram, a review page, or an animation, read and follow `/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.agents/skills/output-conventions/SKILL.md`; it owns the full writing profile, the diagram notation map, and the output checklist.
+`/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/bin/fm-prose-lint.sh <file|->` checks that prose and only warns; it never blocks.
+
+
+$ bin/fm-brief.sh prose-scout sample --scout
+scaffolded: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.test-output-guidance/home/data/prose-scout/brief.md (scout; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+
+Generated public instructions:
+Write status lines, reports, and summaries in plain language: the first sentence carries the answer, and shortening never drops a fact.
+Before you write a report, a report summary, a diagram, a review page, or an animation, read and follow `/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.agents/skills/output-conventions/SKILL.md`; it owns the full writing profile, the diagram notation map, and the output checklist.
+`/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/bin/fm-prose-lint.sh <file|->` checks that prose and only warns; it never blocks.
+
+
+$ bin/fm-brief.sh prose-mate --secondmate --no-projects
+scaffolded: /home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M51ARB0Z3K8CHPXHJN7KPVM2/.test-output-guidance/home/data/prose-mate/brief.md (secondmate charter)
+exit=0

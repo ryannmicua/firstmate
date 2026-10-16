@@ -1,0 +1,44 @@
+Vale 3.24.0; real Google and Microsoft packages synced to an isolated workspace cache.
+Fixture correction: Clearly is not a Microsoft.Adverbs token; used Carefully from the package rule instead.
+CASE: 25-word lead
+$ printf <input> | bin/fm-prose-lint.sh -
+INPUT:
+CI passed every required check for the release after I fixed the reported failure and reran the affected tests on the final branch this morning.
+STDOUT:
+STDERR:
+exit=0
+
+CASE: 26-word lead
+$ printf <input> | bin/fm-prose-lint.sh -
+INPUT:
+CI passed every required check for the release after I fixed the reported failure and successfully reran the affected tests on the final branch this morning.
+STDOUT:
+stdin:1:1:Status.LeadSentence:Lead sentence has 26 words, more than 25. Put the answer first.
+stdin:1:1:Status.SentenceLength:Sentence has more than 25 words. Split it.
+STDERR:
+exit=0
+
+CASE: named package rules
+$ printf <input> | bin/fm-prose-lint.sh -
+INPUT:
+The report was reviewed.
+
+Carefully, I can help in order to finish.
+
+Basically, we should circle back.
+STDOUT:
+stdin:1:12:Google.Passive:In general, use active voice instead of passive voice ('was reviewed').
+stdin:3:1:Microsoft.Adverbs:Remove 'Carefully' if it's not important to the meaning of the statement.
+stdin:3:23:Microsoft.Wordiness:Consider using 'to' instead of 'in order to'.
+stdin:5:1:Status.Idioms:Replace the idiom or filler 'Basically' with the plain fact.
+stdin:5:22:Status.Idioms:Replace the idiom or filler 'circle back' with the plain fact.
+STDERR:
+exit=0
+
+CASE: plain result
+$ printf <input> | bin/fm-prose-lint.sh -
+INPUT:
+CI passed. I fixed two conflicts. Merge requires one human approval.
+STDOUT:
+STDERR:
+exit=0
