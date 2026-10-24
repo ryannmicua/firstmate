@@ -63,7 +63,10 @@
 #     hints.open_decisions is the keyed open-decision set returned by
 #     fm-classify-lib.sh's authoritative status_open_decisions fold and reconciled
 #     against current_state; hints.pending_decision and hints.blocked_event are
-#     booleans derived from that set.
+#     booleans derived from that set. Each entry also carries opened_epoch, the
+#     opening line's [at=<epoch>] stamp (status_open_decisions_at), or null when
+#     that line has none; decisions_open entries carry the same field. Captain
+#     holds in decisions_open also carry hold_set and since for bin/fm-attention.sh.
 #     endpoint.exists is the cheap local backend endpoint-presence read.
 #     endpoint.agent_alive is populated for local secondmates only, where it is
 #     useful return-channel supervision data; remote secondmates use "unknown"
@@ -816,7 +819,7 @@ task_json_lines() {
     # never clear another concern's keyed decision. A parked/blocked state, or a
     # non-authoritative status-log/none read on a still-live task, keeps the fold's
     # open decision surfacing.
-    open_decisions_tsv=$(status_open_decisions "$status_log" "$kind")
+    open_decisions_tsv=$(status_open_decisions_at "$status_log" "$kind")
     if [ "$kind" != secondmate ] && \
        { { { [ "$current_source" = run-step ] || [ "$current_source" = pane ]; } \
            && [ "$current_state" != parked ] && [ "$current_state" != blocked ]; } \
@@ -825,8 +828,10 @@ task_json_lines() {
     fi
     open_decisions_json=$(printf '%s' "$open_decisions_tsv" | jq -R -s '
       [ splits("\n") | select(length > 0)
-        | (capture("^(?<key>[^\t]*)\t(?<verb>[^\t]*)\t(?<summary>.*)$")?)
-        | select(. != null) ]')
+        | (capture("^(?<key>[^\t]*)\t(?<verb>[^\t]*)\t(?<summary>.*)\t(?<at>[0-9]*)$")?)
+        | select(. != null)
+        | .opened_epoch = (if .at == "" then null else (.at | tonumber) end)
+        | del(.at) ]')
     pending_decision=$(printf '%s' "$open_decisions_json" | jq 'if any(.[]; .verb == "needs-decision") then 1 else 0 end')
     blocked_event=$(printf '%s' "$open_decisions_json" | jq 'if any(.[]; .verb == "blocked") then 1 else 0 end')
 
@@ -1010,7 +1015,9 @@ secondmate_home_summary_json() {  # <backlog-json-file> <tasks-json-file>
             reason:(.hold_reason | trunc(160)),
             hold_until:(.hold_until // null),
             hold_bucket:(.hold_bucket // null),
-            hold_age_days:(.hold_age_days // null),source:"backlog"} ]) as $captain_holds_all
+            hold_age_days:(.hold_age_days // null),
+            hold_set:(.hold_set // null),since:(.since // null),
+            source:"backlog"} ]) as $captain_holds_all
     | ([ $backlog.records[]? | select(landed_record)
          | {id:(.id | trunc(120)),title:(.title | trunc(120)),
             kind:((.kind // null) | if . == null then null else trunc(40) end),
@@ -1063,7 +1070,7 @@ secondmate_home_summary_json() {  # <backlog-json-file> <tasks-json-file>
             doing:((.current_state.detail // "") | trunc(120))} ]) as $active_all
     | ($captain_holds_all
        + ([ $tasks[] as $t | ($t.hints.open_decisions // [])[]
-            | {id:$t.id,key,verb,summary:(.summary | trunc(160)),reason:null,source:"status"} ])) as $decisions_all
+            | {id:$t.id,key,verb,summary:(.summary | trunc(160)),reason:null,opened_epoch:(.opened_epoch // null),source:"status"} ])) as $decisions_all
     | ([ $queued_all[]
          | select((.unresolved_blocker_ids | length) > 0 or (.hold_reason != null and .hold_kind != null))
          | {id:(.id | trunc(120)),title:(.title | trunc(90)),

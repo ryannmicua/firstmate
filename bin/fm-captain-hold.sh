@@ -211,6 +211,11 @@
 # The hold or answer is already durable in the backlog, so a channel that
 # cannot be written is reported as `actionable:` on stderr rather than undoing
 # the record; bin/fm-inactive-reconcile.sh's diagnostics name a broken binding.
+#
+# Fleet ledger: when the home's config/fleet-ledger flag exists, the same publish
+# point also records captain.held (captain.deferred for a hold with --until),
+# captain.answered with mode done, release, or reconciled, so an external reader
+# can order open captain calls by when they were raised (docs/fleet-ledger.md).
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -218,6 +223,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
+CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
 # shellcheck source=bin/fm-classify-lib.sh
 # shellcheck disable=SC1091
@@ -238,10 +244,40 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/fm-parent-channel-lib.sh"
 
+# Opt-in fleet activity ledger (docs/fleet-ledger.md); off costs one file test.
+# Every hold, answer, release, and reconcile path ends in publish_parent_hold, so
+# this is the one place the captain.* events are written. Retries record again;
+# the ledger is at-least-once and its readers fold a task's newest event.
+CAPTAIN_HOLD_LEDGER_UNTIL=
+record_captain_ledger() {  # <task-id> <verb> <note>
+  local id=$1 verb=$2 note=$3 mode
+  [ ! -e "$CONFIG/fleet-ledger" ] || case "$verb" in
+    needs-decision)
+      if [ -n "$CAPTAIN_HOLD_LEDGER_UNTIL" ]; then
+        FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG \
+          "$SCRIPT_DIR/fm-fleet-ledger.sh" captain_deferred "$id" "$CAPTAIN_HOLD_LEDGER_UNTIL" || true
+      else
+        FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG \
+          "$SCRIPT_DIR/fm-fleet-ledger.sh" captain_held "$id" || true
+      fi
+      ;;
+    resolved)
+      case "$note" in
+        released) mode=release ;;
+        reconciled) mode=reconciled ;;
+        *) mode="done" ;;
+      esac
+      FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG \
+        "$SCRIPT_DIR/fm-fleet-ledger.sh" captain_answered "$id" "$mode" || true
+      ;;
+  esac
+}
+
 PARENT_HOLD_PUBLISHED=0
 publish_parent_hold() {  # <task-id> <occurrence> <verb> <note>
   local id=$1 occurrence=$2 verb=$3 note=$4 rc=0
   PARENT_HOLD_PUBLISHED=0
+  record_captain_ledger "$id" "$verb" "$note"
   fm_parent_channel_report "$FM_HOME" "$STATE" \
     "$verb [key=captain-hold-$id-$occurrence]: captain hold $id: $(fm_parent_channel_clean_note "$note")" || rc=$?
   case "$rc" in
@@ -1007,6 +1043,8 @@ command_hold() {
   occurrence=$(( $(resolution_record_count "$(show_field "$show" body)") + 1 ))
   [ -n "$(body_hold_set_timestamp "$(show_field_value "$show" body)")" ] \
     || fail "task $id lost its hold-set stamp while being held"
+  CAPTAIN_HOLD_LEDGER_UNTIL=$until
+  CAPTAIN_HOLD_LEDGER_UNTIL=$until
   publish_parent_hold "$id" "$occurrence" needs-decision "$reason"
   printf '%s\n' "$id"
 }

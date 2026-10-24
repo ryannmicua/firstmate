@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# Behavior tests for the captain attention read (bin/fm-attention.sh) and the
+# captain.* fleet ledger events bin/fm-captain-hold.sh records for it. The holds
+# are made through the real script and tasks-axi; docs/fleet-ledger.md owns the
+# event contract.
+set -u
+
+# shellcheck source=tests/lib.sh
+# shellcheck disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+ATTENTION="$ROOT/bin/fm-attention.sh"
+TMP_ROOT=$(fm_test_tmproot fm-attention)
+TASKS_AXI_BIN=$(command -v tasks-axi || true)
+
+command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
+command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found"; exit 0; }
+
+make_home() {  # <name> <on|off>
+  local home="$TMP_ROOT/$1" fakebin
+  mkdir -p "$home/data" "$home/state" "$home/config" "$home/projects"
+  fm_test_tasks_toml "$home/.tasks.toml"
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  [ "$2" = off ] || : > "$home/config/fleet-ledger"
+  fakebin=$(fm_fakebin "$home")
+  fm_fake_exit0 "$fakebin" tmux treehouse no-mistakes gh gh-axi
+  printf '%s\n' "$home"
+}
+
+run_captain() {  # <home> <command args...>
+  local home=$1
+  shift
+  PATH="$home/fakebin:$PATH" REAL_TASKS_AXI="$TASKS_AXI_BIN" \
+    FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_CONFIG_OVERRIDE="$home/config" "$ROOT/bin/fm-captain-hold.sh" "$@"
+}
+
+run_attention() {  # <home> [args]
+  local home=$1
+  shift
+  PATH="$home/fakebin:$PATH" FM_HOME="$home" "$ATTENTION" "${@:---json}"
+}
+
+ledger_events() {  # <home> <jq-expression>
+  jq -r -c "$2" "$1/state/fleet-ledger.jsonl" 2>/dev/null | paste -sd' ' -
+}
+
+hold_at() {  # <home> <id> <utc-stamp>
+  FM_CAPTAIN_HOLD_NOW=$3 run_captain "$1" hold "$2" --title "Call $2" \
+    --reason "captain must decide $2" --repo sample >/dev/null \
+    || fail "could not hold $2"
+}
+
+test_hold_answer_release_and_defer_are_recorded() {
+  local home answer
+  home=$(make_home ledger-on on)
+  answer="$home/answer.txt"
+  printf 'Use the first option.\n' > "$answer"
+  hold_at "$home" asked 2026-07-01T10:00:00Z
+  FM_CAPTAIN_HOLD_NOW=2026-07-01T11:00:00Z run_captain "$home" hold deferred --title "Call deferred" \
+    --reason "revisit later" --repo sample --until 2026-12-01 >/dev/null || fail "could not defer"
+  hold_at "$home" released 2026-07-01T12:00:00Z
+  run_captain "$home" answer asked --decision-file "$answer" >/dev/null || fail "could not answer"
+  run_captain "$home" answer released --decision-file "$answer" --release >/dev/null || fail "could not release"
+  assert_equals 'captain.held:asked captain.deferred:deferred captain.held:released captain.answered:asked captain.answered:released' \
+    "$(ledger_events "$home" 'select(.event | startswith("captain.")) | "\(.event):\(.task)"')" \
+    "captain events in write order"
+  assert_equals '2026-12-01' "$(ledger_events "$home" 'select(.event == "captain.deferred") | .until')" \
+    "deferred date"
+  assert_equals 'done release' "$(ledger_events "$home" 'select(.event == "captain.answered") | .mode')" \
+    "answer modes"
+  pass "hold, deferral, answer, and release each write one captain event"
+}
+
+test_reconcile_is_recorded() {
+  local home evidence
+  home=$(make_home ledger-reconcile on)
+  evidence="$home/evidence.txt"
+  printf 'The question is moot: the work shipped.\n' > "$evidence"
+  hold_at "$home" moot 2026-07-01T10:00:00Z
+  run_captain "$home" bind board-source >/dev/null || fail "could not bind"
+  printf 'moot\n' | run_captain "$home" reconcile-requests --source-id board-source \
+    --source "captured board result" >/dev/null || fail "could not request reconcile"
+  run_captain "$home" reconcile close moot --evidence-file "$evidence" >/dev/null \
+    || fail "could not reconcile"
+  assert_equals 'captain.held:moot captain.answered:moot' \
+    "$(ledger_events "$home" 'select(.event | startswith("captain.")) | "\(.event):\(.task)"')" \
+    "events around a reconcile"
+  assert_equals 'reconciled' "$(ledger_events "$home" 'select(.event == "captain.answered") | .mode')" \
+    "reconcile mode"
+  pass "a moot call closed by reconciliation records captain.answered with mode reconciled"
+}
+
+test_flag_off_writes_nothing() {
+  local home leftovers
+  home=$(make_home ledger-off off)
+  printf 'ok\n' > "$home/answer.txt"
+  hold_at "$home" quiet 2026-07-01T10:00:00Z
+  run_captain "$home" answer quiet --decision-file "$home/answer.txt" >/dev/null || fail "could not answer"
+  leftovers=$(cd "$home/state" && find . -name '*fleet-ledger*')
+  assert_equals "" "$leftovers" "ledger files with the flag absent"
+  pass "flag off: holds and answers leave no ledger file or lock"
+}
+
+test_ledger_command_rejects_bad_captain_events() {
+  local home
+  home=$(make_home ledger-usage on)
+  for args in "captain_answered t maybe" "captain_deferred t" "captain_held" "captain_held bad/id"; do
+    # shellcheck disable=SC2086
+    FM_HOME="$home" "$ROOT/bin/fm-fleet-ledger.sh" $args >/dev/null 2>&1 \
+      && fail "accepted: $args"
+  done
+  [ ! -s "$home/state/fleet-ledger.jsonl" ] || fail "a rejected event wrote a record"
+  pass "the ledger writer refuses malformed captain events without writing"
+}
+
+test_open_decisions_are_newest_first() {
+  local home out epoch
+  home=$(make_home order off)
+  hold_at "$home" older 2026-07-01T10:00:00Z
+  hold_at "$home" newer 2026-07-03T09:30:15Z
+  cat >> "$home/data/backlog.md" <<'EOF'
+EOF
+  sed -i 's/^## Done$/- [ ] legacy-call - Legacy call (repo: sample) (kind: captain) (hold: old question) (hold-kind: captain) (since 2026-07-02)\n\n## Done/' "$home/data/backlog.md"
+  epoch=$(date -u -d 2026-07-02T12:00:00Z +%s)
+  mkdir -p "$home/mate-home"
+  fm_write_meta "$home/state/mate.meta" \
+    "window=firstmate:fm-mate" "worktree=$home/mate-home" "project=$home/mate-home" \
+    "harness=codex" "kind=secondmate" "mode=secondmate" "home=$home/mate-home" "projects=alpha"
+  printf 'needs-decision [key=api-shape] [at=%s]: choose the API shape\n' "$epoch" > "$home/state/mate.status"
+  printf 'needs-decision [key=unstamped]: no time on this line\n' >> "$home/state/mate.status"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  printf '%s' "$out" | jq -e '.schema == "fm-attention.v1" and (.generated | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$"))
+    and (keys | sort) == ["generated", "open_decisions", "schema"]' >/dev/null \
+    || fail "unexpected envelope: $out"
+  assert_equals 'newer api-shape legacy-call older unstamped' \
+    "$(printf '%s' "$out" | jq -r '[.open_decisions[] | (.key // .task)] | join(" ")')" \
+    "newest-first order, undated last"
+  printf '%s' "$out" | jq -e '
+    (.open_decisions[] | select(.task == "newer"))
+      | .kind == "captain_hold" and .home == "main" and .opened_at == "2026-07-03T09:30:15Z"
+        and .opened_precision == "second" and .last_touched_at == .opened_at and .bucket == "aged"
+        and .reason == "captain must decide newer"' >/dev/null || fail "captain hold row wrong: $out"
+  printf '%s' "$out" | jq -e '
+    (.open_decisions[] | select(.task == "legacy-call"))
+      | .opened_at == "2026-07-02T00:00:00Z" and .opened_precision == "day"' >/dev/null \
+    || fail "legacy hold must fall back to the day it was filed: $out"
+  printf '%s' "$out" | jq -e '
+    (.open_decisions[] | select(.key == "api-shape"))
+      | .kind == "keyed" and .task == "mate" and .opened_at == "2026-07-02T12:00:00Z"
+        and .opened_precision == "second" and .bucket == null' >/dev/null \
+    || fail "keyed decision must carry its [at=] stamp: $out"
+  printf '%s' "$out" | jq -e '
+    (.open_decisions[] | select(.key == "unstamped"))
+      | .opened_at == null and .opened_precision == null and .last_touched_at == null' >/dev/null \
+    || fail "an unstamped keyed decision has no time: $out"
+  pass "open decisions sort newest first with second, day, and unknown opened times"
+}
+
+test_ledger_events_move_last_touched() {
+  local home out ts
+  home=$(make_home touched on)
+  hold_at "$home" first 2026-07-01T10:00:00Z
+  hold_at "$home" second 2026-07-02T10:00:00Z
+  # The ledger recorded both just now, at the real clock; place a later re-hold
+  # of the older call an hour ahead of it.
+  ts=$(( $(date +%s) + 3600 ))
+  printf '{"v":1,"ts":%s,"event":"captain.held","task":"first"}\n' "$ts" >> "$home/state/fleet-ledger.jsonl"
+  printf 'not json\n{"ts":"x"}\n' >> "$home/state/fleet-ledger.jsonl"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  assert_equals "first" "$(printf '%s' "$out" | jq -r '.open_decisions[0].task')" \
+    "a ledger event makes the call newest"
+  printf '%s' "$out" | jq -e '
+    (.open_decisions | map(select(.task == "first"))[0])
+      | .opened_at == "2026-07-01T10:00:00Z"' >/dev/null || fail "opened_at must not move: $out"
+  printf '%s' "$out" | jq -e --argjson ts "$ts" '(.open_decisions | map(select(.task == "first"))[0].last_touched_at | fromdateiso8601) == $ts' \
+    >/dev/null || fail "last_touched_at must follow the ledger: $out"
+  pass "ledger events raise last_touched_at while opened_at stays put, and torn ledger lines are skipped"
+}
+
+test_answered_call_is_not_open() {
+  local home out
+  home=$(make_home answered on)
+  printf 'ok\n' > "$home/answer.txt"
+  hold_at "$home" gone 2026-07-01T10:00:00Z
+  hold_at "$home" stays 2026-07-02T10:00:00Z
+  run_captain "$home" answer gone --decision-file "$home/answer.txt" >/dev/null || fail "could not answer"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  assert_equals "stays" "$(printf '%s' "$out" | jq -r '[.open_decisions[].task] | join(" ")')" \
+    "only the unanswered call remains"
+  pass "an answered call leaves the open decisions"
+}
+
+test_read_is_side_effect_free_and_validates_arguments() {
+  local home before after
+  home=$(make_home readonly on)
+  hold_at "$home" call 2026-07-01T10:00:00Z
+  before=$(cd "$home" && find . -type f -exec cksum {} + | LC_ALL=C sort)
+  run_attention "$home" >/dev/null || fail "fm-attention failed"
+  after=$(cd "$home" && find . -type f -exec cksum {} + | LC_ALL=C sort)
+  assert_equals "$before" "$after" "files after a read"
+  run_attention "$home" >/dev/null 2>&1 && true
+  PATH="$home/fakebin:$PATH" FM_HOME="$home" "$ATTENTION" >/dev/null 2>&1 && fail "ran without --json"
+  PATH="$home/fakebin:$PATH" FM_HOME="$home" "$ATTENTION" --json extra >/dev/null 2>&1 && fail "accepted an extra argument"
+  PATH="$home/fakebin:$PATH" FM_HOME="$home" "$ATTENTION" --help >/dev/null 2>&1 || fail "--help failed"
+  pass "the read stores nothing and rejects unknown arguments"
+}
+
+test_hold_answer_release_and_defer_are_recorded
+test_reconcile_is_recorded
+test_flag_off_writes_nothing
+test_ledger_command_rejects_bad_captain_events
+test_open_decisions_are_newest_first
+test_ledger_events_move_last_touched
+test_answered_call_is_not_open
+test_read_is_side_effect_free_and_validates_arguments

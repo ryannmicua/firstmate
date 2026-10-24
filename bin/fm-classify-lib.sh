@@ -913,6 +913,61 @@ status_open_decisions() {  # <status-file> [<kind>]
   printf '%s' "$open"
 }
 
+# status_open_decisions plus the opening line's `[at=<epoch>]` stamp: prints one
+# "<key>\t<verb>\t<summary>\t<epoch>" line per still-open decision, with an empty
+# epoch when the opening line carries no well-formed stamp. The open set and its
+# order are exactly status_open_decisions's, because every line goes through the
+# same _fm_decision_fold_line rule; this only records when each surviving record
+# was last opened. It is a separate function so the three-column fold every other
+# consumer uses, and the incremental fold's persisted open set, keep their shape.
+status_open_decisions_at() {  # <status-file> [<kind>]
+  local f=$1 kind=${2:-} line resolve held open='' verb key epoch stamps='' kept skey sepoch row out='' done_rc
+  [ -e "$f" ] || [ -L "$f" ] || return 0
+  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
+  kind=$(_fm_status_kind "$f" "$kind")
+  resolve=${FM_CLASSIFY_RESOLVE_VERB:-$FM_CLASSIFY_RESOLVE_VERB_DEFAULT}
+  held=${FM_CLASSIFY_CAPTAIN_HELD_VERB:-$FM_CLASSIFY_CAPTAIN_HELD_VERB_DEFAULT}
+  while IFS= read -r line || [ -n "$line" ]; do
+    status_line_verb "$line" verb
+    case "$verb" in
+      needs-decision|blocked|done|failed|"$resolve"|"$held")
+        open=$(_fm_decision_fold_line "$open" "$line" "$resolve" "$held" "$kind")
+        case "$verb" in
+          needs-decision|blocked)
+            key=$(_fm_decision_key "$line") || continue
+            _fm_open_set_has "$open" "$key" || continue
+            epoch=$(status_line_at_epoch "$line") || epoch=''
+            kept=''
+            while IFS=$'\t' read -r skey sepoch; do
+              [ -n "$skey" ] && [ "$skey" != "$key" ] || continue
+              kept="${kept}${skey}"$'\t'"${sepoch}"$'\n'
+            done <<STAMPS
+$stamps
+STAMPS
+            stamps="${kept}${key}"$'\t'"${epoch}"$'\n'
+            ;;
+        esac
+        ;;
+    esac
+  done < "$f"
+  done_rc=$?
+  [ "$done_rc" -eq 0 ] || return 1
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    key=${row%%$'\t'*}
+    epoch=''
+    while IFS=$'\t' read -r skey sepoch; do
+      [ "$skey" = "$key" ] && epoch=$sepoch
+    done <<STAMPS
+$stamps
+STAMPS
+    out="${out}${row}"$'\t'"${epoch}"$'\n'
+  done <<OPEN
+$open
+OPEN
+  printf '%s' "$out"
+}
+
 # Resolve the log's current declaration at one boundary for crew-state consumers.
 # Any decision the fold still holds open wins over unrelated events, and the
 # fold's most recently opened record supplies it; a standing declared wait, then
