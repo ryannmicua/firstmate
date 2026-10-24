@@ -124,7 +124,7 @@ The list reports only what the ledger recorded, so its [limits](#limits) apply: 
 
 ### In-flight items
 
-`in_flight` lists the backlog's in-flight items in backlog order, the same items `bin/fm-inbox.sh status` prints as text.
+`in_flight` lists the configured backlog adapter's in-flight items in backlog order.
 Each item has `task`, `title`, `repo`, `kind`, `worker`, `last_event`, and `pr`.
 `worker` is the fleet snapshot's current state for the task's worker, such as `working`, `done`, or `unknown`, or `null` when no worker is recorded for it.
 `last_event` is the task's newest status line, trimmed to 160 characters, or `null`; like any status line, it is history rather than current state.
