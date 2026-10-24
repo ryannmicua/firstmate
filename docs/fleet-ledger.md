@@ -87,11 +87,12 @@ All times are UTC, ISO 8601, second precision.
 
 | `source`           | `started_at` is                                                                                     |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
-| `session_lock`     | when the session lock was acquired, the modification time of `state/.lock` |
+| `session_lock`     | the modification time of `state/.lock`, used only when no session identity boundary is available |
 | `session_identity` | when the session lock last recorded a new session identity, such as a `/clear`, the modification time of `state/.lock-session` |
 | `fallback_24h`  | 24 hours before the read, when neither session boundary is available; this is a rolling window, not a session                                               |
 
-When both records exist, the later one wins.
+The session identity boundary takes precedence even when the lock file is newer.
+A same-session re-anchor rewrites the lock file without changing the identity sidecar, so it must not advance the activity boundary.
 
 `session_activity` lists this ledger's events from `started_at` on, newest first, at most 100 items.
 `session_activity_total` counts distinct eligible items before the cap, and `session_activity_truncated` is true when the cap omits items.

@@ -514,7 +514,7 @@ test_in_flight_reports_the_worker_state() {
 }
 
 test_session_start_sources_and_fallback() {
-  local home out now
+  local home out now before_reanchor
   home=$(activity_home activity-sources)
   : > "$home/state/.lock"
   : > "$home/state/.session-start-complete"
@@ -527,6 +527,19 @@ test_session_start_sources_and_fallback() {
     and ([.session_activity[].task] | index("fix-login")) != null
     and ([.session_activity[] | select(.event == "task.dispatched")] | length) == 0' >/dev/null \
     || fail "a later session identity change must start the session: $out"
+  before_reanchor=$(printf '%s' "$out" | jq -c '{session, session_activity, session_activity_total, session_activity_truncated}')
+  TZ=UTC touch -t 202607010955.00 "$home/state/.lock"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  assert_equals "$before_reanchor" \
+    "$(printf '%s' "$out" | jq -c '{session, session_activity, session_activity_total, session_activity_truncated}')" \
+    "same-session re-anchor must preserve the identity boundary and all prior activity"
+  rm -f "$home/state/.lock"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  assert_equals "$before_reanchor" \
+    "$(printf '%s' "$out" | jq -c '{session, session_activity, session_activity_total, session_activity_truncated}')" \
+    "identity-only reads must preserve the session boundary and activity"
+  : > "$home/state/.lock"
+  TZ=UTC touch -t 202607010920.00 "$home/state/.lock"
   rm -f "$home/state/.lock-session"
   out=$(run_attention "$home") || fail "fm-attention failed: $out"
   printf '%s' "$out" | jq -e '.session == {started_at: "2026-07-01T09:20:00Z", source: "session_lock"}

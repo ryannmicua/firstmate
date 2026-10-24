@@ -43,15 +43,14 @@ SNAPSHOT=$("$SCRIPT_DIR/fm-fleet-snapshot.sh" --local) || exit $?
 
 SESSION_START=null
 SESSION_SOURCE=null
-for pair in session_lock:.lock session_identity:.lock-session; do
+for pair in session_identity:.lock-session session_lock:.lock; do
   path="$STATE/${pair#*:}"
   [ -f "$path" ] && [ ! -L "$path" ] || continue
   mtime=$(fm_lock_path_mtime "$path") || continue
   case "$mtime" in ''|*[!0-9]*) continue ;; esac
-  if [ "$SESSION_START" = null ] || [ "$mtime" -gt "$SESSION_START" ]; then
-    SESSION_START=$mtime
-    SESSION_SOURCE="\"${pair%%:*}\""
-  fi
+  SESSION_START=$mtime
+  SESSION_SOURCE="\"${pair%%:*}\""
+  break
 done
 
 LEDGER_JSON='[]'
