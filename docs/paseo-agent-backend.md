@@ -10,7 +10,7 @@ Install Paseo and `jq`, then ensure the existing daemon answers `paseo daemon st
 Firstmate never starts, stops, or restarts the Paseo daemon.
 Select it with `paseo-agent` in `config/backend`, `FM_BACKEND=paseo-agent`, or an explicitly authorized `--backend paseo-agent`.
 It is never auto-detected and never supports secondmate spawns.
-Task metadata records `backend=paseo-agent`; a task recorded as `backend=paseo` before the rename is read as the upstream terminal backend, so relaunch it or migrate its record.
+Task metadata records `backend=paseo-agent`; a task recorded as `backend=paseo` before the rename is read as the upstream terminal backend and refused by endpoint validation, so first change that record's `backend=` line to `backend=paseo-agent`; after that, relaunch works.
 
 ## Limits
 
