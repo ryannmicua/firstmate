@@ -1,0 +1,25 @@
+$ FM_HOME=<lab> fm-spawn.sh pa-live-1 /tmp/fm-lab.VDTvXi/projects/demo --mode local-only --yolo off --harness codex   (config/backend=paseo-agent)
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+warning: /tmp/fm-lab.VDTvXi/data/pa-live-1/launch-brief.md records no ship branch; defaulting to legacy branch fm/pa-live-1
+warning: /tmp/fm-lab.VDTvXi/data/pa-live-1/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: pa-live-1 ships mode=local-only while the standing posture for demo is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+spawned pa-live-1 harness=codex kind=ship mode=local-only yolo=off window=06f0f8cc-6255-4400-8c6b-b08ca7a7738b worktree=/tmp/fm-paseo-home.RApL8J/worktrees/2mhiktph/fm-b98a39185c90-pa-live-1
+rc=0
+--- state/pa-live-1.meta
+window=06f0f8cc-6255-4400-8c6b-b08ca7a7738b
+endpoint_task_id=pa-live-1
+worktree=/tmp/fm-paseo-home.RApL8J/worktrees/2mhiktph/fm-b98a39185c90-pa-live-1
+project=/tmp/fm-lab.VDTvXi/projects/demo
+harness=codex
+approval_mode=bypass
+kind=ship
+mode=local-only
+yolo=off
+branch=fm/pa-live-1
+tasktmp=/tmp/fm-pa-live-1
+model=default
+effort=default
+spawn_gen=s1792851972.101469.22258
+backend=paseo-agent
+paseo_agent_id=06f0f8cc-6255-4400-8c6b-b08ca7a7738b
+paseo_workspace_id=wks_60dd74757e0e1fb1

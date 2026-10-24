@@ -1,0 +1,6 @@
+$ fm-peek.sh pa-live-1 30
+[User] /tmp/fm-lab.VDTvXi/data/pa-live-1/launch-brief.md
+[System Error] Your workspace is out of credits. Ask your workspace owner to refill in order to continue.
+rc=0
+$ paseo ls --json (isolated daemon)
+{"id":"06f0f8cc-6255-4400-8c6b-b08ca7a7738b","provider":"codex/gpt-6.1-sol","status":"error","labels":null}

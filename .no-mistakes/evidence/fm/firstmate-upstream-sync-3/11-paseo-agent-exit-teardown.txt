@@ -1,0 +1,40 @@
+$ fm-control.sh pa-live-2 exit
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+archived pa-live-2 harness=claude backend=paseo-agent endpoint=2fc4821c-ce60-4552-9fb5-249949cc01d8 worktree=/tmp/fm-paseo-home.RApL8J/worktrees/2mhiktph/fm-b98a39185c90-pa-live-2
+rc=0
+$ fm-teardown.sh pa-live-2
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+Error: Agent 2fc4821 is already archived
+Archived at: 2026-10-24T14:32:39.244Z
+error: the paseo-agent endpoint 2fc4821c-ce60-4552-9fb5-249949cc01d8 for pa-live-2 could not be closed, so it may still be live.
+error: stopping this cleanup without removing the task's records, so the record naming 2fc4821c-ce60-4552-9fb5-249949cc01d8 is still here to reconcile from.
+error: that retention is not durable across a session start: if this task carries a backlog transition, the next session replays its pending close and removes the retained record, so reconcile the surviving endpoint yourself rather than trusting the retention.
+rc=1
+home-summary.json
+pa-live-2.control-relaunch
+pa-live-2.control-relaunch.brief-prior
+pa-live-2.control-relaunch.meta-prior
+pa-live-2.control-relaunch.note
+pa-live-2.git-hooks
+pa-live-2.inbox
+pa-live-2.meta
+terminal-outcomes
+$ paseo ls --json / workspace ls
+{"workspaceId":"wks_893e1082f6a964f0","project":"demo","name":"fm/pa-live-2","isolation":"worktree","cwd":"/tmp/fm-paseo-home.RApL8J/worktrees/2mhiktph/fm-b98a39185c90-pa-live-2"}
+$ fm-teardown.sh pa-live-2 --force
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+Error: Agent 2fc4821 is already archived
+Archived at: 2026-10-24T14:32:39.244Z
+error: the paseo-agent endpoint 2fc4821c-ce60-4552-9fb5-249949cc01d8 for pa-live-2 could not be closed, so it may still be live.
+error: stopping this cleanup without removing the task's records, so the record naming 2fc4821c-ce60-4552-9fb5-249949cc01d8 is still here to reconcile from.
+error: that retention is not durable across a session start: if this task carries a backlog transition, the next session replays its pending close and removes the retained record, so reconcile the surviving endpoint yourself rather than trusting the retention.
+rc=1
+home-summary.json
+pa-live-2.control-relaunch
+pa-live-2.control-relaunch.brief-prior
+pa-live-2.control-relaunch.meta-prior
+pa-live-2.control-relaunch.note
+pa-live-2.git-hooks
+pa-live-2.inbox
+pa-live-2.meta
+terminal-outcomes

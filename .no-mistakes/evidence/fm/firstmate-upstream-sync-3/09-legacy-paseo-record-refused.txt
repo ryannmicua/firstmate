@@ -1,0 +1,22 @@
+# simulate a fork-era record: backend=paseo with paseo_agent_id/paseo_workspace_id
+window=66488330-d241-44a5-bd78-8ae1bece979f
+backend=paseo
+paseo_agent_id=66488330-d241-44a5-bd78-8ae1bece979f
+paseo_workspace_id=wks_893e1082f6a964f0
+$ fm-control.sh pa-live-2 relaunch --note "lab relaunch"
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+REFUSED: paseo endpoint metadata for task pa-live-2 is malformed or inconsistent; preserving task state.
+rc=1
+$ fm-spawn.sh --relaunch pa-live-2
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+WARNING: watcher still down (same stale episode; last beat: 364s ago, grace 300s) - full banner already printed this episode.
+REFUSED: paseo endpoint metadata for task pa-live-2 is malformed or inconsistent; preserving task state.
+rc=1
+$ fm-teardown.sh pa-live-2
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+REFUSED: paseo endpoint metadata for task pa-live-2 is malformed or inconsistent; preserving task state.
+rc=1
+# record preserved?
+meta unchanged
+$ paseo ls --json
+{"id":"66488330-d241-44a5-bd78-8ae1bece979f","status":"idle"}

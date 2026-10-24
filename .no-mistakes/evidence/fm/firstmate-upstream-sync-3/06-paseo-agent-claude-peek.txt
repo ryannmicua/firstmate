@@ -1,0 +1,6 @@
+$ fm-peek.sh pa-live-2 30
+[User] /tmp/fm-lab.VDTvXi/data/pa-live-2/launch-brief.md
+[Read] /tmp/fm-lab.VDTvXi/data/pa-live-2/launch-brief.md
+rc=0
+$ paseo ls --json
+{"id":"66488330-d241-44a5-bd78-8ae1bece979f","provider":"claude/claude-opus-5-5","status":"running"}

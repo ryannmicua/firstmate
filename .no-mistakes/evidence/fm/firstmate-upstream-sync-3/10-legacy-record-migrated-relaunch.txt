@@ -1,0 +1,18 @@
+# migrate: change only the backend= line to backend=paseo-agent
+backend=paseo-agent
+$ fm-control.sh pa-live-2 relaunch --note "lab relaunch after migration"
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+warning: /tmp/fm-lab.VDTvXi/data/pa-live-2/launch-brief.md records no ship branch; defaulting to legacy branch fm/pa-live-2
+warning: /tmp/fm-lab.VDTvXi/data/pa-live-2/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: pa-live-2 ships mode=local-only while the standing posture for demo is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+relaunched pa-live-2 harness=claude from=claude model=default effort=default backend=paseo-agent endpoint=2fc4821c-ce60-4552-9fb5-249949cc01d8 worktree=/tmp/fm-paseo-home.RApL8J/worktrees/2mhiktph/fm-b98a39185c90-pa-live-2
+rc=0
+window=2fc4821c-ce60-4552-9fb5-249949cc01d8
+worktree=/tmp/fm-paseo-home.RApL8J/worktrees/2mhiktph/fm-b98a39185c90-pa-live-2
+backend=paseo-agent
+paseo_agent_id=2fc4821c-ce60-4552-9fb5-249949cc01d8
+paseo_workspace_id=wks_893e1082f6a964f0
+$ paseo ls --json
+{"id":"2fc4821c-ce60-4552-9fb5-249949cc01d8","status":"running"}
+{"workspaceId":"wks_893e1082f6a964f0","cwd":"/tmp/fm-paseo-home.RApL8J/worktrees/2mhiktph/fm-b98a39185c90-pa-live-2"}

@@ -1,0 +1,12 @@
+$ fm-teardown.sh pa-live-1
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+teardown pa-live-1 complete (window 06f0f8cc-6255-4400-8c6b-b08ca7a7738b, worktree /tmp/fm-paseo-home.RApL8J/worktrees/2mhiktph/fm-b98a39185c90-pa-live-1)
+Backlog: pa-live-1 just finished (this home keeps no markdown backlog at /tmp/fm-lab.VDTvXi/data/backlog.md). Update /tmp/fm-lab.VDTvXi/data/backlog.md - move pa-live-1 to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.
+rc=0
+$ ls state
+home-summary.json
+terminal-outcomes
+$ paseo ls -a --json
+$ paseo inspect 06f0f8cc... --json | status
+{"status":null,"archivedAt":null}
+$ paseo workspace ls --json

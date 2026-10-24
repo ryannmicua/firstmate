@@ -1,0 +1,15 @@
+$ fm-paseo-project.sh --if-selected demo   (config/backend=paseo-agent)
+created Paseo project demo (prj_f06ed22ae5dbf071) for registered project demo at /tmp/fm-lab.VDTvXi/projects/demo
+rc=0
+$ again (idempotent)
+Paseo project demo (prj_f06ed22ae5dbf071) already matches registered project demo at /tmp/fm-lab.VDTvXi/projects/demo
+rc=0
+$ paseo project ls --json (isolated daemon)
+[
+  {
+    "projectId": "prj_f06ed22ae5dbf071",
+    "name": "demo",
+    "kind": "git",
+    "path": "/tmp/fm-lab.VDTvXi/projects/demo"
+  }
+]

@@ -1,0 +1,8 @@
+$ fm-send.sh pa-live-2 "Lab steer: reply with the word STEERED."
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+rc=0
+$ fm-peek.sh pa-live-2 20
+[User] /tmp/fm-lab.VDTvXi/data/pa-live-2/launch-brief.md
+[Read] /tmp/fm-lab.VDTvXi/data/pa-live-2/launch-brief.md
+[User] : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'pa-live-2.inbox' steering inbox, read and act on each in numeric order, then mv each into its handled/.
+[Shell] echo "$FM_TASK_INBOX"; ls -1 "$FM_TASK_INBOX"/*.msg

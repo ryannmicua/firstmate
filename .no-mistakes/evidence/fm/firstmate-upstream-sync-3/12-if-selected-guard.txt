@@ -1,0 +1,12 @@
+$ config/backend=paseo; fm-paseo-project.sh --if-selected other
+skip: runtime backend for new tasks is paseo; no Paseo project was created
+rc=0
+$ config/backend=tmux; fm-paseo-project.sh --if-selected other
+skip: runtime backend for new tasks is tmux; no Paseo project was created
+rc=0
+$ paseo project ls --json | names
+["demo"]
+$ config/backend=paseo-agent; fm-paseo-project.sh --if-selected other
+created Paseo project other (prj_1af7daae97ff7a07) for registered project other at /tmp/fm-lab.VDTvXi/projects/other
+rc=0
+["demo","other"]

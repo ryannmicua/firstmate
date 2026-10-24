@@ -1,0 +1,22 @@
+$ fm-peek.sh pa-live-2 12
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: 318s ago, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[User] /tmp/fm-lab.VDTvXi/data/pa-live-2/launch-brief.md
+[Read] /tmp/fm-lab.VDTvXi/data/pa-live-2/launch-brief.md
+[User] : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'pa-live-2.inbox' steering inbox, read and act on each in numeric order, then mv each into its handled/.
+[Shell] echo "$FM_TASK_INBOX"; ls -1 "$FM_TASK_INBOX"/*.msg
+$ fm-control.sh pa-live-2 interrupt
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /tmp/fm-lab.VDTvXi
+interrupt-delivered pa-live-2 harness=claude backend=paseo-agent verified=endpoint cancel=INTERRUPTED
+1          
+unconfirmed
+rc=0
+$ paseo inspect status
+Status              idle                                                                                                                 
+Archived            false                                                                                                                
+ArchivedAt          null                                                                                                                 

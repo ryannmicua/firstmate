@@ -1,0 +1,14 @@
+== fm-backend-paseo-agent
+ok - Paseo project grouping, task-isolated workspaces, relaunch identity, provider, status, and control contracts
+== fm-backend-paseo
+ok - fm_backend_paseo_list_live: lists only this home's scoped task terminals using plain fm-<id> labels
+ok - fm-spawn.sh: an explicit paseo refuses --secondmate (mirrors cmux/Orca); ambient Paseo markers never select paseo
+ok - Pi supervision branch claims a paseo stale wake keyed by the task's window= endpoint
+== fm-backend-paseo-smoke
+ok - real paseo: send_text_line composes send-keys+Enter and its output is capturable
+ok - real paseo: current_path reads the terminal's live cwd after a direct cd
+not ok - real paseo: current_path did not track a nested subshell's own cd (the treehouse-get-shaped case), got '/'
+== fm-spawn-paseo-agent-env
+ok - Paseo environment forwarding and abort cleanup preserve workspaces safely
+== fm-paseo-project
+ok - Paseo project registration is idempotent, registry-bound, path-bound, ambiguity-safe, and backend-conditional for add
