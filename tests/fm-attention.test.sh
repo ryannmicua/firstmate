@@ -337,6 +337,101 @@ test_continuations_preserve_opening_timestamps() {
   pass "shared fold ignores continuations and timestamps accepted identical openings"
 }
 
+test_legacy_rehold_preserves_effective_date() {
+  local home flag out before
+  for flag in off on; do
+    home=$(make_home "legacy-rehold-$flag" "$flag")
+    cat > "$home/data/backlog.md" <<'EOF'
+## In flight
+
+## Queued
+
+- [ ] legacy - Legacy call (repo: sample) (kind: captain) (hold: legacy question) (hold-kind: captain) (since 2026-01-01)
+- [ ] stamped - Stamped call (repo: sample) (kind: captain) (hold: stamped question) (hold-kind: captain) (since 2026-01-02)
+  Captain hold set: 2026-02-01T10:00:00Z
+
+## Done
+EOF
+    before=$(run_attention "$home") || fail "legacy read failed"
+    FM_CAPTAIN_HOLD_NOW=2026-03-01T10:00:00Z run_captain "$home" hold legacy \
+      --reason 'legacy question' >/dev/null || fail "legacy re-hold failed"
+    out=$(run_attention "$home") || fail "legacy retry read failed"
+    assert_equals "$(printf '%s' "$before" | jq -c .open_decisions)" \
+      "$(printf '%s' "$out" | jq -c .open_decisions)" "legacy retry recency/$flag"
+    [ ! -s "$home/state/fleet-ledger.jsonl" ] || fail "unchanged legacy retry emitted an event"
+  done
+  pass "legacy re-holds retain their effective opening date with the ledger on or off"
+}
+
+test_attention_skips_secondmate_collection() {
+  local home before after out directories
+  home=$(make_home no-collection off)
+  hold_at "$home" local-call 2026-07-01T10:00:00Z
+  printf -- '- remote - Remote mate (host: sample-host; root: /remote/root; home: /remote/home; scope: fixture; projects: sample; added 2026-09-01)\n' > "$home/data/secondmates.md"
+  fm_write_meta "$home/state/remote.meta" 'kind=secondmate' 'mode=secondmate' \
+    'harness=codex' 'remote_host=sample-host' 'remote_root=/remote/root' 'home=/remote/home'
+  printf 'needs-decision [key=remote-call] [at=1782907200]: choose remote option\n' > "$home/state/remote.status"
+  cat > "$home/fakebin/ssh" <<'SH'
+#!/usr/bin/env bash
+exit 99
+SH
+  chmod +x "$home/fakebin/ssh"
+  before=$(cd "$home" && find . -type f -exec cksum {} + | LC_ALL=C sort)
+  directories=$(cd "$home" && find . | LC_ALL=C sort)
+  out=$(run_attention "$home") || fail "attention required remote collection"
+  after=$(cd "$home" && find . -type f -exec cksum {} + | LC_ALL=C sort)
+  assert_equals "$before" "$after" "attention files with registered secondmate"
+  assert_equals "$directories" "$(cd "$home" && find . | LC_ALL=C sort)" "attention created no cache directories"
+  assert_equals 'remote-call local-call' \
+    "$(printf '%s' "$out" | jq -r '[.open_decisions[] | (.key // .task)] | join(" ")')" "parent-side remote decision preserved"
+  pass "attention retains parent-side decisions without secondmate cache writes"
+}
+
+test_attention_uses_configured_adapter() {
+  local home out before after
+  home=$(make_home adapter on)
+  mv "$home/data/backlog.md" "$home/adapter.md"
+  printf 'backend = "beads"\n[beads]\npath = "graph/.beads"\n' > "$home/.tasks.toml"
+  cat > "$home/fakebin/tasks-axi" <<'SH'
+#!/usr/bin/env bash
+[ -z "${TASKS_AXI_FILE:-}" ] || exit 91
+for arg in "$@"; do
+  case "$arg" in --file|--file=*) exit 92 ;; esac
+done
+case "$1:${2:-}" in --version:*|*:--help) exec "$REAL_TASKS_AXI" "$@" ;; esac
+[ -f "$PWD/adapter.md" ] || exit 93
+exec "$REAL_TASKS_AXI" "$@" --backend markdown --file "$PWD/adapter.md"
+SH
+  chmod +x "$home/fakebin/tasks-axi"
+  out=$(REAL_TASKS_AXI="$TASKS_AXI_BIN" run_attention "$home") || fail "empty adapter read failed"
+  assert_equals 0 "$(printf '%s' "$out" | jq '.open_decisions | length')" "empty adapter inventory"
+  hold_at "$home" adapter-call 2026-07-03T10:00:00Z
+  FM_CAPTAIN_HOLD_NOW=2026-07-04T10:00:00Z run_captain "$home" hold dated-call \
+    --title 'A "dated", call' --reason 'a reason (with punctuation)' --repo sample --until 2027-01-01 >/dev/null || fail "adapter deferral failed"
+  PATH="$home/fakebin:$PATH" REAL_TASKS_AXI="$TASKS_AXI_BIN" FM_HOME="$home" \
+    "$ROOT/bin/fm-tasks-axi.sh" add blocker 'Blocking task' --repo sample >/dev/null || fail "adapter blocker add failed"
+  hold_at "$home" blocked-call 2026-07-02T10:00:00Z
+  PATH="$home/fakebin:$PATH" REAL_TASKS_AXI="$TASKS_AXI_BIN" FM_HOME="$home" \
+    "$ROOT/bin/fm-tasks-axi.sh" block blocked-call --by blocker >/dev/null || fail "adapter block failed"
+  before=$(cksum "$home/adapter.md")
+  out=$(REAL_TASKS_AXI="$TASKS_AXI_BIN" run_attention "$home") || fail "adapter attention failed"
+  after=$(cksum "$home/adapter.md")
+  assert_equals "$before" "$after" "adapter read is read-only"
+  [ ! -e "$home/data/backlog.md" ] || fail "adapter read created a Markdown backlog"
+  printf '%s' "$out" | jq -e '
+    (.open_decisions | length) == 3
+    and any(.open_decisions[]; .task == "blocked-call" and .bucket == "blocked")
+    and any(.open_decisions[]; .task == "adapter-call" and .opened_at == "2026-07-03T10:00:00Z")
+    and any(.open_decisions[]; .task == "dated-call" and .bucket == "dated"
+      and .title == "A \"dated\", call" and .reason == "a reason (with punctuation)")' >/dev/null || fail "adapter holds missing: $out"
+  PATH="$home/fakebin:$PATH" REAL_TASKS_AXI="$TASKS_AXI_BIN" FM_HOME="$home" \
+    "$ROOT/bin/fm-tasks-axi.sh" done blocker >/dev/null || fail "adapter blocker completion failed"
+  out=$(REAL_TASKS_AXI="$TASKS_AXI_BIN" run_attention "$home") || fail "adapter reread failed"
+  printf '%s' "$out" | jq -e 'any(.open_decisions[]; .task == "blocked-call" and .bucket == "aged")' >/dev/null \
+    || fail "adapter completed blocker still blocks: $out"
+  pass "attention reads the configured adapter without a Markdown backlog"
+}
+
 test_hold_answer_release_and_defer_are_recorded
 test_reconcile_is_recorded
 test_flag_off_writes_nothing
@@ -350,3 +445,6 @@ test_keyed_emission_order_with_large_delayed_ledger
 test_opening_timestamp_acceptance
 test_rehold_recency
 test_continuations_preserve_opening_timestamps
+test_legacy_rehold_preserves_effective_date
+test_attention_skips_secondmate_collection
+test_attention_uses_configured_adapter

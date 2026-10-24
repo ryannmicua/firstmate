@@ -71,7 +71,8 @@ Example:
 ## Open decisions for outside readers
 
 `bin/fm-attention.sh --json` prints the decisions waiting on the captain, newest first, as one JSON object with schema `fm-attention.v1`.
-It is read-only: it folds the home's fleet snapshot and this ledger on every call and stores nothing, so it never goes stale.
+It is read-only: it folds the home's local fleet snapshot and this ledger on every call and stores nothing, so it never goes stale.
+The local projection reads holds through the configured backlog adapter and skips secondmate summary collection and its cache.
 It works with the ledger off, in which case each row's `last_touched_at` equals its `opened_at`.
 
 The object has `schema`, `generated` (UTC, ISO 8601, second precision), and `open_decisions`.

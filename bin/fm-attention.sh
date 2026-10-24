@@ -24,7 +24,7 @@
 # for that decision: captain.held and captain.deferred
 # for a hold. Keyed decisions use opened_at, never ledger capture time.
 #
-# It reads bin/fm-fleet-snapshot.sh --json and state/fleet-ledger.jsonl and
+# It reads bin/fm-fleet-snapshot.sh --local and state/fleet-ledger.jsonl and
 # stores nothing. docs/fleet-ledger.md owns the ledger events.
 set -u
 
@@ -51,7 +51,7 @@ esac
 
 command -v jq >/dev/null 2>&1 || { echo "fm-attention: jq not found" >&2; exit 1; }
 
-SNAPSHOT=$("$SCRIPT_DIR/fm-fleet-snapshot.sh" --json) || exit $?
+SNAPSHOT=$("$SCRIPT_DIR/fm-fleet-snapshot.sh" --local) || exit $?
 
 LEDGER_JSON='[]'
 if [ -f "$LEDGER" ] && [ ! -L "$LEDGER" ] && [ -r "$LEDGER" ]; then

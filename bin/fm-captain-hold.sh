@@ -1016,6 +1016,11 @@ command_hold() {
   # snapshot may see the harmless stamp by itself, but can never see a newly
   # held task without the timestamp that defines this hold lifecycle's age.
   task_show_or_fail "$id" "task $id disappeared before recording its hold-set stamp"
+  if [ "$preserve_hold_set" = 1 ] && [ -z "$(body_hold_set_timestamp "$(show_field_value "$show" body)")" ]; then
+    hold_set=$(show_field_value "$show" created)
+    hold_set=${hold_set%%T*}
+    [ -n "$hold_set" ] || fail "existing captain hold $id has no opening date"
+  fi
   write_hold_set_stamp "$id" "$(show_field "$show" body)" "$hold_set" "$preserve_hold_set"
   task_show_or_fail "$id" "task $id disappeared while recording its hold-set stamp"
   [ -n "$(body_hold_set_timestamp "$(show_field_value "$show" body)")" ] \
