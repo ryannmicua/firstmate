@@ -602,7 +602,7 @@ case "${1:-}" in
     printf '%s\n' 'task:'
     printf '  id: %s\n' "@ID@"
     printf '%s\n' '  state: queued' '  held: yes' '  blocked: no' \
-      '  hold_kind: captain'
+      '  hold_kind: captain' '  created: 2026-07-03'
     if [ -f "@HOME@/last-body" ]; then
       printf '%s' '  body: '
       perl -MJSON::PP -e 'local $/; print encode_json(<STDIN>)' < "@HOME@/last-body"
@@ -625,6 +625,8 @@ SH
     || fail "holding on a beads-configured home failed without a markdown backlog"
   assert_grep "hold $id" "$log" \
     "the captain-hold mutation never reached the configured backend"
+  assert_contains "$(cat "$home/last-body")" 'Captain hold set: 2026-07-03' \
+    "the legacy Beads hold did not retain its original opening date"
 
   decision="$home/captain-decision.txt"
   printf 'Ship the gold-only plan.\n' > "$decision"

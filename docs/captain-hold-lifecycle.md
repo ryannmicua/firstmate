@@ -570,6 +570,7 @@ It proves:
 
 One case in that family needs no beads install and always runs.
 It uses a stubbed tasks-axi that fails any markdown file override, and proves the captain-hold hold, answer, and close mutations reach a beads-configured home without one.
+The stub exposes the task creation date, and the persisted body must use that date for an unstamped legacy hold's opening date.
 
 ### Reconcile coverage
 
