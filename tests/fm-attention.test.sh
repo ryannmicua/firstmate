@@ -425,7 +425,7 @@ SH
     and any(.open_decisions[]; .task == "dated-call" and .bucket == "dated"
       and .title == "A \"dated\", call" and .reason == "a reason (with punctuation)")' >/dev/null || fail "adapter holds missing: $out"
   PATH="$home/fakebin:$PATH" REAL_TASKS_AXI="$TASKS_AXI_BIN" FM_HOME="$home" \
-    "$ROOT/bin/fm-tasks-axi.sh" done blocker >/dev/null || fail "adapter blocker completion failed"
+    "$ROOT/bin/fm-tasks-axi.sh" "done" blocker >/dev/null || fail "adapter blocker completion failed"
   out=$(REAL_TASKS_AXI="$TASKS_AXI_BIN" run_attention "$home") || fail "adapter reread failed"
   printf '%s' "$out" | jq -e 'any(.open_decisions[]; .task == "blocked-call" and .bucket == "aged")' >/dev/null \
     || fail "adapter completed blocker still blocks: $out"
