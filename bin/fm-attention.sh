@@ -4,28 +4,10 @@
 #
 # Usage: fm-attention.sh --json
 #
-# Output is one JSON object, schema fm-attention.v1:
-#   generated        UTC observation time, ISO 8601, second precision
-#   open_decisions   array, newest first by last_touched_at (opened_at when the
-#                    ledger adds nothing newer); rows with no time sort last
-#
-# Each open_decisions row carries:
-#   task, home ("main"), title, kind, reason, bucket,
-#   opened_at, opened_precision ("second" or "day"), last_touched_at
-#   kind "captain_hold": a backlog task held for the captain. opened_at is the
-#     machine-written hold-set stamp; a legacy hold without one falls back to the
-#     backlog `since` date; date-only stamps have opened_precision "day". bucket is the fleet
-#     snapshot's hold_bucket (live, dated, blocked, aged), unchanged.
-#   kind "keyed": a keyed status decision (needs-decision or blocked) a task
-#     still holds open. opened_at is the opening line's [at=<epoch>] stamp, and
-#     is null when the line carries none. bucket is null, and key is added.
-#
-# last_touched_at is the newest of opened_at and the home's fleet ledger events
-# for that decision: captain.held and captain.deferred
-# for a hold. Keyed decisions use opened_at, never ledger capture time.
-#
+# docs/fleet-ledger.md#open-decisions-for-outside-readers owns the
+# fm-attention.v1 output schema and ordering contract.
 # It reads bin/fm-fleet-snapshot.sh --local and state/fleet-ledger.jsonl and
-# stores nothing. docs/fleet-ledger.md owns the ledger events.
+# stores nothing.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

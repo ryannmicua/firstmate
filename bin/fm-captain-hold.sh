@@ -47,8 +47,10 @@
 # Beads `due.required` through `BD_DUE_REQUIRED` rather than inventing a due
 # date or registering a `types.custom` captain issue type. The command records
 # a UTC `Captain hold set:` timestamp in the task body: repeating an active
-# hold preserves the existing timestamp, while re-holding released work starts
-# a new lifecycle. A task already closed is refused rather than reopened.
+# hold preserves the existing stamp, including after a deferral expires; an
+# unstamped legacy hold receives its original task creation date instead.
+# Re-holding released work starts a new lifecycle. A task already closed is
+# refused rather than reopened.
 # `--origin` also records the origin on a `Captain hold origin:` body line, which
 # `complete` and `verify` check. The reason may hold parentheses and line breaks:
 # tasks-axi refuses them, so `hold` escapes them where it writes the reason and
@@ -212,10 +214,8 @@
 # cannot be written is reported as `actionable:` on stderr rather than undoing
 # the record; bin/fm-inactive-reconcile.sh's diagnostics name a broken binding.
 #
-# Fleet ledger: when the home's config/fleet-ledger flag exists, the same publish
-# point also records captain.held (captain.deferred for a hold with --until),
-# captain.answered with mode done, release, or reconciled, so an external reader
-# can order open captain calls by when they were raised (docs/fleet-ledger.md).
+# docs/fleet-ledger.md owns the optional captain-event contract emitted at the
+# parent-channel publish point.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

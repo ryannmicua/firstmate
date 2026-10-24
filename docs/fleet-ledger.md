@@ -52,7 +52,8 @@ It is written each time firstmate records a PR for the task, so registering a re
 `captain.answered` has `mode`: `done` when the captain's answer closed the task, `release` when the answer released the hold and kept the task, and `reconciled` when the call closed as moot on evidence rather than an answer.
 `task` is the held task's id.
 These events come from `bin/fm-captain-hold.sh`, which writes them as it publishes the hold or answer, and an unchanged re-hold writes no new event.
-A reader that needs the open calls takes each task's newest `captain.*` event, or reads them with `bin/fm-attention.sh --json` ([below](#open-decisions-for-outside-readers)).
+Each task's newest `captain.*` event describes its latest recorded hold or answer transition, not its complete current state: holds can predate recording or change while recording is off.
+For the current open calls, use the [attention feed](#open-decisions-for-outside-readers), which reads the current backlog and status decisions rather than inferring membership from ledger history.
 
 Example:
 
@@ -71,9 +72,10 @@ Example:
 ## Open decisions for outside readers
 
 `bin/fm-attention.sh --json` prints the decisions waiting on the captain, newest first, as one JSON object with schema `fm-attention.v1`.
-It is read-only: it folds the home's local fleet snapshot and this ledger on every call and stores nothing, so it never goes stale.
+It is read-only: it folds the home's local fleet snapshot and this ledger on every call and stores no separate board.
 The local projection reads holds through the configured backlog adapter and skips secondmate summary collection and its cache.
-It works with the ledger off, in which case each row's `last_touched_at` equals its `opened_at`.
+It works without a ledger, in which case each row's `last_touched_at` equals its `opened_at`.
+Turning recording off leaves existing ledger history available to this read.
 
 The object has `schema`, `generated` (UTC, ISO 8601, second precision), and `open_decisions`.
 Each row has `task`, `home` (`"main"`), `title`, `kind`, `reason`, `bucket`, `opened_at`, `opened_precision`, and `last_touched_at`.
@@ -82,6 +84,7 @@ Its `opened_at` is the hold-set stamp, and its `bucket` is the fleet snapshot's 
 A date-only hold-set stamp uses `opened_precision` of `day`.
 A legacy hold with no stamp falls back to the backlog `since` date, with `opened_precision` of `day` instead of `second`.
 A `kind` of `keyed` is a keyed status decision a task still holds open, such as a second mate's escalated call; it adds `key`, has a `null` `bucket`, and takes `opened_at` from the opening line's `[at=<epoch>]` stamp, or `null` when the line has none.
+`opened_precision` is `second` for a timestamp, `day` for a date, or `null` when no opening time is known.
 `last_touched_at` is the newest of `opened_at` and this ledger's `captain.held` or `captain.deferred` events for a hold.
 For a keyed decision, `last_touched_at` equals `opened_at`; ledger capture time does not change source emission ordering.
 Rows sort newest first by `last_touched_at`, and rows with no time sort last.
