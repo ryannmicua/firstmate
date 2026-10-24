@@ -246,8 +246,7 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
 # Opt-in fleet activity ledger (docs/fleet-ledger.md); off costs one file test.
 # Every hold, answer, release, and reconcile path ends in publish_parent_hold, so
-# this is the one place the captain.* events are written. Retries record again;
-# the ledger is at-least-once and its readers fold a task's newest event.
+# this is the one place the captain.* events are written.
 CAPTAIN_HOLD_LEDGER_UNTIL=
 record_captain_ledger() {  # <task-id> <verb> <note>
   local id=$1 verb=$2 note=$3 mode
@@ -277,7 +276,7 @@ PARENT_HOLD_PUBLISHED=0
 publish_parent_hold() {  # <task-id> <occurrence> <verb> <note>
   local id=$1 occurrence=$2 verb=$3 note=$4 rc=0
   PARENT_HOLD_PUBLISHED=0
-  record_captain_ledger "$id" "$verb" "$note"
+  [ "${5:-1}" = 0 ] || record_captain_ledger "$id" "$verb" "$note"
   fm_parent_channel_report "$FM_HOME" "$STATE" \
     "$verb [key=captain-hold-$id-$occurrence]: captain hold $id: $(fm_parent_channel_clean_note "$note")" || rc=$?
   case "$rc" in
@@ -938,7 +937,7 @@ verify_entry_durable() {  # <origin-or-empty> <entry>; prints "<id> <how> <origi
 
 command_hold() {
   local id=${1:-} title='' reason='' repo='' origin='' until='' show state existing_title body='' hold_kind hold_set occurrence
-  local existing_hold_kind='' existing_held='' preserve_hold_set=0 stored_reason previous_origin='' hold_status=0
+  local existing_hold_kind='' existing_held='' existing_until='' preserve_hold_set=0 stored_reason previous_origin='' hold_status=0 hold_changed=1
   [ "$#" -ge 1 ] || { usage >&2; exit 2; }
   shift
   while [ "$#" -gt 0 ]; do
@@ -979,8 +978,13 @@ command_hold() {
       || fail "task $id is already closed; a new captain call needs its own task"
     existing_hold_kind=$(show_field_value "$show" hold_kind)
     existing_held=$(show_field_value "$show" held)
-    if [ "$existing_hold_kind" = captain ] && [ "$existing_held" = yes ]; then
+    existing_until=$(show_field_value "$show" hold_until)
+    if [ "$existing_hold_kind" = captain ] && { [ "$existing_held" = yes ] || [ -n "$existing_until" ]; }; then
       preserve_hold_set=1
+      if [ "$(show_field_value "$(printf '%s\n' "$show" | fm_hold_reason_decode_stream)" hold_reason)" = "$reason" ] \
+        && [ "$existing_until" = "$until" ]; then
+        hold_changed=0
+      fi
     fi
     if [ -n "$title" ]; then
       existing_title=$(show_field_value "$show" title)
@@ -1044,8 +1048,7 @@ command_hold() {
   [ -n "$(body_hold_set_timestamp "$(show_field_value "$show" body)")" ] \
     || fail "task $id lost its hold-set stamp while being held"
   CAPTAIN_HOLD_LEDGER_UNTIL=$until
-  CAPTAIN_HOLD_LEDGER_UNTIL=$until
-  publish_parent_hold "$id" "$occurrence" needs-decision "$reason"
+  publish_parent_hold "$id" "$occurrence" needs-decision "$reason" "$hold_changed"
   printf '%s\n' "$id"
 }
 

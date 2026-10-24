@@ -274,6 +274,69 @@ test_opening_timestamp_acceptance() {
   pass "rejected openings preserve timestamps while accepted updates and resolutions still work"
 }
 
+test_rehold_recency() {
+  local home until before out count
+  for until in '' 2026-12-01 2026-01-01; do
+    home=$(make_home "rehold-${until:-undated}" on)
+    FM_CAPTAIN_HOLD_NOW=2026-07-01T10:00:00Z run_captain "$home" hold first \
+      --title 'Call first' --reason 'choose (first)' --repo sample --until "$until" >/dev/null || fail "first hold failed"
+    FM_CAPTAIN_HOLD_NOW=2026-07-01T11:00:00Z run_captain "$home" hold second \
+      --title 'Call second' --reason 'choose second' --repo sample --until "$until" >/dev/null || fail "second hold failed"
+    jq -c '.ts = (if .task == "first" then 1782900000 else 1782903600 end)' \
+      "$home/state/fleet-ledger.jsonl" > "$home/ledger-times.jsonl"
+    mv "$home/ledger-times.jsonl" "$home/state/fleet-ledger.jsonl"
+    before=$(cat "$home/state/fleet-ledger.jsonl")
+    FM_CAPTAIN_HOLD_NOW=2026-07-01T12:00:00Z run_captain "$home" hold first \
+      --reason 'choose (first)' --until "$until" >/dev/null || fail "retry failed"
+    assert_equals "$before" "$(cat "$home/state/fleet-ledger.jsonl")" "unchanged re-hold ledger/$until"
+    out=$(run_attention "$home") || fail "attention failed"
+    assert_equals 'second first' "$(printf '%s' "$out" | jq -r '[.open_decisions[].task] | join(" ")')" "retry ordering/$until"
+    printf '%s' "$out" | jq -e '.open_decisions[] | select(.task == "first")
+      | .opened_at == "2026-07-01T10:00:00Z" and .last_touched_at == .opened_at' >/dev/null \
+      || fail "retry moved timestamps: $out"
+    run_captain "$home" hold first --reason 'different (reason)' --until "$until" >/dev/null || fail "reason change failed"
+    count=$(jq -s 'length' "$home/state/fleet-ledger.jsonl")
+    assert_equals 3 "$count" "reason change emits once/$until"
+    out=$(run_attention "$home") || fail "attention failed"
+    assert_equals first "$(printf '%s' "$out" | jq -r '.open_decisions[0].task')" "changed reason moves recency/$until"
+    run_captain "$home" hold first --reason 'different (reason)' --until 2027-01-01 >/dev/null || fail "date change failed"
+    assert_equals 'captain.deferred:2027-01-01' \
+      "$(tail -1 "$home/state/fleet-ledger.jsonl" | jq -r '.event + ":" + .until')" "date change event/$until"
+    before=$(cat "$home/state/fleet-ledger.jsonl")
+    run_captain "$home" hold first --reason 'different (reason)' --until 2027-01-01 >/dev/null || fail "dated retry failed"
+    assert_equals "$before" "$(cat "$home/state/fleet-ledger.jsonl")" "dated retry ledger/$until"
+    run_captain "$home" hold first --reason 'different (reason)' >/dev/null || fail "date removal failed"
+    assert_equals captain.held "$(tail -1 "$home/state/fleet-ledger.jsonl" | jq -r '.event')" "date removal event/$until"
+    assert_equals 5 "$(jq -s 'length' "$home/state/fleet-ledger.jsonl")" "only actual hold changes emit/$until"
+  done
+  pass "unchanged dated and undated re-holds preserve recency; reason and date changes emit events"
+}
+
+test_continuations_preserve_opening_timestamps() {
+  local home kind verb out plain
+  home=$(make_home continuation off)
+  for kind in ship scout secondmate; do
+    for verb in needs-decision blocked; do
+      printf '%s [at=100]: need access\n %s\n %s [at=12:30]\n' "$verb" "$verb" "$verb" > "$home/state/check.status"
+      out=$(bash -c '. "$1/bin/fm-classify-lib.sh"; status_open_decisions_at "$2" "$3"' \
+        _ "$ROOT" "$home/state/check.status" "$kind")
+      assert_equals "default"$'\t'"$verb"$'\tneed access\t100' "$out" "continuations/$kind/$verb"
+      printf '%s [at=200]: need access\n' "$verb" >> "$home/state/check.status"
+      out=$(bash -c '. "$1/bin/fm-classify-lib.sh"; status_open_decisions_at "$2" "$3"' \
+        _ "$ROOT" "$home/state/check.status" "$kind")
+      assert_equals "default"$'\t'"$verb"$'\tneed access\t200' "$out" "identical accepted opening/$kind/$verb"
+      plain=$(bash -c '. "$1/bin/fm-classify-lib.sh"; status_open_decisions "$2" "$3"' \
+        _ "$ROOT" "$home/state/check.status" "$kind")
+      assert_equals "$plain" "${out%$'\t'*}" "three-column fold compatibility/$kind/$verb"
+      printf 'resolved: answered\n' >> "$home/state/check.status"
+      out=$(bash -c '. "$1/bin/fm-classify-lib.sh"; status_open_decisions_at "$2" "$3"' \
+        _ "$ROOT" "$home/state/check.status" "$kind")
+      assert_equals '' "$out" "resolution/$kind/$verb"
+    done
+  done
+  pass "shared fold ignores continuations and timestamps accepted identical openings"
+}
+
 test_hold_answer_release_and_defer_are_recorded
 test_reconcile_is_recorded
 test_flag_off_writes_nothing
@@ -285,3 +348,5 @@ test_read_is_side_effect_free_and_validates_arguments
 test_date_only_hold_stamp
 test_keyed_emission_order_with_large_delayed_ledger
 test_opening_timestamp_acceptance
+test_rehold_recency
+test_continuations_preserve_opening_timestamps

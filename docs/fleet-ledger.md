@@ -47,11 +47,11 @@ It is written each time firstmate records a PR for the task, so registering a re
 `key` is the line's `[key=...]` decision key, or `null`.
 `text` is the status line after its first colon, verbatim, capped at 2000 characters; if the line has no colon, it is the whole line.
 
-`captain.held` and `captain.deferred` are the two spellings of one hold: a hold command writes exactly one of them.
+`captain.held` and `captain.deferred` are the two spellings of one hold: a new hold or a change to its reason or deferral date writes exactly one of them.
 `captain.deferred` has `until`, the `YYYY-MM-DD` date the captain deferred the call to.
 `captain.answered` has `mode`: `done` when the captain's answer closed the task, `release` when the answer released the hold and kept the task, and `reconciled` when the call closed as moot on evidence rather than an answer.
 `task` is the held task's id.
-These events come from `bin/fm-captain-hold.sh`, which writes them as it publishes the hold or answer, so a retried command can write its event again.
+These events come from `bin/fm-captain-hold.sh`, which writes them as it publishes the hold or answer, and an unchanged re-hold writes no new event.
 A reader that needs the open calls takes each task's newest `captain.*` event, or reads them with `bin/fm-attention.sh --json` ([below](#open-decisions-for-outside-readers)).
 
 Example:
