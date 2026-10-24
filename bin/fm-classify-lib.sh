@@ -935,6 +935,7 @@ status_open_decisions_at() {  # <status-file> [<kind>]
         case "$verb" in
           needs-decision|blocked)
             key=$(_fm_decision_key "$line") || continue
+            _fm_decision_key_transition_allowed "$key" "$(status_line_note "$line")" || continue
             _fm_open_set_has "$open" "$key" || continue
             epoch=$(status_line_at_epoch "$line") || epoch=''
             kept=''

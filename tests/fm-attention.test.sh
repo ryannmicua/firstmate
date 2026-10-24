@@ -206,6 +206,74 @@ test_read_is_side_effect_free_and_validates_arguments() {
   pass "the read stores nothing and rejects unknown arguments"
 }
 
+test_date_only_hold_stamp() {
+  local home out
+  home=$(make_home day-stamp off)
+  hold_at "$home" legacy-day 2026-01-01T10:00:00Z
+  hold_at "$home" july-second 2026-07-02T10:00:00Z
+  sed -i 's/Captain hold set: 2026-01-01T10:00:00Z/Captain hold set: 2026-07-03/' "$home/data/backlog.md"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  printf '%s' "$out" | jq -e '.open_decisions[0]
+    | .task == "legacy-day" and .opened_at == "2026-07-03T00:00:00Z"
+      and .opened_precision == "day"' >/dev/null || fail "date-only hold stamp lost: $out"
+  pass "a date-only hold stamp takes precedence over the filing date"
+}
+
+test_keyed_emission_order_with_large_delayed_ledger() {
+  local home out
+  home=$(make_home delayed on)
+  mkdir -p "$home/mate-home"
+  fm_write_meta "$home/state/mate.meta" \
+    "window=firstmate:fm-mate" "worktree=$home/mate-home" "project=$home/mate-home" \
+    "harness=codex" "kind=secondmate" "mode=secondmate" "home=$home/mate-home" "projects=alpha"
+  cat > "$home/state/mate.status" <<'EOF'
+needs-decision [key=pending-reply-old] [at=1783072800]: pending-reply-missed: choose old
+needs-decision [key=new] [at=1783076400]: choose new
+blocked [key=pending-reply-old] [at=1783080000]: unrelated stamped note
+blocked [key=pending-reply-old]: unrelated unstamped note
+needs-decision [key=unknown]: choose unknown
+EOF
+  jq -nc '[range(0;2048) | "x"] | join("") as $note
+    | range(0;100) | {ts:(1783080000 + .),event:"task.status",task:"mate",
+       state:"blocked",key:"pending-reply-old",note:$note}' > "$home/state/fleet-ledger.jsonl"
+  printf '{"ts":1783090000,"event":"task.status","task":"mate","state":"needs-decision","key":"unknown"}\n' >> "$home/state/fleet-ledger.jsonl"
+  [ "$(wc -c < "$home/state/fleet-ledger.jsonl")" -gt 131072 ] || fail "ledger fixture too small"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  assert_equals 'new pending-reply-old unknown' \
+    "$(printf '%s' "$out" | jq -r '[.open_decisions[].key] | join(" ")')" \
+    "emission order survives delayed capture and rejected transitions"
+  printf '%s' "$out" | jq -e 'all(.open_decisions[]; .last_touched_at == .opened_at)
+    and (.open_decisions[] | select(.key == "pending-reply-old")
+      | .opened_at == "2026-07-03T10:00:00Z")
+    and (.open_decisions[] | select(.key == "unknown") | .opened_at == null)' >/dev/null \
+    || fail "capture or rejected transition changed emission timestamps: $out"
+  pass "large ledgers preserve source emission times and accepted opening transitions"
+}
+
+test_opening_timestamp_acceptance() {
+  local home kind verb out
+  home=$(make_home acceptance off)
+  for kind in ship scout secondmate; do
+    for verb in needs-decision blocked; do
+      printf '%s [key=pending-reply-check] [at=100]: pending-reply-missed: choose\n' "$verb" > "$home/state/check.status"
+      printf '%s [key=pending-reply-check] [at=200]: unrelated\n' "$verb" >> "$home/state/check.status"
+      printf '%s [key=pending-reply-check]: unrelated\n' "$verb" >> "$home/state/check.status"
+      out=$(bash -c '. "$1/bin/fm-classify-lib.sh"; status_open_decisions_at "$2" "$3"' \
+        _ "$ROOT" "$home/state/check.status" "$kind")
+      assert_equals "pending-reply-check"$'\t'"$verb"$'\t'"pending-reply-missed: choose"$'\t100' "$out" "accepted opening for $kind/$verb"
+      printf '%s [key=pending-reply-check] [at=300]: pending-reply-missed: choose again\n' "$verb" >> "$home/state/check.status"
+      out=$(bash -c '. "$1/bin/fm-classify-lib.sh"; status_open_decisions_at "$2" "$3"' \
+        _ "$ROOT" "$home/state/check.status" "$kind")
+      assert_equals "pending-reply-check"$'\t'"$verb"$'\t'"pending-reply-missed: choose again"$'\t300' "$out" "accepted update for $kind/$verb"
+      printf 'resolved [key=pending-reply-check]: pending-reply-missed: answered\n' >> "$home/state/check.status"
+      out=$(bash -c '. "$1/bin/fm-classify-lib.sh"; status_open_decisions_at "$2" "$3"' \
+        _ "$ROOT" "$home/state/check.status" "$kind")
+      assert_equals '' "$out" "resolved decision for $kind/$verb"
+    done
+  done
+  pass "rejected openings preserve timestamps while accepted updates and resolutions still work"
+}
+
 test_hold_answer_release_and_defer_are_recorded
 test_reconcile_is_recorded
 test_flag_off_writes_nothing
@@ -214,3 +282,6 @@ test_open_decisions_are_newest_first
 test_ledger_events_move_last_touched
 test_answered_call_is_not_open
 test_read_is_side_effect_free_and_validates_arguments
+test_date_only_hold_stamp
+test_keyed_emission_order_with_large_delayed_ledger
+test_opening_timestamp_acceptance

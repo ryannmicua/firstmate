@@ -78,9 +78,11 @@ The object has `schema`, `generated` (UTC, ISO 8601, second precision), and `ope
 Each row has `task`, `home` (`"main"`), `title`, `kind`, `reason`, `bucket`, `opened_at`, `opened_precision`, and `last_touched_at`.
 A `kind` of `captain_hold` is a backlog task held for the captain.
 Its `opened_at` is the hold-set stamp, and its `bucket` is the fleet snapshot's `hold_bucket` (`live`, `dated`, `blocked`, or `aged`) unchanged.
+A date-only hold-set stamp uses `opened_precision` of `day`.
 A legacy hold with no stamp falls back to the backlog `since` date, with `opened_precision` of `day` instead of `second`.
 A `kind` of `keyed` is a keyed status decision a task still holds open, such as a second mate's escalated call; it adds `key`, has a `null` `bucket`, and takes `opened_at` from the opening line's `[at=<epoch>]` stamp, or `null` when the line has none.
-`last_touched_at` is the newest of `opened_at` and this ledger's `captain.held` or `captain.deferred` events for a hold, or its `task.status` events with the same key for a keyed decision.
+`last_touched_at` is the newest of `opened_at` and this ledger's `captain.held` or `captain.deferred` events for a hold.
+For a keyed decision, `last_touched_at` equals `opened_at`; ledger capture time does not change source emission ordering.
 Rows sort newest first by `last_touched_at`, and rows with no time sort last.
 The read covers the home it runs in, and not the second mate homes it supervises, except for the keyed decisions those mates escalate into this home's status logs.
 

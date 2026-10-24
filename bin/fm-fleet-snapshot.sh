@@ -65,8 +65,7 @@
 #     against current_state; hints.pending_decision and hints.blocked_event are
 #     booleans derived from that set. Each entry also carries opened_epoch, the
 #     opening line's [at=<epoch>] stamp (status_open_decisions_at), or null when
-#     that line has none; decisions_open entries carry the same field. Captain
-#     holds in decisions_open also carry hold_set and since for bin/fm-attention.sh.
+#     that line has none.
 #     endpoint.exists is the cheap local backend endpoint-presence read.
 #     endpoint.agent_alive is populated for local secondmates only, where it is
 #     useful return-channel supervision data; remote secondmates use "unknown"
@@ -1016,7 +1015,6 @@ secondmate_home_summary_json() {  # <backlog-json-file> <tasks-json-file>
             hold_until:(.hold_until // null),
             hold_bucket:(.hold_bucket // null),
             hold_age_days:(.hold_age_days // null),
-            hold_set:(.hold_set // null),since:(.since // null),
             source:"backlog"} ]) as $captain_holds_all
     | ([ $backlog.records[]? | select(landed_record)
          | {id:(.id | trunc(120)),title:(.title | trunc(120)),
@@ -1070,7 +1068,7 @@ secondmate_home_summary_json() {  # <backlog-json-file> <tasks-json-file>
             doing:((.current_state.detail // "") | trunc(120))} ]) as $active_all
     | ($captain_holds_all
        + ([ $tasks[] as $t | ($t.hints.open_decisions // [])[]
-            | {id:$t.id,key,verb,summary:(.summary | trunc(160)),reason:null,opened_epoch:(.opened_epoch // null),source:"status"} ])) as $decisions_all
+            | {id:$t.id,key,verb,summary:(.summary | trunc(160)),reason:null,source:"status"} ])) as $decisions_all
     | ([ $queued_all[]
          | select((.unresolved_blocker_ids | length) > 0 or (.hold_reason != null and .hold_kind != null))
          | {id:(.id | trunc(120)),title:(.title | trunc(90)),
