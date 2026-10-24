@@ -8,7 +8,7 @@
 # docs/fleet-ledger.md#open-decisions-for-outside-readers owns the
 # fm-attention.v1 output schema, ordering, and session-start contract.
 # It reads bin/fm-fleet-snapshot.sh --local, state/fleet-ledger.jsonl, and the
-# modification times of state/.session-start-complete and state/.lock-session,
+# modification times of state/.lock and state/.lock-session,
 # and stores nothing.
 set -u
 
@@ -41,11 +41,9 @@ command -v jq >/dev/null 2>&1 || { echo "fm-attention: jq not found" >&2; exit 1
 
 SNAPSHOT=$("$SCRIPT_DIR/fm-fleet-snapshot.sh" --local) || exit $?
 
-# The session began at the later of the last completed full session start and
-# the last change of session identity on the session lock (a /clear re-key).
 SESSION_START=null
 SESSION_SOURCE=null
-for pair in session_start:.session-start-complete session_identity:.lock-session; do
+for pair in session_lock:.lock session_identity:.lock-session; do
   path="$STATE/${pair#*:}"
   [ -f "$path" ] && [ ! -L "$path" ] || continue
   mtime=$(fm_lock_path_mtime "$path") || continue
@@ -103,40 +101,41 @@ printf '%s\n%s\n' "$SNAPSHOT" "$LEDGER_JSON" | jq -s \
   | (reduce ($ledger[] | select((.task | type) == "string" and (.pr | type) == "string")) as $e
        ({}; .[$e.task] = $e.pr)) as $ledger_prs
   | def title_of($id): (($records[$id].title // $tasks[$id].backlog.title // $id) | trunc(160));
-    def pr_of($id): $ledger_prs[$id] // $tasks[$id].pr.url // $records[$id].pr_url // null;
+    def pr_of($id; $event_pr): $tasks[$id].pr.url // $event_pr // $ledger_prs[$id] // $records[$id].pr_url // null;
     def activity_line($e; $title):
       if $e.event == "task.dispatched" then "Started: \($title)"
       elif $e.event == "task.pr_ready" then "PR ready: \($title)"
       elif $e.event == "task.merged" then (if $e.via == "local" then "Landed locally: \($title)" else "Merged: \($title)" end)
       elif $e.event == "task.cleaned_up" then "Cleaned up: \($title)"
       elif $e.event == "task.status" then
-        {"blocked": "Blocked: ", "needs-decision": "Needs your decision: ", "done": "Worker finished: "}[$e.state] + $title
+        {"failed": "Failed: ", "blocked": "Blocked: ", "needs-decision": "Needs your decision: ", "resolved": "Resolved: ", "done": "Worker finished: "}[$e.state] + $title
       elif $e.event == "captain.held" then "Waiting on you: \($title)"
       elif $e.event == "captain.deferred" then "Deferred to \($e.until // "a later date"): \($title)"
       elif $e.event == "captain.answered" then
         {"done": "You answered: ", "release": "You answered and kept it open: ", "reconciled": "Closed as moot: "}[$e.mode] + $title
       else null end;
     ($session_start // ((now | floor) - 86400)) as $since
+  | ([ $ledger | to_entries[]
+       | .key as $i | .value
+       | select(.ts >= $since and (.task | type) == "string")
+       | select(.event != "task.status" or (.state == "failed" or .state == "blocked" or .state == "needs-decision" or .state == "resolved" or .state == "done"))
+       | select(.event != "captain.answered" or (.mode == "done" or .mode == "release" or .mode == "reconciled"))
+       | . as $e | title_of($e.task) as $title | activity_line($e; $title) as $line
+       | select($line != null)
+       | {i: $i, record: $e, ts, task, event,
+          state: (if .event == "task.status" then .state else null end),
+          key: (.key // null), mode: (.mode // null), line: $line,
+          detail: (if .event == "task.status" then ((.text // "") | trunc(160) | ltrimstr(" ")) else null end),
+          pr: pr_of($e.task; (if (.pr | type) == "string" then .pr else null end))} ]
+     | group_by(.record) | map(max_by(.i))
+     | sort_by([-.ts, -.i])) as $activity
   | {schema: "fm-attention.v1",
      generated: .generated,
      session: {started_at: ($since | iso),
-               source: ($session_source // "fallback_window")},
-     session_activity:
-       ([ $ledger | to_entries[]
-          | .key as $i | .value
-          | select(.ts >= $since and (.task | type) == "string")
-          | select(.event != "task.status" or (.state == "blocked" or .state == "needs-decision" or .state == "done"))
-          | select(.event != "captain.answered" or (.mode == "done" or .mode == "release" or .mode == "reconciled"))
-          | . as $e | title_of($e.task) as $title | activity_line($e; $title) as $line
-          | select($line != null)
-          | {i: $i, ts, task, event, state: (if .event == "task.status" then .state else null end),
-             line: $line,
-             detail: (if .event == "task.status" then ((.text // "") | trunc(160) | ltrimstr(" ")) else null end),
-             pr: (if (.pr | type) == "string" then .pr else pr_of($e.task) end)} ]
-        | group_by([.task, .event, .state]) | map(max_by([.ts, .i]))
-        | sort_by([-.ts, -.i])
-        | .[:100]
-        | map({at: (.ts | iso), task, event, state, line, detail, pr})),
+               source: ($session_source // "fallback_24h")},
+     session_activity_total: ($activity | length),
+     session_activity_truncated: (($activity | length) > 100),
+     session_activity: ($activity[:100] | map({at: (.ts | iso), task, event, state, key, mode, line, detail, pr})),
      in_flight:
        [ .backlog.records[]? | select(.state == "in_flight" and .id != null)
          | . as $r | $tasks[$r.id] as $t
@@ -144,7 +143,7 @@ printf '%s\n%s\n' "$SNAPSHOT" "$LEDGER_JSON" | jq -s \
             kind: ($r.kind // $t.kind // null),
             worker: (if $t == null then null else ($t.current_state.state // null) end),
             last_event: (($t.paths.status_log.last_event.raw // "") | if . == "" then null else trunc(160) end),
-            pr: pr_of($r.id)} ],
+            pr: pr_of($r.id; null)} ],
      open_decisions:
        ($rows
         | sort_by(if .touched == null then [1, 0] else [0, -.touched] end)

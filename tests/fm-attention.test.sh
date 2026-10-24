@@ -131,7 +131,7 @@ EOF
   printf 'needs-decision [key=unstamped]: no time on this line\n' >> "$home/state/mate.status"
   out=$(run_attention "$home") || fail "fm-attention failed: $out"
   printf '%s' "$out" | jq -e '.schema == "fm-attention.v1" and (.generated | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$"))
-    and (keys | sort) == ["generated", "in_flight", "open_decisions", "schema", "session", "session_activity"]' >/dev/null \
+    and (keys | sort) == ["generated", "in_flight", "open_decisions", "schema", "session", "session_activity", "session_activity_total", "session_activity_truncated"]' >/dev/null \
     || fail "unexpected envelope: $out"
   assert_equals 'newer api-shape legacy-call older unstamped' \
     "$(printf '%s' "$out" | jq -r '[.open_decisions[] | (.key // .task)] | join(" ")')" \
@@ -466,23 +466,23 @@ EOF
   printf '%s\n' "$home"
 }
 
-test_session_activity_is_newest_first_and_collapsed() {
+test_session_activity_is_newest_first_and_distinct() {
   local home out
   home=$(activity_home activity)
-  : > "$home/state/.session-start-complete"
-  TZ=UTC touch -t 202607010920.00 "$home/state/.session-start-complete"  # 1782897600
+  : > "$home/state/.lock"
+  TZ=UTC touch -t 202607010920.00 "$home/state/.lock"  # 1782897600
   out=$(run_attention "$home") || fail "fm-attention failed: $out"
-  printf '%s' "$out" | jq -e '.session == {started_at: "2026-07-01T09:20:00Z", source: "session_start"}' >/dev/null \
-    || fail "session start not read from the completed session start: $out"
-  assert_equals 'Cleaned up: gone-task|Landed locally: Old finished work|You answered: Old finished work|Waiting on you: Old finished work|PR ready: Fix the login page|Worker finished: Fix the login page|Needs your decision: Fix the login page|Started: Fix the login page' \
+  printf '%s' "$out" | jq -e '.session == {started_at: "2026-07-01T09:20:00Z", source: "session_lock"}' >/dev/null \
+    || fail "session start not read from the session lock: $out"
+  assert_equals 'Cleaned up: gone-task|Landed locally: Old finished work|You answered: Old finished work|Waiting on you: Old finished work|PR ready: Fix the login page|Worker finished: Fix the login page|Worker finished: Fix the login page|Needs your decision: Fix the login page|Started: Fix the login page' \
     "$(printf '%s' "$out" | jq -r '[.session_activity[].line] | join("|")')" \
-    "activity newest first, routine status and unknown events skipped, repeats collapsed, earlier session excluded"
+    "activity newest first, routine status and unknown events skipped, distinct transitions retained, earlier session excluded"
   printf '%s' "$out" | jq -e '
-    (.session_activity[] | select(.event == "task.status" and .state == "done"))
+    (.session_activity[] | select(.event == "task.status" and .state == "done" and .detail != "first try"))
       | .at == "2026-07-01T09:50:00Z" and .task == "fix-login"
         and .detail == "PR https://example.test/acme/webapp/pull/7 checks green"
         and .pr == "https://example.test/acme/webapp/pull/7"' >/dev/null \
-    || fail "the newest repeat must win and carry the recorded PR: $out"
+    || fail "the latest completion must carry the recorded PR: $out"
   printf '%s' "$out" | jq -e '
     (.session_activity[] | select(.event == "task.status" and .state == "needs-decision") | .detail == "pick a shape")
     and (.session_activity[] | select(.event == "task.dispatched") | .state == null and .detail == null)
@@ -516,25 +516,87 @@ test_in_flight_reports_the_worker_state() {
 test_session_start_sources_and_fallback() {
   local home out now
   home=$(activity_home activity-sources)
+  : > "$home/state/.lock"
   : > "$home/state/.session-start-complete"
   : > "$home/state/.lock-session"
-  TZ=UTC touch -t 202607010920.00 "$home/state/.session-start-complete"
+  TZ=UTC touch -t 202607010920.00 "$home/state/.lock"
+  TZ=UTC touch -t 202607011000.00 "$home/state/.session-start-complete"
   TZ=UTC touch -t 202607010945.00 "$home/state/.lock-session"  # 1782899100
   out=$(run_attention "$home") || fail "fm-attention failed: $out"
   printf '%s' "$out" | jq -e '.session == {started_at: "2026-07-01T09:45:00Z", source: "session_identity"}
     and ([.session_activity[].task] | index("fix-login")) != null
     and ([.session_activity[] | select(.event == "task.dispatched")] | length) == 0' >/dev/null \
     || fail "a later session identity change must start the session: $out"
-  rm -f "$home/state/.session-start-complete" "$home/state/.lock-session"
+  rm -f "$home/state/.lock-session"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  printf '%s' "$out" | jq -e '.session == {started_at: "2026-07-01T09:20:00Z", source: "session_lock"}
+    and any(.session_activity[]; .event == "task.dispatched" and .task == "fix-login")' >/dev/null \
+    || fail "lock-only sessions must include events during startup: $out"
+  rm -f "$home/state/.lock"
+
   now=$(date +%s)
   printf '{"v":1,"ts":%s,"event":"task.pr_ready","task":"fix-login","pr":"https://example.test/acme/webapp/pull/8"}\n' \
     "$((now - 3600))" >> "$home/state/fleet-ledger.jsonl"
   out=$(run_attention "$home") || fail "fm-attention failed: $out"
-  printf '%s' "$out" | jq -e --argjson now "$now" '.session.source == "fallback_window"
+  printf '%s' "$out" | jq -e --argjson now "$now" '.session.source == "fallback_24h"
     and ((.session.started_at | fromdateiso8601) - ($now - 86400) | fabs) < 60
     and [.session_activity[] | {line, pr}] == [{line: "PR ready: Fix the login page", pr: "https://example.test/acme/webapp/pull/8"}]' >/dev/null \
     || fail "without a session record the window must be the last 24 hours: $out"
-  pass "the session starts at the later session record, or 24 hours back when none exists"
+  pass "session boundaries include startup activity and the fallback is labeled as a rolling 24-hour window"
+}
+
+test_activity_preserves_decisions_and_reports_cap() {
+  local home out
+  home=$(activity_home activity-distinct)
+  : > "$home/state/.lock"
+  TZ=UTC touch -t 202607010920.00 "$home/state/.lock"
+  cat >> "$home/state/fleet-ledger.jsonl" <<'EOF'
+{"v":1,"ts":1782900010,"event":"task.status","task":"fix-login","state":"failed","text":"failed build"}
+{"v":1,"ts":1782900020,"event":"task.status","task":"fix-login","state":"blocked","text":"waiting"}
+{"v":1,"ts":1782900030,"event":"task.status","task":"fix-login","state":"resolved","text":"unblocked"}
+{"v":1,"ts":1782900040,"event":"task.status","task":"fix-login","state":"needs-decision","key":"first","text":"choose"}
+{"v":1,"ts":1782900040,"event":"task.status","task":"fix-login","state":"needs-decision","key":"second","text":"choose"}
+{"v":1,"ts":1782900040,"event":"task.status","task":"fix-login","state":"needs-decision","key":"second","text":"choose"}
+{"v":1,"ts":1782900050,"event":"captain.answered","task":"fix-login","mode":"release"}
+{"v":1,"ts":1782900050,"event":"captain.answered","task":"fix-login","mode":"done"}
+{"v":1,"ts":1782900050,"event":"captain.answered","task":"fix-login","mode":"reconciled"}
+EOF
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  printf '%s' "$out" | jq -e '
+    [.session_activity[] | select(.event == "task.status") | .state] as $states
+    | all(["failed", "blocked", "resolved", "done", "needs-decision"][]; . as $s | $states | index($s) != null)
+    and ([.session_activity[] | select(.event == "task.status" and .state == "needs-decision") | .key] | sort) == ["first", "second", "shape"]
+    and ([.session_activity[] | select(.task == "fix-login" and .event == "captain.answered") | .mode]) == ["reconciled", "done", "release"]
+    and .session_activity_total == (.session_activity | length)
+    and .session_activity_truncated == false' >/dev/null \
+    || fail "distinct statuses, keys, answer modes and emission ordering must survive deduplication: $out"
+  jq -nc 'range(0; 105) | {v:1, ts:(1782900100 + .), event:"task.dispatched", task:"fix-login"}' \
+    >> "$home/state/fleet-ledger.jsonl"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  printf '%s' "$out" | jq -e '.session_activity_total == 122
+    and .session_activity_truncated == true and (.session_activity | length) == 100
+    and .session_activity[0].at == (1782900204 | todate)
+    and .session_activity[-1].at == (1782900105 | todate)' >/dev/null \
+    || fail "the cap must disclose omitted distinct transitions: $out"
+  pass "meaningful statuses and distinct decisions survive, true duplicates collapse, and the cap is disclosed"
+}
+
+test_current_pr_metadata_wins_over_history() {
+  local home out
+  home=$(activity_home activity-current-pr)
+  rm -f "$home/config/fleet-ledger"
+  : > "$home/state/.lock"
+  TZ=UTC touch -t 202607010920.00 "$home/state/.lock"
+  mkdir -p "$home/wt"
+  fm_write_meta "$home/state/fix-login.meta" "window=firstmate:fm-fix-login" "worktree=$home/wt" \
+    "project=$home/wt" "harness=claude" "kind=ship" "mode=no-mistakes" \
+    "pr=https://example.test/acme/webapp/pull/8"
+  out=$(run_attention "$home") || fail "fm-attention failed: $out"
+  printf '%s' "$out" | jq -e '
+    all(.session_activity[] | select(.task == "fix-login"); .pr == "https://example.test/acme/webapp/pull/8")
+    and (.in_flight[] | select(.task == "fix-login") | .pr == "https://example.test/acme/webapp/pull/8")' >/dev/null \
+    || fail "replacement metadata PR must beat ledger and event PRs in both feeds: $out"
+  pass "current metadata PR wins for activity and in-flight items with recording disabled"
 }
 
 test_hold_answer_release_and_defer_are_recorded
@@ -553,6 +615,8 @@ test_continuations_preserve_opening_timestamps
 test_legacy_rehold_preserves_effective_date
 test_attention_skips_secondmate_collection
 test_attention_uses_configured_adapter
-test_session_activity_is_newest_first_and_collapsed
+test_session_activity_is_newest_first_and_distinct
 test_in_flight_reports_the_worker_state
 test_session_start_sources_and_fallback
+test_activity_preserves_decisions_and_reports_cap
+test_current_pr_metadata_wins_over_history

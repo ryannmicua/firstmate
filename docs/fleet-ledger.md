@@ -77,30 +77,34 @@ The local projection reads holds through the configured backlog adapter and skip
 It works without a ledger, in which case each row's `last_touched_at` equals its `opened_at` and `session_activity` is empty.
 Turning recording off leaves existing ledger history available to this read.
 
-The object has `schema`, `generated` (UTC, ISO 8601, second precision), `session`, `session_activity`, `in_flight`, and `open_decisions`.
+The object has `schema`, `generated` (UTC, ISO 8601, second precision), `session`, `session_activity`, `session_activity_total`, `session_activity_truncated`, `in_flight`, and `open_decisions`.
 Readers must ignore members they do not recognize, so later versions can add members without changing the schema name.
 All times are UTC, ISO 8601, second precision.
 
 ### Session activity
 
-`session` has `started_at` and `source`, which name where the current firstmate session's start came from:
+`session` has `started_at` and `source`, which identify the session boundary or an explicitly labeled fallback window:
 
 | `source`           | `started_at` is                                                                                     |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
-| `session_start`    | when the last full session start finished, the modification time of `state/.session-start-complete` |
+| `session_lock`     | when the session lock was acquired, the modification time of `state/.lock` |
 | `session_identity` | when the session lock last recorded a new session identity, such as a `/clear`, the modification time of `state/.lock-session` |
-| `fallback_window`  | 24 hours before the read, when neither record exists                                               |
+| `fallback_24h`  | 24 hours before the read, when neither session boundary is available; this is a rolling window, not a session                                               |
 
 When both records exist, the later one wins.
 
 `session_activity` lists this ledger's events from `started_at` on, newest first, at most 100 items.
-Each item has `at`, `task`, `event` (the ledger event name), `state`, `line`, `detail`, and `pr`.
+`session_activity_total` counts distinct eligible items before the cap, and `session_activity_truncated` is true when the cap omits items.
+Each item has `at`, `task`, `event` (the ledger event name), `state`, `key`, `mode`, `line`, `detail`, and `pr`.
+`key` and `mode` preserve the recorded decision key and answer mode, or are `null` when absent.
 `line` is one plain sentence built from the task's backlog title, or its task id when the backlog no longer has it:
 
 | Event                                   | `line`                                    |
 | --------------------------------------- | ----------------------------------------- |
 | `task.dispatched`                       | `Started: <title>`                        |
 | `task.status` with `state` `needs-decision` | `Needs your decision: <title>`        |
+| `task.status` with `state` `failed`     | `Failed: <title>`                         |
+| `task.status` with `state` `resolved`   | `Resolved: <title>`                       |
 | `task.status` with `state` `blocked`    | `Blocked: <title>`                        |
 | `task.status` with `state` `done`       | `Worker finished: <title>`                |
 | `task.pr_ready`                         | `PR ready: <title>`                       |
@@ -111,10 +115,10 @@ Each item has `at`, `task`, `event` (the ledger event name), `state`, `line`, `d
 | `captain.answered`                      | `You answered: <title>`, `You answered and kept it open: <title>` for `release`, or `Closed as moot: <title>` for `reconciled` |
 
 Other status lines, such as `working` or `paused`, and events this list does not name are left out.
-Repeats collapse: for each task, event, and status `state`, only the newest item is kept.
+Only identical ledger records collapse, including their timestamp, task, event, state, decision key, answer mode, and payload; distinct recorded transitions remain separate.
 `state` is the status line's state for a `task.status` item and `null` otherwise.
 `detail` is the status line's text, trimmed to 160 characters, for a `task.status` item and `null` otherwise.
-`pr` is the event's own PR URL, else the newest PR URL this ledger records for the task, else the PR the task's local record or backlog item names, else `null`.
+`pr` is the task's current local PR URL (metadata first, then status-log discovery), else the event's own PR URL, else the newest PR URL this ledger records for the task, else the backlog item's PR URL, else `null`.
 The list reports only what the ledger recorded, so its [limits](#limits) apply: status lines already in a log when recording was turned on appear at the time they were recorded, not when they were written.
 
 ### In-flight items
