@@ -1,0 +1,54 @@
+{
+  "schema": "fm-attention.v1",
+  "generated": "2026-10-24T07:27:53Z",
+  "open_decisions": [
+    {
+      "task": "remote",
+      "home": "main",
+      "title": "remote",
+      "kind": "keyed",
+      "key": "new",
+      "reason": "choose new",
+      "bucket": null,
+      "opened_at": "2026-07-03T11:00:00Z",
+      "opened_precision": "second",
+      "last_touched_at": "2026-07-03T11:00:00Z"
+    },
+    {
+      "task": "remote",
+      "home": "main",
+      "title": "remote",
+      "kind": "keyed",
+      "key": "pending-reply-old",
+      "reason": "pending-reply-missed: choose old",
+      "bucket": null,
+      "opened_at": "2026-07-03T10:00:00Z",
+      "opened_precision": "second",
+      "last_touched_at": "2026-07-03T10:00:00Z"
+    },
+    {
+      "task": "remote",
+      "home": "main",
+      "title": "remote",
+      "kind": "keyed",
+      "key": "default",
+      "reason": "default decision",
+      "bucket": null,
+      "opened_at": "2026-07-03T09:00:00Z",
+      "opened_precision": "second",
+      "last_touched_at": "2026-07-03T09:00:00Z"
+    },
+    {
+      "task": "remote",
+      "home": "main",
+      "title": "remote",
+      "kind": "keyed",
+      "key": "undated",
+      "reason": "no timestamp",
+      "bucket": null,
+      "opened_at": null,
+      "opened_precision": null,
+      "last_touched_at": null
+    }
+  ]
+}

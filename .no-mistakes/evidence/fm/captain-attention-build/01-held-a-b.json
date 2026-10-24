@@ -1,0 +1,28 @@
+{
+  "schema": "fm-attention.v1",
+  "generated": "2026-10-24T07:27:38Z",
+  "open_decisions": [
+    {
+      "task": "b",
+      "home": "main",
+      "title": "b",
+      "kind": "captain_hold",
+      "reason": "choose B",
+      "bucket": "live",
+      "opened_at": "2026-10-24T07:27:35Z",
+      "opened_precision": "second",
+      "last_touched_at": "2026-10-24T07:27:37Z"
+    },
+    {
+      "task": "a",
+      "home": "main",
+      "title": "a",
+      "kind": "captain_hold",
+      "reason": "choose A",
+      "bucket": "live",
+      "opened_at": "2026-10-24T07:27:32Z",
+      "opened_precision": "second",
+      "last_touched_at": "2026-10-24T07:27:34Z"
+    }
+  ]
+}

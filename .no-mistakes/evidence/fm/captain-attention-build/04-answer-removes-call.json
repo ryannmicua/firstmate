@@ -1,0 +1,17 @@
+{
+  "schema": "fm-attention.v1",
+  "generated": "2026-10-24T07:27:45Z",
+  "open_decisions": [
+    {
+      "task": "a",
+      "home": "main",
+      "title": "a",
+      "kind": "captain_hold",
+      "reason": "choose revised A",
+      "bucket": "dated",
+      "opened_at": "2026-10-24T07:27:32Z",
+      "opened_precision": "second",
+      "last_touched_at": "2026-10-24T07:27:43Z"
+    }
+  ]
+}

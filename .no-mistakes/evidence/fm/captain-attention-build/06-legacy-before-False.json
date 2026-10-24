@@ -1,0 +1,28 @@
+{
+  "schema": "fm-attention.v1",
+  "generated": "2026-10-24T07:27:47Z",
+  "open_decisions": [
+    {
+      "task": "day",
+      "home": "main",
+      "title": "day",
+      "kind": "captain_hold",
+      "reason": "choose day",
+      "bucket": "aged",
+      "opened_at": "2026-07-03T00:00:00Z",
+      "opened_precision": "day",
+      "last_touched_at": "2026-07-03T00:00:00Z"
+    },
+    {
+      "task": "legacy",
+      "home": "main",
+      "title": "legacy",
+      "kind": "captain_hold",
+      "reason": "choose legacy",
+      "bucket": "aged",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "opened_precision": "day",
+      "last_touched_at": "2026-01-01T00:00:00Z"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "unchanged": true,
+  "before": {
+    "projects": "dir",
+    "state": "dir",
+    "config": "dir",
+    ".tasks.toml": "3b39c93a90b25e940f5a4972c1c286c914c19f496268a217231645f9f3a0ef20",
+    "data": "dir",
+    "state/remote.status": "b8774ff4f10533b74a772e1ab57ffaba5b77638f8a898728740575352541770a",
+    "state/remote.meta": "2d62fdc0e2accb5bc55cda821e2733d4fc7430e5a246998cc5b2e1d3dd74b574",
+    "state/fleet-ledger.jsonl": "b29a51493722c81692574ff6b46b2ef66ef08bfb225745b366694e089a976f9e",
+    "state/.remote.fleet-ledger-offset": "30a8d3c2e53e919d84c8897de417a5bf168e0803915482f1b956f68c44ce1cfd",
+    "config/fleet-ledger": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "data/backlog.md": "fc7cfb341b1c7627e953dcca21ee8f90a02fb1e30d8ef38f3a3ba576acbe6bc8",
+    "data/secondmates.md": "eb574d2bba48cd3da887bdb8a2bbec4b2ed9a89469be5180d10d133022164e56"
+  },
+  "after": {
+    "projects": "dir",
+    "state": "dir",
+    "config": "dir",
+    ".tasks.toml": "3b39c93a90b25e940f5a4972c1c286c914c19f496268a217231645f9f3a0ef20",
+    "data": "dir",
+    "state/remote.status": "b8774ff4f10533b74a772e1ab57ffaba5b77638f8a898728740575352541770a",
+    "state/remote.meta": "2d62fdc0e2accb5bc55cda821e2733d4fc7430e5a246998cc5b2e1d3dd74b574",
+    "state/fleet-ledger.jsonl": "b29a51493722c81692574ff6b46b2ef66ef08bfb225745b366694e089a976f9e",
+    "state/.remote.fleet-ledger-offset": "30a8d3c2e53e919d84c8897de417a5bf168e0803915482f1b956f68c44ce1cfd",
+    "config/fleet-ledger": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "data/backlog.md": "fc7cfb341b1c7627e953dcca21ee8f90a02fb1e30d8ef38f3a3ba576acbe6bc8",
+    "data/secondmates.md": "eb574d2bba48cd3da887bdb8a2bbec4b2ed9a89469be5180d10d133022164e56"
+  }
+}

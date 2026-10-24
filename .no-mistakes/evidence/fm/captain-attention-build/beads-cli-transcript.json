@@ -1,0 +1,36 @@
+[
+  {
+    "command": [
+      "git",
+      "init",
+      "-q"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "bd",
+      "init",
+      "--prefix",
+      "att",
+      "--skip-agents",
+      "--skip-hooks",
+      "--non-interactive"
+    ],
+    "exit": 0,
+    "stdout": "  Repository ID: 5381c844\n  Clone ID: 1ed9fe620de3b698\n\n\u2713 bd initialized successfully!\n\n  Backend: dolt\n  Mode: embedded\n  Database: att\n  Issue prefix: att\n  Issues will be named: att-<hash> (e.g., att-a3f2dd)\n\nRun bd quickstart to get started.\n\n",
+    "stderr": "Thanks for using bd! Quick heads-up: bd shares anonymous usage metrics \u2014\n   just which commands get run (plus the bd version and OS platform), never your\n   issues, paths, remotes, identity, or anything you type. Seeing how people use\n   bd is how we decide what to improve next, so it genuinely makes bd better for\n   everyone.\n      Curious what's sent?   bd metrics example\n      Prefer to opt out?     bd metrics off    (one command, no restart needed)\n\nWarning: failed to commit beads files: exit status 128\n\n\u26a0 No Dolt remote configured\n  Issues are stored in local Dolt. .beads/issues.jsonl is an export,\n  not cross-machine sync or the source of truth.\n  To enable durable sync, add a git origin and then run:\n    bd dolt push\n"
+  },
+  {
+    "command": [
+      "bash",
+      "/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M5PAAQRNW77M8AQJJP4MDZYA/bin/fm-attention.sh",
+      "--json"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "error: \"Unsupported backend \\\"beads\\\" \u2014 P1 ships the markdown backend only\"\ncode: UNSUPPORTED\nhelp[1]: \"Set `backend = \\\"markdown\\\"` in .tasks.toml, or omit --backend\"\nfm-fleet-snapshot: backlog read failed\n"
+  }
+]

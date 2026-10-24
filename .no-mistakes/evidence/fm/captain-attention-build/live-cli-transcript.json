@@ -1,0 +1,293 @@
+[
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-captain-hold.sh",
+      "hold",
+      "a",
+      "--title",
+      "a",
+      "--reason",
+      "choose A",
+      "--repo",
+      "sample"
+    ],
+    "exit": 0,
+    "stdout": "a\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-captain-hold.sh",
+      "hold",
+      "b",
+      "--title",
+      "b",
+      "--reason",
+      "choose B",
+      "--repo",
+      "sample"
+    ],
+    "exit": 0,
+    "stdout": "b\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:38Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"b\",\n      \"home\": \"main\",\n      \"title\": \"b\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose B\",\n      \"bucket\": \"live\",\n      \"opened_at\": \"2026-10-24T07:27:35Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-10-24T07:27:37Z\"\n    },\n    {\n      \"task\": \"a\",\n      \"home\": \"main\",\n      \"title\": \"a\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose A\",\n      \"bucket\": \"live\",\n      \"opened_at\": \"2026-10-24T07:27:32Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-10-24T07:27:34Z\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-captain-hold.sh",
+      "hold",
+      "a",
+      "--title",
+      "a",
+      "--reason",
+      "choose A",
+      "--repo",
+      "sample"
+    ],
+    "exit": 0,
+    "stdout": "a\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:40Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"b\",\n      \"home\": \"main\",\n      \"title\": \"b\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose B\",\n      \"bucket\": \"live\",\n      \"opened_at\": \"2026-10-24T07:27:35Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-10-24T07:27:37Z\"\n    },\n    {\n      \"task\": \"a\",\n      \"home\": \"main\",\n      \"title\": \"a\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose A\",\n      \"bucket\": \"live\",\n      \"opened_at\": \"2026-10-24T07:27:32Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-10-24T07:27:34Z\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-captain-hold.sh",
+      "hold",
+      "a",
+      "--title",
+      "a",
+      "--reason",
+      "choose revised A",
+      "--repo",
+      "sample",
+      "--until",
+      "2027-01-01"
+    ],
+    "exit": 0,
+    "stdout": "a\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:43Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"a\",\n      \"home\": \"main\",\n      \"title\": \"a\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose revised A\",\n      \"bucket\": \"dated\",\n      \"opened_at\": \"2026-10-24T07:27:32Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-10-24T07:27:43Z\"\n    },\n    {\n      \"task\": \"b\",\n      \"home\": \"main\",\n      \"title\": \"b\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose B\",\n      \"bucket\": \"live\",\n      \"opened_at\": \"2026-10-24T07:27:35Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-10-24T07:27:37Z\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-captain-hold.sh",
+      "answer",
+      "b",
+      "--decision-file",
+      "/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M5PAAQRNW77M8AQJJP4MDZYA/.validation-tmp/attention-live-igu_t17l/lifecycle/answer.txt"
+    ],
+    "exit": 0,
+    "stdout": "answered: b\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:45Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"a\",\n      \"home\": \"main\",\n      \"title\": \"a\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose revised A\",\n      \"bucket\": \"dated\",\n      \"opened_at\": \"2026-10-24T07:27:32Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-10-24T07:27:43Z\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-captain-hold.sh",
+      "answer",
+      "a",
+      "--decision-file",
+      "/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M5PAAQRNW77M8AQJJP4MDZYA/.validation-tmp/attention-live-igu_t17l/lifecycle/answer.txt",
+      "--release"
+    ],
+    "exit": 0,
+    "stdout": "released: a\n",
+    "stderr": ""
+  },
+  {
+    "home": "lifecycle",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:47Z\",\n  \"open_decisions\": []\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "legacy-False",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:47Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"day\",\n      \"home\": \"main\",\n      \"title\": \"day\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose day\",\n      \"bucket\": \"aged\",\n      \"opened_at\": \"2026-07-03T00:00:00Z\",\n      \"opened_precision\": \"day\",\n      \"last_touched_at\": \"2026-07-03T00:00:00Z\"\n    },\n    {\n      \"task\": \"legacy\",\n      \"home\": \"main\",\n      \"title\": \"legacy\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose legacy\",\n      \"bucket\": \"aged\",\n      \"opened_at\": \"2026-01-01T00:00:00Z\",\n      \"opened_precision\": \"day\",\n      \"last_touched_at\": \"2026-01-01T00:00:00Z\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "legacy-False",
+    "command": [
+      "fm-captain-hold.sh",
+      "hold",
+      "legacy",
+      "--title",
+      "legacy",
+      "--reason",
+      "choose legacy",
+      "--repo",
+      "sample"
+    ],
+    "exit": 0,
+    "stdout": "legacy\n",
+    "stderr": ""
+  },
+  {
+    "home": "legacy-False",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:50Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"day\",\n      \"home\": \"main\",\n      \"title\": \"day\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose day\",\n      \"bucket\": \"aged\",\n      \"opened_at\": \"2026-07-03T00:00:00Z\",\n      \"opened_precision\": \"day\",\n      \"last_touched_at\": \"2026-07-03T00:00:00Z\"\n    },\n    {\n      \"task\": \"legacy\",\n      \"home\": \"main\",\n      \"title\": \"legacy\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose legacy\",\n      \"bucket\": \"aged\",\n      \"opened_at\": \"2026-01-01T00:00:00Z\",\n      \"opened_precision\": \"day\",\n      \"last_touched_at\": \"2026-01-01T00:00:00Z\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "legacy-True",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:50Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"day\",\n      \"home\": \"main\",\n      \"title\": \"day\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose day\",\n      \"bucket\": \"aged\",\n      \"opened_at\": \"2026-07-03T00:00:00Z\",\n      \"opened_precision\": \"day\",\n      \"last_touched_at\": \"2026-07-03T00:00:00Z\"\n    },\n    {\n      \"task\": \"legacy\",\n      \"home\": \"main\",\n      \"title\": \"legacy\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose legacy\",\n      \"bucket\": \"aged\",\n      \"opened_at\": \"2026-01-01T00:00:00Z\",\n      \"opened_precision\": \"day\",\n      \"last_touched_at\": \"2026-01-01T00:00:00Z\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "legacy-True",
+    "command": [
+      "fm-captain-hold.sh",
+      "hold",
+      "legacy",
+      "--title",
+      "legacy",
+      "--reason",
+      "choose legacy",
+      "--repo",
+      "sample"
+    ],
+    "exit": 0,
+    "stdout": "legacy\n",
+    "stderr": ""
+  },
+  {
+    "home": "legacy-True",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:52Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"day\",\n      \"home\": \"main\",\n      \"title\": \"day\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose day\",\n      \"bucket\": \"aged\",\n      \"opened_at\": \"2026-07-03T00:00:00Z\",\n      \"opened_precision\": \"day\",\n      \"last_touched_at\": \"2026-07-03T00:00:00Z\"\n    },\n    {\n      \"task\": \"legacy\",\n      \"home\": \"main\",\n      \"title\": \"legacy\",\n      \"kind\": \"captain_hold\",\n      \"reason\": \"choose legacy\",\n      \"bucket\": \"aged\",\n      \"opened_at\": \"2026-01-01T00:00:00Z\",\n      \"opened_precision\": \"day\",\n      \"last_touched_at\": \"2026-01-01T00:00:00Z\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "status-feed",
+    "command": [
+      "fm-fleet-ledger.sh",
+      "capture"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "home": "status-feed",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:53Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"new\",\n      \"reason\": \"choose new\",\n      \"bucket\": null,\n      \"opened_at\": \"2026-07-03T11:00:00Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-07-03T11:00:00Z\"\n    },\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"pending-reply-old\",\n      \"reason\": \"pending-reply-missed: choose old\",\n      \"bucket\": null,\n      \"opened_at\": \"2026-07-03T10:00:00Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-07-03T10:00:00Z\"\n    },\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"default\",\n      \"reason\": \"default decision\",\n      \"bucket\": null,\n      \"opened_at\": \"2026-07-03T09:00:00Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-07-03T09:00:00Z\"\n    },\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"undated\",\n      \"reason\": \"no timestamp\",\n      \"bucket\": null,\n      \"opened_at\": null,\n      \"opened_precision\": null,\n      \"last_touched_at\": null\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "status-feed",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:54Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"new\",\n      \"reason\": \"choose new\",\n      \"bucket\": null,\n      \"opened_at\": \"2026-07-03T11:00:00Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-07-03T11:00:00Z\"\n    },\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"pending-reply-old\",\n      \"reason\": \"pending-reply-missed: choose old\",\n      \"bucket\": null,\n      \"opened_at\": \"2026-07-03T10:00:00Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-07-03T10:00:00Z\"\n    },\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"default\",\n      \"reason\": \"default decision\",\n      \"bucket\": null,\n      \"opened_at\": \"2026-07-03T09:00:00Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-07-03T09:00:00Z\"\n    },\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"undated\",\n      \"reason\": \"no timestamp\",\n      \"bucket\": null,\n      \"opened_at\": null,\n      \"opened_precision\": null,\n      \"last_touched_at\": null\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "status-feed",
+    "command": [
+      "fm-attention.sh",
+      "--json"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"schema\": \"fm-attention.v1\",\n  \"generated\": \"2026-10-24T07:27:54Z\",\n  \"open_decisions\": [\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"pending-reply-old\",\n      \"reason\": \"pending-reply-missed: choose old\",\n      \"bucket\": null,\n      \"opened_at\": \"2026-07-03T10:00:00Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-07-03T10:00:00Z\"\n    },\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"default\",\n      \"reason\": \"default decision\",\n      \"bucket\": null,\n      \"opened_at\": \"2026-07-03T09:00:00Z\",\n      \"opened_precision\": \"second\",\n      \"last_touched_at\": \"2026-07-03T09:00:00Z\"\n    },\n    {\n      \"task\": \"remote\",\n      \"home\": \"main\",\n      \"title\": \"remote\",\n      \"kind\": \"keyed\",\n      \"key\": \"undated\",\n      \"reason\": \"no timestamp\",\n      \"bucket\": null,\n      \"opened_at\": null,\n      \"opened_precision\": null,\n      \"last_touched_at\": null\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "home": "status-feed",
+    "command": [
+      "fm-attention.sh"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "usage: fm-attention.sh --json\n\nPrint the decisions waiting on the captain, newest first, as JSON\n(schema fm-attention.v1). Read-only: nothing is stored.\n"
+  },
+  {
+    "home": "status-feed",
+    "command": [
+      "fm-attention.sh",
+      "--json",
+      "extra"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "usage: fm-attention.sh --json\n\nPrint the decisions waiting on the captain, newest first, as JSON\n(schema fm-attention.v1). Read-only: nothing is stored.\n"
+  },
+  {
+    "home": "status-feed",
+    "command": [
+      "fm-attention.sh",
+      "--help"
+    ],
+    "exit": 0,
+    "stdout": "usage: fm-attention.sh --json\n\nPrint the decisions waiting on the captain, newest first, as JSON\n(schema fm-attention.v1). Read-only: nothing is stored.\n",
+    "stderr": ""
+  }
+]

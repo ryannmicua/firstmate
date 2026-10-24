@@ -1,0 +1,16 @@
+ok - hold, deferral, answer, and release each write one captain event
+ok - a moot call closed by reconciliation records captain.answered with mode reconciled
+ok - flag off: holds and answers leave no ledger file or lock
+ok - the ledger writer refuses malformed captain events without writing
+ok - open decisions sort newest first with second, day, and unknown opened times
+ok - ledger events raise last_touched_at while opened_at stays put, and torn ledger lines are skipped
+ok - an answered call leaves the open decisions
+ok - the read stores nothing and rejects unknown arguments
+ok - a date-only hold stamp takes precedence over the filing date
+ok - large ledgers preserve source emission times and accepted opening transitions
+ok - rejected openings preserve timestamps while accepted updates and resolutions still work
+ok - unchanged dated and undated re-holds preserve recency; reason and date changes emit events
+ok - shared fold ignores continuations and timestamps accepted identical openings
+ok - legacy re-holds retain their effective opening date with the ledger on or off
+ok - attention retains parent-side decisions without secondmate cache writes
+ok - attention reads the configured adapter without a Markdown backlog
