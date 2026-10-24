@@ -1,0 +1,66 @@
+{
+  "schema": "fm-attention.v1",
+  "generated": "2026-10-24T22:40:04Z",
+  "session": {
+    "started_at": "2026-07-01T09:24:10Z",
+    "source": "session_identity"
+  },
+  "session_activity_total": 3,
+  "session_activity_truncated": false,
+  "session_activity": [
+    {
+      "at": "2026-10-24T22:40:04Z",
+      "task": "export",
+      "event": "task.dispatched",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Started: Export monthly report",
+      "detail": null,
+      "pr": null
+    },
+    {
+      "at": "2026-07-01T09:25:50Z",
+      "task": "retired",
+      "event": "task.cleaned_up",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Cleaned up: retired",
+      "detail": null,
+      "pr": null
+    },
+    {
+      "at": "2026-07-01T09:25:00Z",
+      "task": "old",
+      "event": "task.merged",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Landed locally: Previous release",
+      "detail": null,
+      "pr": null
+    }
+  ],
+  "in_flight": [
+    {
+      "task": "login",
+      "title": "Repair login redirects",
+      "repo": "webapp",
+      "kind": "ship",
+      "worker": null,
+      "last_event": null,
+      "pr": "https://example.test/webapp/pull/7"
+    },
+    {
+      "task": "export",
+      "title": "Export monthly report",
+      "repo": "reports",
+      "kind": "scout",
+      "worker": null,
+      "last_event": null,
+      "pr": null
+    }
+  ],
+  "open_decisions": []
+}

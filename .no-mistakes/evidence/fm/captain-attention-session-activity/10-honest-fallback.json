@@ -1,0 +1,67 @@
+{
+  "schema": "fm-attention.v1",
+  "generated": "2026-10-24T22:40:09Z",
+  "session": {
+    "started_at": "2026-10-23T22:40:09Z",
+    "source": "fallback_24h"
+  },
+  "session_activity_total": 2,
+  "session_activity_truncated": false,
+  "session_activity": [
+    {
+      "at": "2026-10-24T22:40:07Z",
+      "task": "approval",
+      "event": "captain.held",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Waiting on you: Approve report format",
+      "detail": null,
+      "pr": null
+    },
+    {
+      "at": "2026-10-24T22:40:04Z",
+      "task": "export",
+      "event": "task.dispatched",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Started: Export monthly report",
+      "detail": null,
+      "pr": null
+    }
+  ],
+  "in_flight": [
+    {
+      "task": "login",
+      "title": "Repair login redirects",
+      "repo": "webapp",
+      "kind": "ship",
+      "worker": "unknown",
+      "last_event": "working [at=1782899100]: tracing redirect",
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "task": "export",
+      "title": "Export monthly report",
+      "repo": "reports",
+      "kind": "scout",
+      "worker": null,
+      "last_event": null,
+      "pr": null
+    }
+  ],
+  "open_decisions": [
+    {
+      "task": "approval",
+      "home": "main",
+      "title": "Approve report format",
+      "kind": "captain_hold",
+      "reason": "Choose CSV or PDF",
+      "bucket": "live",
+      "opened_at": "2026-10-24T22:40:05Z",
+      "opened_precision": "second",
+      "last_touched_at": "2026-10-24T22:40:07Z"
+    }
+  ]
+}

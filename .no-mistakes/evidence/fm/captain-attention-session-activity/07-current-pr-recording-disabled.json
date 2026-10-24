@@ -1,0 +1,210 @@
+{
+  "schema": "fm-attention.v1",
+  "generated": "2026-10-24T22:40:07Z",
+  "session": {
+    "started_at": "2026-07-01T09:20:00Z",
+    "source": "session_lock"
+  },
+  "session_activity_total": 15,
+  "session_activity_truncated": false,
+  "session_activity": [
+    {
+      "at": "2026-10-24T22:40:07Z",
+      "task": "approval",
+      "event": "captain.held",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Waiting on you: Approve report format",
+      "detail": null,
+      "pr": null
+    },
+    {
+      "at": "2026-10-24T22:40:04Z",
+      "task": "export",
+      "event": "task.dispatched",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Started: Export monthly report",
+      "detail": null,
+      "pr": null
+    },
+    {
+      "at": "2026-07-01T09:30:00Z",
+      "task": "login",
+      "event": "captain.answered",
+      "state": null,
+      "key": null,
+      "mode": "reconciled",
+      "line": "Closed as moot: Repair login redirects",
+      "detail": null,
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:30:00Z",
+      "task": "login",
+      "event": "captain.answered",
+      "state": null,
+      "key": null,
+      "mode": "release",
+      "line": "You answered and kept it open: Repair login redirects",
+      "detail": null,
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:30:00Z",
+      "task": "login",
+      "event": "captain.answered",
+      "state": null,
+      "key": null,
+      "mode": "done",
+      "line": "You answered: Repair login redirects",
+      "detail": null,
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:28:20Z",
+      "task": "login",
+      "event": "task.status",
+      "state": "needs-decision",
+      "key": "second",
+      "mode": null,
+      "line": "Needs your decision: Repair login redirects",
+      "detail": "Choose option",
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:28:20Z",
+      "task": "login",
+      "event": "task.status",
+      "state": "needs-decision",
+      "key": "first",
+      "mode": null,
+      "line": "Needs your decision: Repair login redirects",
+      "detail": "Choose option",
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:26:43Z",
+      "task": "login",
+      "event": "task.status",
+      "state": "done",
+      "key": null,
+      "mode": null,
+      "line": "Worker finished: Repair login redirects",
+      "detail": "done details",
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:26:42Z",
+      "task": "login",
+      "event": "task.status",
+      "state": "resolved",
+      "key": null,
+      "mode": null,
+      "line": "Resolved: Repair login redirects",
+      "detail": "resolved details",
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:26:41Z",
+      "task": "login",
+      "event": "task.status",
+      "state": "blocked",
+      "key": null,
+      "mode": null,
+      "line": "Blocked: Repair login redirects",
+      "detail": "blocked details",
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:26:40Z",
+      "task": "login",
+      "event": "task.status",
+      "state": "failed",
+      "key": null,
+      "mode": null,
+      "line": "Failed: Repair login redirects",
+      "detail": "failed details",
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:25:50Z",
+      "task": "retired",
+      "event": "task.cleaned_up",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Cleaned up: retired",
+      "detail": null,
+      "pr": null
+    },
+    {
+      "at": "2026-07-01T09:25:00Z",
+      "task": "old",
+      "event": "task.merged",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Landed locally: Previous release",
+      "detail": null,
+      "pr": null
+    },
+    {
+      "at": "2026-07-01T09:23:20Z",
+      "task": "login",
+      "event": "task.pr_ready",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "PR ready: Repair login redirects",
+      "detail": null,
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "at": "2026-07-01T09:20:00Z",
+      "task": "login",
+      "event": "task.dispatched",
+      "state": null,
+      "key": null,
+      "mode": null,
+      "line": "Started: Repair login redirects",
+      "detail": null,
+      "pr": "https://example.test/webapp/pull/8"
+    }
+  ],
+  "in_flight": [
+    {
+      "task": "login",
+      "title": "Repair login redirects",
+      "repo": "webapp",
+      "kind": "ship",
+      "worker": "unknown",
+      "last_event": "working [at=1782899100]: tracing redirect",
+      "pr": "https://example.test/webapp/pull/8"
+    },
+    {
+      "task": "export",
+      "title": "Export monthly report",
+      "repo": "reports",
+      "kind": "scout",
+      "worker": null,
+      "last_event": null,
+      "pr": null
+    }
+  ],
+  "open_decisions": [
+    {
+      "task": "approval",
+      "home": "main",
+      "title": "Approve report format",
+      "kind": "captain_hold",
+      "reason": "Choose CSV or PDF",
+      "bucket": "live",
+      "opened_at": "2026-10-24T22:40:05Z",
+      "opened_precision": "second",
+      "last_touched_at": "2026-10-24T22:40:07Z"
+    }
+  ]
+}
