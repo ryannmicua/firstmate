@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ensure a registered Firstmate project checkout has exactly one Paseo project.
 # Usage: fm-paseo-project.sh [--if-selected] <project-name>
-# --if-selected skips creation unless Paseo resolves as the runtime backend for new tasks.
+# --if-selected skips creation unless paseo-agent resolves as the runtime backend for new tasks.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,7 +33,7 @@ if [ "$ONLY_IF_SELECTED" -eq 1 ]; then
   . "$FM_ROOT/bin/fm-backend.sh"
   backend=$(fm_backend_name)
   fm_backend_validate_spawn "$backend"
-  if [ "$backend" != paseo ]; then
+  if [ "$backend" != paseo-agent ]; then
     printf 'skip: runtime backend for new tasks is %s; no Paseo project was created\n' "$backend"
     exit 0
   fi
@@ -81,12 +81,12 @@ case "$project_real" in
     ;;
 esac
 
-# shellcheck source=bin/backends/paseo.sh
-. "$FM_ROOT/bin/backends/paseo.sh"
-fm_backend_paseo_tool_check
+# shellcheck source=bin/backends/paseo-agent.sh
+. "$FM_ROOT/bin/backends/paseo-agent.sh"
+fm_backend_paseo_agent_tool_check
 project_record=''
 lookup_status=0
-project_record=$(fm_backend_paseo_project_for_source "$project_real" --allow-missing) || lookup_status=$?
+project_record=$(fm_backend_paseo_agent_project_for_source "$project_real" --allow-missing) || lookup_status=$?
 case "$lookup_status" in
   0)
     IFS=$'\t' read -r paseo_id paseo_name <<< "$project_record"
@@ -105,7 +105,7 @@ if ! create_output=$(paseo project create --json "$project_real" 2>&1); then
   printf '%s\n' "$create_output" >&2
   exit 1
 fi
-if ! project_record=$(fm_backend_paseo_project_for_source "$project_real"); then
+if ! project_record=$(fm_backend_paseo_agent_project_for_source "$project_real"); then
   printf 'error: Paseo project create returned, but exactly one project could not be verified for %s at %s\n' \
     "$PROJECT_NAME" "$project_real" >&2
   [ -z "$create_output" ] || printf '%s\n' "$create_output" >&2

@@ -537,7 +537,7 @@ test_paseo_native_busy_precedes_codex_gate() {
   state=$(new_state_dir paseo-native)
   # shellcheck disable=SC2329 # invoked indirectly through fm_busy_classify
   fm_backend_busy_state() { printf busy; }
-  out=$(fm_busy_classify paseo agent-test codex t1 "$state")
+  out=$(fm_busy_classify paseo-agent agent-test codex t1 "$state")
   [ "$out" = "busy paseo-native" ] \
     || fail "Paseo native busy must outrank Codex's unverified gate, got '$out'"
   unset -f fm_backend_busy_state
@@ -605,7 +605,28 @@ test_progress_is_generation_bound_and_not_semantic_state() {
   pass "native progress is generation-bound, separately recorded, and cleared on arm and retire"
 }
 
+test_turn_ended_notification_is_generation_bound() {
+  local state gen
+  state=$(new_state_dir turn-ended)
+  gen=$("$EV" arm "$state" t1)
+  "$EV" apply "$state" t1 idle --gen "$gen" --source commandcode-mod --event run-end \
+    || fail "current idle event was refused"
+  [ ! -e "$state/t1.turn-ended" ] || fail "an idle event without --turn-ended notified"
+  "$EV" apply "$state" t1 idle --gen "$gen" --source commandcode-mod --event run-end --turn-ended \
+    || fail "current turn-ended event was refused"
+  [ -f "$state/t1.turn-ended" ] || fail "turn-ended notification missing"
+  rm "$state/t1.turn-ended"
+  "$EV" arm "$state" t1 >/dev/null
+  if "$EV" apply "$state" t1 idle --gen "$gen" --source commandcode-mod --event run-end --turn-ended 2>/dev/null; then
+    fail "stale turn-ended event was accepted"
+  fi
+  [ ! -e "$state/t1.turn-ended" ] || fail "stale turn-ended event woke the replacement"
+  if "$EV" progress "$state" t1 --gen "$gen" --turn-ended 2>/dev/null; then fail "--turn-ended accepted outside apply"; fi
+  pass "the turn-ended notification rides the apply generation check"
+}
+
 test_progress_is_generation_bound_and_not_semantic_state
+test_turn_ended_notification_is_generation_bound
 
 test_arm_seeds_busy_spawn
 test_apply_advances_seq_and_source

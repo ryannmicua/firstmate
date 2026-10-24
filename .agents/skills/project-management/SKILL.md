@@ -1,10 +1,8 @@
 ---
 name: project-management
 description: >-
-  Agent-only procedure for Firstmate project management.
-  Use before adding, creating, removing, or initializing a project.
+  Load before adding, creating, removing, or initializing a project.
   Cloning or registering a project is add intake and uses the same trigger.
-  Owns project add, create, clone, remove, initialization, registry, delivery-mode, autonomy, and outward-consent decisions.
 user-invocable: false
 metadata:
   internal: true
@@ -53,13 +51,14 @@ The optional `+yolo` posture changes merge authority only and does not change th
 Default it off for every project and every posture, and enable it only on the captain's explicit instruction.
 `AGENTS.md` section 7 owns the merge-authority contract.
 
-The optional `forge=` token records which forge the project's remote actually is; its values are `forge=gerrit` and `forge=forgejo`.
+The optional `forge=` token records which forge the project's remote actually is; its values are `forge=gerrit`, `forge=forgejo`, and `forge=external`.
 It is orthogonal to the mode and to `+yolo`, so it is never derived from either, and it is never inferred at use time from a remote name, host, port, or push target.
 At add or create intake, run `bin/fm-forge-detect.sh projects/<name>` once the clone exists and propose its answer alongside the posture; the captain's confirmation is what binds it, and the registry token is the durable record of that confirmation.
 Never register the binding from detection alone, and never re-derive it later from the clone.
 `bin/fm-forge-detect.sh` never proposes `forge=forgejo`, so for a remote that may be Forgejo or Gitea ask the captain and register `forge=forgejo` only on that confirmation.
-A forge composes with `no-mistakes`, `direct-PR`, and `no-mistakes-prod-only`, and the registry refuses it on `local-only`, which publishes nothing; a Gerrit-hosted project kept local registers `local-only` with no forge token.
+A forge composes with `no-mistakes`, `direct-PR`, and `no-mistakes-prod-only` (`forge=external` with `direct-PR` only), and the registry refuses it on `local-only`, which publishes nothing; a Gerrit-hosted project kept local registers `local-only` with no forge token.
 `yolo` is inactive on a `forge=gerrit` project, so never propose `+yolo` alongside it.
+`forge=external` marks a project whose review tool uploads its own snapshot, so workers never push a task branch to its shared origin: it is never detected, so register it only on the captain's confirmation, as `[direct-PR forge=external]` with no `+yolo`, and only once the home has `config/external-review.md` (`docs/configuration.md` "External review tool").
 `bin/fm-project-mode.sh`'s header owns the binding and `bin/fm-dod-lib.sh` owns what it changes for a worker.
 
 ## Add or clone an existing project
@@ -80,20 +79,22 @@ Use `gh-axi` for the approved GitHub operation and consult its current help rath
 After remote creation succeeds, clone it locally and add the registry entry, then follow the automatic Paseo registration step below before initializing it according to its delivery posture.
 
 For a purely `local-only` project, create a local Git repository under its unused `projects/<name>` path, add the registry entry, and make no GitHub call.
+A new repository has no commit, and spawn refuses to dispatch work into a project with an unborn `HEAD`.
+Tell the captain that the project needs a first commit.
 The captain's request to create that local project authorizes this local initialization, but it does not authorize an unmentioned remote repository.
 After the new checkout and registry entry both succeed, follow the automatic Paseo registration step below.
 
 ## Automatic Paseo registration
 
 After any Firstmate project add or create leaves both its checkout and registry entry in place, run `bin/fm-paseo-project.sh --if-selected <name>`.
-It resolves the runtime backend for new tasks using the contract in [`docs/configuration.md`](../../../docs/configuration.md), and skips cleanly unless that backend is Paseo.
-If registration fails, report the failure; the checkout and registry entry remain in place as described in [`docs/paseo-backend.md`](../../../docs/paseo-backend.md).
+It resolves the runtime backend for new tasks using the contract in [`docs/configuration.md`](../../../docs/configuration.md), and skips cleanly unless that backend is `paseo-agent`.
+If registration fails, report the failure; the checkout and registry entry remain in place as described in [`docs/paseo-agent-backend.md`](../../../docs/paseo-agent-backend.md).
 
 ## Register a project in Paseo on request
 
 When asked to create a Paseo project for an existing Firstmate project, run `bin/fm-paseo-project.sh <name>`.
 This explicit request works regardless of the selected runtime backend.
-See [`docs/paseo-backend.md`](../../../docs/paseo-backend.md) for the helper's project eligibility and path-matching contract.
+See [`docs/paseo-agent-backend.md`](../../../docs/paseo-agent-backend.md) for the helper's project eligibility and path-matching contract.
 
 ## Initialize
 

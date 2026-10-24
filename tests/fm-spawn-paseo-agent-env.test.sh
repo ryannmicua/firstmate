@@ -134,7 +134,7 @@ out=$(BASH_COMPAT=3.2 FM_TEST_SET=present FM_TEST_EMPTY='' \
   FM_TEST_PASEO_RUN_COUNT="$PASEO_RUN_COUNT" FM_TEST_PASEO_STATUS="$TMP_ROOT/paseo-status" \
   FM_TEST_PASEO_LAUNCH_ENV="$PASEO_LAUNCH_ENV" FM_TEST_PASEO_PROBE=1 \
   fm_test_run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" \
-  "$ID" "$PROJ_DIR" --mode no-mistakes --yolo off --backend paseo --harness codex)
+  "$ID" "$PROJ_DIR" --mode no-mistakes --yolo off --backend paseo-agent --harness codex)
 status=$?
 expect_code 0 "$status" "Paseo spawn in Bash 3.2 compatibility mode should succeed: $out"
 assert_grep 'FM_TEST_SET=present' "$PASEO_ARGS" "Paseo did not receive a set allowlisted value"
@@ -217,7 +217,7 @@ run_abort_case() {
     FM_TEST_PASEO_ARCHIVE_FAIL="$archive_fail" \
     FM_TEST_PASEO_WORKSPACE_ARCHIVE_FAIL="$workspace_archive_fail" \
     fm_test_run_spawn "$home" "$worktree" "$FAKEBIN_DIR" \
-      "$id" "$project" --mode no-mistakes --yolo off --backend paseo --harness codex)
+      "$id" "$project" --mode no-mistakes --yolo off --backend paseo-agent --harness codex)
   status=$?
   task_worktree=$(awk -F '\t' -v id="$workspace" '$1 == id {print $4}' "$PASEO_WORKSPACES" | tail -n 1)
   expect_code 1 "$status" "forced post-return setup failure must abort $label spawn"
