@@ -602,7 +602,9 @@ steer_in_inbox() {
   for f in "$STATE/$TASK.inbox"/*.msg "$STATE/$TASK.inbox/handled"/*.msg; do
     [ -f "$f" ] || continue
     ! grep -qxF "${f##*/}" "$WORK/inbox-before" || continue
-    sed '1,/^--$/d' "$f" | cmp -s - "$WORK/message.txt" && return 0
+    # Inbox records end with a newline (bin/fm-task-inbox-lib.sh), so compare
+    # bodies without trailing newlines.
+    [ "$(sed '1,/^--$/d' "$f")" = "$(cat "$WORK/message.txt")" ] && return 0
   done
   return 1
 }

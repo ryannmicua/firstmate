@@ -63,11 +63,6 @@ SH
 chmod +x "$FAKEBIN/fake-ssh"
 
 remote_env() {
-  # Manual handling re-arms the registration. Quiesce automatic handling first
-  # so it cannot keep polling a registration that the manual replay replaces.
-  if [ "${1:-}" = "$ROOT/bin/fm-procevent-remote-reply.sh" ] && [ "${2:-}" = handle ]; then
-    stop_reply_listener || fail "the reply listener did not stop before manual handling"
-  fi
   FM_HOME="$PARENT" \
   FM_ROOT_OVERRIDE="$ROOT" \
   FM_PROCEVENT_CLAIM_ROOT="$CLAIMS" \

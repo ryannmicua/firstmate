@@ -1,46 +1,121 @@
-# Paseo Runtime Backend
+# Paseo runtime backend
 
-Paseo is an experimental, explicit-only runtime backend for Codex, OpenCode, and host-diagnostic-gated Claude workers.
-It owns each agent endpoint and its isolated task worktree inside an existing registered Paseo project.
+Paseo is an experimental macOS GUI terminal backend.
+It provides task workspaces and terminals while Treehouse continues to provide git worktrees.
+[`configuration.md`](configuration.md#runtime-backend-configbackend--fm_backend) owns shared selection and metadata semantics.
 
 ## Setup
 
-Install Paseo and `jq`, then ensure the existing daemon answers `paseo daemon status`.
-Firstmate never starts, stops, or restarts the Paseo daemon.
-Select it with `config/backend`, `FM_BACKEND=paseo`, or an explicitly authorized `--backend paseo`.
-Paseo is never auto-detected and never supports secondmate spawns.
+Pick Paseo when you already use the app as your terminal and want tasks as tabs in its sidebar, with the same UX as Herdr: in Firstmate's own workspace when Firstmate runs inside Paseo, otherwise in one `firstmate` workspace per project.
+Paseo is macOS-only, GUI-first, and unsuitable for a headless or SSH-only Firstmate session.
 
-## Limits
+Prerequisites:
 
-`codex` and `opencode` map directly to Paseo providers.
-Claude is accepted only when its host diagnostic has a recognized positive status and Paseo reports the provider available and enabled.
-Absent providers are rejected by name rather than substituted.
-Workers are root agents created with `env -u PASEO_AGENT_ID`.
-Each fresh task must match exactly one registered Paseo project by the physical path of its source checkout, and Firstmate refuses to create a project when that match is absent or ambiguous.
-After a Firstmate project is added or created, project management runs an idempotent Paseo registration helper only when Paseo resolves as the runtime backend for new tasks.
-An explicit request to register an existing Firstmate project in Paseo uses the same idempotent helper regardless of the selected backend.
-The helper requires one registry entry and a checkout under the active home's `projects/` directory, reuses one Paseo project already matching the physical checkout path, creates one when none matches, and refuses ambiguous matches.
-Neither path changes spawn behavior: a task spawn only matches an existing Paseo project and never creates one.
-If registration fails during project add or create, Firstmate reports the failure and keeps the successful local checkout and registry entry.
-Removing a Firstmate project does not remove its Paseo project; cleanup may be added as a separate follow-up.
-Firstmate uses `paseo workspace create --path` to create one worktree workspace from that checkout, with its own branch and a unique home-and-task slug, then starts the agent with `paseo run --workspace`.
-The agent receives the task's unique `fm-task` label and the Firstmate home's `fm-home` label, while task metadata records the returned agent identity and the validated workspace and worktree identities.
-Relaunch requires the same registered source project, a matching worktree workspace, and the recorded worktree path, then reuses that workspace without creating another one.
-When the task has a recorded branch, Firstmate checks that the worktree is on it before running the agent and refuses a mismatch with both branch names in the error.
-When trailer-hook installation is enabled but fails, Firstmate does not launch the agent and reports the retained workspace ID and worktree path for manual reconciliation.
-Paseo can answer an existing-workspace run with `Using workspace <id>` and no `workspaceId` JSON field, so Firstmate retains the workspace identity it validated before the run.
-The selected workspace is passed through `--workspace`; Firstmate does not pass `--cwd` to `paseo run`.
-When filtering is enabled, Firstmate passes eligible set allowlisted values to Paseo through individual `--env NAME=value` flags; these arguments are visible in process listings on the daemon host ([full forwarding contract](configuration.md#worker-launch-environment-configlaunch-env-allowlist)).
-Logs are timeline output, not a verified visible viewport, and agent liveness remains `unverified` because Paseo exposes no worker pid.
-Interrupt maps to `paseo stop`; exit accepts only a native `closed` or `archived` status as stop proof, otherwise archives the agent and verifies terminal status.
-After a successful Paseo run, an aborted Firstmate spawn confirms the agent is stopped before checking Git and archives the agent and workspace only when the worktree is clean.
-Dirty, ignored, or uninspectable worktrees are retained; stop, status, or archive failures are reported with both IDs and a reason for manual reconciliation.
-If workspace creation or `paseo run` fails after reporting a created workspace, Firstmate reports its ID and leaves that workspace for manual reconciliation.
-Teardown archives the agent and then its separate workspace record.
+- Paseo 0.8 or newer, installed from [paseo.sh](https://paseo.sh) (`/Applications/Paseo.app`).
+- `jq` for JSON responses.
+- The universal harness and toolchain requirements in [`configuration.md`](configuration.md#toolchain).
 
-## Verification
+The bundled CLI is not always installed on `PATH` with the app.
+The adapter prefers `command -v paseo` and otherwise uses `/Applications/Paseo.app/Contents/Resources/bin/paseo`.
 
-The adapter contract is implemented in [`bin/backends/paseo.sh`](../bin/backends/paseo.sh), while project registration is owned by [`bin/fm-paseo-project.sh`](../bin/fm-paseo-project.sh).
-Spawn and metadata publication live in [`bin/fm-spawn.sh`](../bin/fm-spawn.sh), with dispatch in [`bin/fm-backend.sh`](../bin/fm-backend.sh).
-The project-registration helper has focused fake-CLI coverage in `tests/fm-paseo-project.test.sh`; the adapter and spawn suites are `tests/fm-backend-paseo.test.sh` and `tests/fm-spawn-paseo-env.test.sh`.
-Current host evidence belongs in [`verification/runtime-backends.md`](verification/runtime-backends.md#paseo).
+No socket-access configuration is needed.
+The daemon listens on `127.0.0.1:6767` by default, and `paseo status` reports its reachability.
+The adapter starts the daemon with `paseo start` only when it is simply not up yet, and fails fast with a pointer here when a started daemon does not become reachable.
+
+Select Paseo with local `config/backend` containing `paseo`, `FM_BACKEND=paseo` for one launch, or an explicit request to Firstmate.
+It is never runtime auto-detected; see "Selection is explicit" below.
+A spawn stops with an actionable setup message when the CLI, minimum version, `jq`, or daemon reachability is unavailable.
+
+Routine supervision uses `bin/fm-peek.sh <id>` and `FM_HOME=<home> bin/fm-send.sh <id> '<text>'` without bringing the Paseo window forward.
+
+Verify setup by spawning a small task and confirming metadata contains `backend=paseo`, `paseo_terminal_id=`, and `paseo_workspace_id=`.
+
+## Selection is explicit
+
+Paseo is explicit-only, like zellij and orca: `config/backend`, `FM_BACKEND=paseo`, or `--backend paseo` select it, and nothing else does.
+Paseo stamps its markers into every descendant process: a Paseo agent exports `PASEO_AGENT_ID`, a terminal tab exports `PASEO_TERMINAL_ID` and `PASEO_WORKSPACE_ID`, and both carry `__CFBundleIdentifier=sh.paseo.desktop`.
+A tmux server started from a Paseo tab inherits all of them, so their presence proves only that some ancestor was Paseo, never that the captain chose it.
+Reading them as a selection would make Paseo an ambient default, which "Authority is explicit and never inferred" rules out; `fm_backend_detect` therefore ignores them.
+
+The markers are still useful once Paseo has been selected explicitly.
+When Firstmate itself runs inside Paseo, the adapter uses them to find Firstmate's own workspace and puts task tabs there (see "Task shape and metadata").
+
+## Task shape and metadata
+
+Paseo's sidebar is project > workspace > terminal tab, and each task is one terminal tab.
+When Firstmate itself runs inside Paseo, every task tab goes into Firstmate's own workspace, whatever the task's project, so work appears beside the captain's session and nothing new is added to the sidebar.
+A Paseo terminal tab names its workspace through `PASEO_WORKSPACE_ID`; a Paseo agent exports only `PASEO_AGENT_ID`, so its workspace is the one live workspace whose cwd is the Firstmate home, and two or more such workspaces count as unknown.
+Otherwise the adapter uses one shared workspace per project, the same container shape as Herdr: titled `firstmate` (or `2ndmate-<id>` for a secondmate home), created once with `workspace create --path <project> --isolation local --title <label>`, and adopted on later spawns by matching that cwd and title in `workspace ls`.
+Paseo registers or reuses the project by path when that workspace is created.
+Paseo allows duplicate workspaces and terminal names, so a spawn whose `workspace ls` or `terminal ls` inventory cannot be read refuses and creates nothing rather than treating the failed read as empty.
+Agents running inside a task tab may open further tabs or workspaces of their own; nothing in the adapter depends on them.
+
+Each task owns one terminal tab in that workspace.
+The terminal's NAME (`terminal create --name fm-<home-label>-<id>`) is the firstmate-facing routing authority, home-scoped so two Firstmate homes sharing one daemon can never cross-match each other's terminals.
+The workspace title only identifies the shared workspace to adopt; it is never used to route a task.
+
+The recorded target is the pair `<terminal_id>:<workspace_id>`:
+
+```text
+backend=paseo
+window=<terminal-uuid>:<workspace-uuid>
+paseo_terminal_id=<terminal-uuid>
+paseo_workspace_id=<workspace-uuid>
+```
+
+The recorded terminal id is validated against the live `terminal ls` inventory before every send.
+When the recorded id is gone, recovery re-resolves the terminal by its home-scoped NAME from the same inventory, never by title.
+
+## Current operation and safety
+
+`terminal send-keys <id> -l -- <text>` sends literal, unsubmitted input.
+The caller sends Enter separately.
+Paseo 0.8.0's send-keys token set is Enter, Tab, Escape, Space, BSpace, C-c, C-d, C-z, C-l, C-a, and C-e.
+Any other key name is typed as literal text, so the adapter sends Ctrl-U as the raw `0x15` byte through `-l` and refuses every other unlisted key.
+
+`terminal capture <id> -S --json` returns plain-text lines with ANSI stripped.
+The adapter fetches the scrollback whole and trims the tail locally; Paseo caps scrollback at 1024 lines (verified on Paseo 0.9.2), so that read stays bounded however long a task runs.
+`--start -<n>` is not used because it counts the blank screen rows below the prompt as part of the tail.
+Because capture strips styling, the capability descriptor declares `styled=0`, and the shared classifier in `bin/fm-composer-lib.sh` degrades a glyph row carrying trailing text to `unknown` rather than misreading an idle suggestion as unsent input.
+
+A terminal's `cwd` field in `terminal ls` is creation-time-frozen and never follows the foreground subshell opened by `treehouse get`.
+Spawn-time worktree discovery therefore sends begin and end markers around `pwd`, captures the marked block, and joins wrapped path lines, exactly like cmux and zellij.
+
+Cleanup closes only the task's tab with `terminal kill`; sibling task tabs stay alive.
+It is best-effort like every backend's kill, so an already-gone target stays quiet.
+When the closed tab was the last one in a per-project shared workspace for one of the home's own clones under `projects/`, cleanup archives that workspace, provided it carries Firstmate's own title, is not Firstmate's own workspace, and no Paseo agent works in its folder, because archiving a workspace also archives the agents it owns.
+Archiving leaves the project in the sidebar, so cleanup then deletes that clone's project when no other workspace uses it; workspaces and projects outside the home's clones are never touched.
+Spawning and this cleanup share one home-wide lock (`state/.paseo-workspace.lock`), so a new task's tab can never land in a workspace between its empty check and its archive; a spawn that cannot get the lock refuses, and cleanup that cannot get it skips.
+Any inventory read that fails also skips this cleanup.
+Mutating `--json` calls keep stderr out of the parsed output, because the CLI prints an Electron warning on stderr when Firstmate itself runs inside a Paseo agent.
+Paseo exposes no native generic agent busy signal, so supervision uses capture/hash polling for screen changes and each harness adapter's semantic lifecycle for worker state.
+
+## Visible tabs versus nested agent views
+
+Paseo can show sub-agents nested inside the current tab, clickable to open as their own view, without opening a separate top-level tab.
+Firstmate's design keeps the terminal-per-task model as the authority: every task gets exactly one terminal tab in its workspace, opened at spawn and closed at cleanup.
+A nested sub-agent view therefore never becomes routing or lifecycle authority for Firstmate - it is an extra view the captain may click into while the task's single terminal remains the endpoint.
+
+The practical tradeoff: a task terminal running a harness that itself spawns sub-agents will show those agents nested inside the task's tab, not as new top-level tabs, so each Firstmate task adds exactly one tab.
+The tradeoff surfaced is agent surface versus terminal surface - a nested agent view is visible and clickable but not separately addressable by `fm-send`/`fm-peek`, which always target the task's one recorded terminal.
+
+A closed tab does not preserve its visible scrollback history: `terminal kill` reclaims the endpoint with no transcript left behind for later reading.
+Durable history for a finished task therefore lives in the status log, the report, and the PR, never in tab scrollback - the same reason firstmate never treats a status line as more than a wake event.
+
+## Active limits
+
+- Paseo is experimental, macOS-only, GUI-first, and requires the app running.
+- Secondmate spawns are unsupported until a per-home lifecycle design is verified; select `tmux` for a home that needs them.
+- `paseo run --cwd` is ignored when `PASEO_AGENT_ID` is set (reported on the upstream issue thread); the adapter never uses `paseo run`, only `terminal create --cwd`, which honours the path.
+- There is no native busy or push-event signal, and `fm_backend_agent_state` reports `unverified` for Paseo.
+- A target can disappear after structural readiness and before the operation.
+- Workspace and terminal ids are not assumed stable across daemon restarts; recovery re-resolves by terminal NAME.
+
+## Regression entry points
+
+```sh
+tests/fm-backend-paseo.test.sh
+tests/fm-backend-paseo-smoke.test.sh
+```
+
+[`verification/runtime-backends.md`](verification/runtime-backends.md#paseo) records the active source and live evidence.

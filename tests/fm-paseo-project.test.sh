@@ -116,7 +116,7 @@ before=$(wc -l < "$LOG" | tr -d '[:space:]')
 assert_contains "$(cat "$TMP_ROOT/tmux-skip.out")" 'runtime backend for new tasks is tmux' "non-Paseo add path did not report its skip"
 assert_equals "$before" "$(wc -l < "$LOG" | tr -d '[:space:]')" "non-Paseo add path called Paseo"
 
-printf 'paseo\n' > "$CONFIG/backend"
+printf 'paseo-agent\n' > "$CONFIG/backend"
 "$HELPER" --if-selected alpha > "$TMP_ROOT/paseo-add.out"
 assert_contains "$(cat "$TMP_ROOT/paseo-add.out")" 'created Paseo project alpha' "Paseo-selected add path did not create its project"
 assert_equals 3 "$(grep -c '^project create ' "$LOG" || true)" "Paseo-selected add path did not create exactly one project"
