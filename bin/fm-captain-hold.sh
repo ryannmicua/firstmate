@@ -47,8 +47,10 @@
 # Beads `due.required` through `BD_DUE_REQUIRED` rather than inventing a due
 # date or registering a `types.custom` captain issue type. The command records
 # a UTC `Captain hold set:` timestamp in the task body: repeating an active
-# hold preserves the existing timestamp, while re-holding released work starts
-# a new lifecycle. A task already closed is refused rather than reopened.
+# hold preserves the existing stamp, including after a deferral expires; an
+# unstamped legacy hold receives its original task creation date instead.
+# Re-holding released work starts a new lifecycle. A task already closed is
+# refused rather than reopened.
 # `--origin` also records the origin on a `Captain hold origin:` body line, which
 # `complete` and `verify` check. The reason may hold parentheses and line breaks:
 # tasks-axi refuses them, so `hold` escapes them where it writes the reason and
@@ -211,6 +213,9 @@
 # The hold or answer is already durable in the backlog, so a channel that
 # cannot be written is reported as `actionable:` on stderr rather than undoing
 # the record; bin/fm-inactive-reconcile.sh's diagnostics name a broken binding.
+#
+# docs/fleet-ledger.md owns the optional captain-event contract emitted at the
+# parent-channel publish point.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -218,6 +223,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
+CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
 # shellcheck source=bin/fm-classify-lib.sh
 # shellcheck disable=SC1091
@@ -238,10 +244,39 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/fm-parent-channel-lib.sh"
 
+# Opt-in fleet activity ledger (docs/fleet-ledger.md); off costs one file test.
+# Every hold, answer, release, and reconcile path ends in publish_parent_hold, so
+# this is the one place the captain.* events are written.
+CAPTAIN_HOLD_LEDGER_UNTIL=
+record_captain_ledger() {  # <task-id> <verb> <note>
+  local id=$1 verb=$2 note=$3 mode
+  [ ! -e "$CONFIG/fleet-ledger" ] || case "$verb" in
+    needs-decision)
+      if [ -n "$CAPTAIN_HOLD_LEDGER_UNTIL" ]; then
+        FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG \
+          "$SCRIPT_DIR/fm-fleet-ledger.sh" captain_deferred "$id" "$CAPTAIN_HOLD_LEDGER_UNTIL" || true
+      else
+        FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG \
+          "$SCRIPT_DIR/fm-fleet-ledger.sh" captain_held "$id" || true
+      fi
+      ;;
+    resolved)
+      case "$note" in
+        released) mode=release ;;
+        reconciled) mode=reconciled ;;
+        *) mode="done" ;;
+      esac
+      FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG \
+        "$SCRIPT_DIR/fm-fleet-ledger.sh" captain_answered "$id" "$mode" || true
+      ;;
+  esac
+}
+
 PARENT_HOLD_PUBLISHED=0
 publish_parent_hold() {  # <task-id> <occurrence> <verb> <note>
   local id=$1 occurrence=$2 verb=$3 note=$4 rc=0
   PARENT_HOLD_PUBLISHED=0
+  [ "${5:-1}" = 0 ] || record_captain_ledger "$id" "$verb" "$note"
   fm_parent_channel_report "$FM_HOME" "$STATE" \
     "$verb [key=captain-hold-$id-$occurrence]: captain hold $id: $(fm_parent_channel_clean_note "$note")" || rc=$?
   case "$rc" in
@@ -902,7 +937,7 @@ verify_entry_durable() {  # <origin-or-empty> <entry>; prints "<id> <how> <origi
 
 command_hold() {
   local id=${1:-} title='' reason='' repo='' origin='' until='' show state existing_title body='' hold_kind hold_set occurrence
-  local existing_hold_kind='' existing_held='' preserve_hold_set=0 stored_reason previous_origin='' hold_status=0
+  local existing_hold_kind='' existing_held='' existing_until='' preserve_hold_set=0 stored_reason previous_origin='' hold_status=0 hold_changed=1
   [ "$#" -ge 1 ] || { usage >&2; exit 2; }
   shift
   while [ "$#" -gt 0 ]; do
@@ -943,8 +978,13 @@ command_hold() {
       || fail "task $id is already closed; a new captain call needs its own task"
     existing_hold_kind=$(show_field_value "$show" hold_kind)
     existing_held=$(show_field_value "$show" held)
-    if [ "$existing_hold_kind" = captain ] && [ "$existing_held" = yes ]; then
+    existing_until=$(show_field_value "$show" hold_until)
+    if [ "$existing_hold_kind" = captain ] && { [ "$existing_held" = yes ] || [ -n "$existing_until" ]; }; then
       preserve_hold_set=1
+      if [ "$(show_field_value "$(printf '%s\n' "$show" | fm_hold_reason_decode_stream)" hold_reason)" = "$reason" ] \
+        && [ "$existing_until" = "$until" ]; then
+        hold_changed=0
+      fi
     fi
     if [ -n "$title" ]; then
       existing_title=$(show_field_value "$show" title)
@@ -976,6 +1016,11 @@ command_hold() {
   # snapshot may see the harmless stamp by itself, but can never see a newly
   # held task without the timestamp that defines this hold lifecycle's age.
   task_show_or_fail "$id" "task $id disappeared before recording its hold-set stamp"
+  if [ "$preserve_hold_set" = 1 ] && [ -z "$(body_hold_set_timestamp "$(show_field_value "$show" body)")" ]; then
+    hold_set=$(show_field_value "$show" created)
+    hold_set=${hold_set%%T*}
+    [ -n "$hold_set" ] || fail "existing captain hold $id has no opening date"
+  fi
   write_hold_set_stamp "$id" "$(show_field "$show" body)" "$hold_set" "$preserve_hold_set"
   task_show_or_fail "$id" "task $id disappeared while recording its hold-set stamp"
   [ -n "$(body_hold_set_timestamp "$(show_field_value "$show" body)")" ] \
@@ -1007,7 +1052,8 @@ command_hold() {
   occurrence=$(( $(resolution_record_count "$(show_field "$show" body)") + 1 ))
   [ -n "$(body_hold_set_timestamp "$(show_field_value "$show" body)")" ] \
     || fail "task $id lost its hold-set stamp while being held"
-  publish_parent_hold "$id" "$occurrence" needs-decision "$reason"
+  CAPTAIN_HOLD_LEDGER_UNTIL=$until
+  publish_parent_hold "$id" "$occurrence" needs-decision "$reason" "$hold_changed"
   printf '%s\n' "$id"
 }
 

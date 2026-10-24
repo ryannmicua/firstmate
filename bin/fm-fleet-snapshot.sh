@@ -63,7 +63,9 @@
 #     hints.open_decisions is the keyed open-decision set returned by
 #     fm-classify-lib.sh's authoritative status_open_decisions fold and reconciled
 #     against current_state; hints.pending_decision and hints.blocked_event are
-#     booleans derived from that set.
+#     booleans derived from that set. Each entry also carries opened_epoch, the
+#     opening line's [at=<epoch>] stamp (status_open_decisions_at), or null when
+#     that line has none.
 #     endpoint.exists is the cheap local backend endpoint-presence read.
 #     endpoint.agent_alive is populated for local secondmates only, where it is
 #     useful return-channel supervision data; remote secondmates use "unknown"
@@ -235,11 +237,15 @@ esac
 usage() {
   cat <<'EOF'
 usage: fm-fleet-snapshot.sh --json
+       fm-fleet-snapshot.sh --local
        fm-fleet-snapshot.sh --secondmate-home-summary
 
 Print a structured snapshot of the firstmate fleet.
 JSON is the stable machine-readable output contract. The default snapshot
 refreshes only its parent-side remote-summary cache as an observational side effect.
+
+--local emits generated, backlog, and local task hints without cross-home
+collection or persistent cache writes. It uses the configured backlog adapter.
 
 --contribution-input emits the canonical local backlog/tasks ownership pair only,
 without worker observations or cross-home collection.
@@ -291,6 +297,7 @@ EOF
 OUTPUT_MODE=json
 case "${1:---json}" in
   --json) ;;
+  --local) OUTPUT_MODE=local ;;
   --secondmate-home-summary) OUTPUT_MODE=secondmate-home-summary ;;
   --contribution-input) OUTPUT_MODE=contribution-input ;;
   -h|--help) usage; exit 0 ;;
@@ -384,15 +391,29 @@ first_pr_url_in_file() {  # <file>
 }
 
 backlog_json() (  # [<backlog-path>] - defaults to this home's $BACKLOG
-  local backlog=${1:-$BACKLOG}
-  if [ ! -f "$backlog" ]; then
+  local backlog=${1:-$BACKLOG} input_format=markdown input backend=markdown root
+  if [ "$OUTPUT_MODE" = local ]; then
+    # shellcheck source=bin/fm-tasks-axi-lib.sh disable=SC1091
+    . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
+    # shellcheck source=bin/fm-backlog-transition-lib.sh disable=SC1091
+    . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"
+    root=$(CDPATH='' cd -- "$(dirname "$DATA")" && pwd) || return 1
+    backend=$(fm_tasks_axi_backend_resolve "$root") || return 1
+  fi
+  if [ "$OUTPUT_MODE" = local ] && [ "$backend" != markdown ]; then
+    input_format=toon
+    input=$(fm_backlog_row_list "$DATA" --limit 2147483647 \
+      --fields hold_reason,hold_kind,hold_until,created,body,blocked_by) || { printf '%s\n' "$input" >&2; return 1; }
+  elif [ ! -f "$backlog" ]; then
     jq -n --arg path "$backlog" '{path:$path,present:false,records:[]}'
     return 0
+  else
+    input=$(cat "$backlog") || return 1
   fi
 
   set -o pipefail
   # shellcheck disable=SC2094
-  jq -Rn --arg path "$backlog" --arg today "$SNAPSHOT_TODAY" --arg now "$SNAPSHOT_NOW" \
+  printf '%s\n' "$input" | jq -Rn --arg input_format "$input_format" --arg path "$backlog" --arg today "$SNAPSHOT_TODAY" --arg now "$SNAPSHOT_NOW" \
     --argjson age_days "$FM_SNAPSHOT_UNDATED_HOLD_AGE_DAYS" '
     def trim: gsub("^[[:space:]]+|[[:space:]]+$"; "");
     def timestamp_epoch($d):
@@ -516,7 +537,27 @@ backlog_json() (  # [<backlog-path>] - defaults to this home's $BACKLOG
              body_lines:[],
              body_excerpt:null}
         end;
-    reduce inputs as $line
+    (if $input_format == "toon" then
+       [inputs] as $lines
+       | if ($lines | index("count: 0")) != null then {path:$path,present:true,records:[]}
+         else [$lines | to_entries[] | .key as $index | .value
+          | capture("^tasks\\[(?<count>[0-9]+)\\]\\{(?<fields>[^}]+)\\}:$")?
+          | . + {index:$index}] as $headers
+       | if ($headers | length) != 1 then error("invalid tasks-axi list envelope") else . end
+       | $headers[0] as $header
+       | ($header.fields | split(",")) as $fields
+       | {path:$path,present:true,records:
+           [$lines[($header.index + 1):($header.index + 1 + ($header.count | tonumber))][]
+            | [scan("\"(?:[^\"\\\\]|\\\\.)*\"|[^,]+")
+               | sub("^  "; "")
+               | if startswith("\"") then fromjson else . end] as $values
+            | if ($values | length) != ($fields | length) then error("invalid tasks-axi list row") else . end
+            | reduce range(0; $fields | length) as $i ({}; .[$fields[$i]] = $values[$i])
+            | (.hold_until, .hold_kind, .hold_reason, .created) |= (if . == "-" then null else . end)
+            | . + {structured:true,body_lines:((.body // "") | split("\n")),
+                   since:((.created // "")[:10] | if . == "" then null else . end),
+                   blocked_by_ids:((.blocked_by // "") | if . == "none" then [] else split("[|,[:space:]]+"; "") | map(select(length > 0)) end)}]} end
+     else reduce inputs as $line
       ({path:$path,present:true,records:[],section:null,order:0};
        if ($line | test("^##[[:space:]]+")) then
          .section = (($line | sub("^##[[:space:]]+";"") | trim) | section_state)
@@ -533,6 +574,7 @@ backlog_json() (  # [<backlog-path>] - defaults to this home's $BACKLOG
          .order += 1
          | .records += [{order:.order,state:.section,structured:false,id:null,raw:$line,body_lines:[],body_excerpt:null}]
        end)
+     end)
     | .records |= map(
         if (.body_lines | length) > 0 then
           .hold_set = cap(.body_lines[0]; "^Captain hold set:[[:space:]]*(?<v>[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)?)$")
@@ -573,7 +615,7 @@ backlog_json() (  # [<backlog-path>] - defaults to this home's $BACKLOG
           | .captain_actionable = (.hold_bucket == "live")
         else . end)
     | del(.section,.order)
-  ' < "$backlog" | fm_hold_reason_decode_stream json
+  ' | fm_hold_reason_decode_stream json
 )
 
 SNAPSHOT_TASK_DIR=
@@ -816,7 +858,7 @@ task_json_lines() {
     # never clear another concern's keyed decision. A parked/blocked state, or a
     # non-authoritative status-log/none read on a still-live task, keeps the fold's
     # open decision surfacing.
-    open_decisions_tsv=$(status_open_decisions "$status_log" "$kind")
+    open_decisions_tsv=$(status_open_decisions_at "$status_log" "$kind")
     if [ "$kind" != secondmate ] && \
        { { { [ "$current_source" = run-step ] || [ "$current_source" = pane ]; } \
            && [ "$current_state" != parked ] && [ "$current_state" != blocked ]; } \
@@ -825,8 +867,10 @@ task_json_lines() {
     fi
     open_decisions_json=$(printf '%s' "$open_decisions_tsv" | jq -R -s '
       [ splits("\n") | select(length > 0)
-        | (capture("^(?<key>[^\t]*)\t(?<verb>[^\t]*)\t(?<summary>.*)$")?)
-        | select(. != null) ]')
+        | (capture("^(?<key>[^\t]*)\t(?<verb>[^\t]*)\t(?<summary>.*)\t(?<at>[0-9]*)$")?)
+        | select(. != null)
+        | .opened_epoch = (if .at == "" then null else (.at | tonumber) end)
+        | del(.at) ]')
     pending_decision=$(printf '%s' "$open_decisions_json" | jq 'if any(.[]; .verb == "needs-decision") then 1 else 0 end')
     blocked_event=$(printf '%s' "$open_decisions_json" | jq 'if any(.[]; .verb == "blocked") then 1 else 0 end')
 
@@ -1010,7 +1054,8 @@ secondmate_home_summary_json() {  # <backlog-json-file> <tasks-json-file>
             reason:(.hold_reason | trunc(160)),
             hold_until:(.hold_until // null),
             hold_bucket:(.hold_bucket // null),
-            hold_age_days:(.hold_age_days // null),source:"backlog"} ]) as $captain_holds_all
+            hold_age_days:(.hold_age_days // null),
+            source:"backlog"} ]) as $captain_holds_all
     | ([ $backlog.records[]? | select(landed_record)
          | {id:(.id | trunc(120)),title:(.title | trunc(120)),
             kind:((.kind // null) | if . == null then null else trunc(40) end),
@@ -2019,6 +2064,15 @@ printf '%s\n' "$BACKLOG_JSON" > "$BACKLOG_JSON_FILE" \
   || { echo "fm-fleet-snapshot: temporary backlog file write failed" >&2; exit 1; }
 printf '%s\n' "$TASKS_JSON" > "$TASKS_JSON_FILE" \
   || { echo "fm-fleet-snapshot: temporary task file write failed" >&2; exit 1; }
+
+if [ "$OUTPUT_MODE" = local ]; then
+  jq -n --arg generated "$SNAPSHOT_NOW" --slurpfile backlog "$BACKLOG_JSON_FILE" --slurpfile tasks "$TASKS_JSON_FILE" '
+    $backlog[0] as $backlog
+    | {generated:$generated,backlog:$backlog,
+       tasks:[$tasks[0][] | . as $task
+         | . + {backlog:([$backlog.records[]? | select(.id == $task.id)][0] // null)}]}'
+  exit $?
+fi
 
 CONTRIBUTIONS_JSON_FILE="$JSON_TRANSPORT_DIR/contributions.json"
 CONTRIBUTION_TASKS_JSON=$(contribution_tasks_json) \

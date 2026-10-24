@@ -18,6 +18,9 @@
 #   bin/fm-merge-outcome-lib.sh  merged ... pr (a recorded PR merge)
 #   bin/fm-merge-local.sh        merged ... local (a local-only landing)
 #   bin/fm-teardown.sh           cleaned_up
+#   bin/fm-captain-hold.sh       captain_held, captain_deferred, captain_answered
+#                                (from its one parent-channel publish point, so
+#                                every hold, answer, release, and reconcile path)
 #
 # Usage:
 #   fm-fleet-ledger.sh dispatched <task> <kind> <project> <harness> <model>
@@ -25,6 +28,9 @@
 #   fm-fleet-ledger.sh merged <task> pr <url>
 #   fm-fleet-ledger.sh merged <task> local
 #   fm-fleet-ledger.sh cleaned_up <task>
+#   fm-fleet-ledger.sh captain_held <task>
+#   fm-fleet-ledger.sh captain_deferred <task> <YYYY-MM-DD>
+#   fm-fleet-ledger.sh captain_answered <task> done|release|reconciled
 #   fm-fleet-ledger.sh capture
 #   fm-fleet-ledger.sh appended <config> <state>/<task>.status
 #
@@ -65,7 +71,7 @@ LOCK="$STATE/.fleet-ledger.lock"
 TEXT_MAX_CHARS=2000
 
 usage() {
-  echo "usage: fm-fleet-ledger.sh dispatched <task> <kind> <project> <harness> <model> | pr_ready <task> <url> | merged <task> pr <url> | merged <task> local | cleaned_up <task> | capture | appended <config> <state>/<task>.status" >&2
+  echo "usage: fm-fleet-ledger.sh dispatched <task> <kind> <project> <harness> <model> | pr_ready <task> <url> | merged <task> pr <url> | merged <task> local | cleaned_up <task> | captain_held <task> | captain_deferred <task> <date> | captain_answered <task> done|release|reconciled | capture | appended <config> <state>/<task>.status" >&2
   exit 2
 }
 
@@ -82,6 +88,12 @@ case "$cmd" in
     case "$#:${3:-}" in 4:pr) [ -n "$4" ] || usage ;; 3:local) ;; *) usage ;; esac
     ;;
   cleaned_up) { [ "$#" -eq 2 ] && task_ok "$2"; } || usage ;;
+  captain_held) { [ "$#" -eq 2 ] && task_ok "$2"; } || usage ;;
+  captain_deferred) { [ "$#" -eq 3 ] && task_ok "$2" && [ -n "$3" ]; } || usage ;;
+  captain_answered)
+    { [ "$#" -eq 3 ] && task_ok "$2"; } || usage
+    case "$3" in done|release|reconciled) ;; *) usage ;; esac
+    ;;
   capture) [ "$#" -eq 1 ] || usage ;;
   appended)
     [ "$#" -eq 3 ] && [ -n "$2" ] || usage
@@ -228,6 +240,15 @@ case "$cmd" in
     capture_task "$2" || rc=1
     append task.cleaned_up "$2" '{}' || rc=1
     [ "$rc" -ne 0 ] || rm -f -- "$(offset_path "$2")"
+    ;;
+  captain_held)
+    append captain.held "$2" '{}' || rc=1
+    ;;
+  captain_deferred)
+    append captain.deferred "$2" '{until: $until}' --arg until "$3" || rc=1
+    ;;
+  captain_answered)
+    append captain.answered "$2" '{mode: $mode}' --arg mode "$3" || rc=1
     ;;
 esac
 [ "$rc" -eq 0 ] || echo "fm-fleet-ledger: could not record $cmd${2:+ for $2}; the ledger may be missing records" >&2

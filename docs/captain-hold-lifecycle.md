@@ -59,7 +59,7 @@ Publishing the stamp first ensures a snapshot cannot observe a newly captain-hel
 
 Repeat and edge cases:
 
-- Retries of an active hold preserve its hold-set timestamp.
+- Retries of an existing captain hold, including a dated hold whose deferral expired, preserve its hold-set stamp; an unstamped legacy hold receives its original task creation date instead of the retry time.
 - Re-holding released work starts a new timestamped lifecycle.
 - A closed task is refused rather than reopened.
 - `--until` stores the captain's own deferral date through tasks-axi's date gate.
@@ -570,6 +570,7 @@ It proves:
 
 One case in that family needs no beads install and always runs.
 It uses a stubbed tasks-axi that fails any markdown file override, and proves the captain-hold hold, answer, and close mutations reach a beads-configured home without one.
+The stub exposes the task creation date, and the persisted body must use that date for an unstamped legacy hold's opening date.
 
 ### Reconcile coverage
 

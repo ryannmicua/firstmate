@@ -833,7 +833,7 @@ _fm_status_kind() {
 }
 
 _fm_decision_fold_line() {  # <open-set> <status-line> <resolve-verb> <held-verb> <kind>
-  local open=$1 line=$2 resolve=$3 held=$4 kind=$5 verb key note unstamped
+  local open=$1 line=$2 resolve=$3 held=$4 kind=$5 verb key note unstamped epoch
   # Both colon tests below ask where the head ends, the same question the note
   # and key readers ask, so they read the same unstamped copy those readers do.
   # A worker-written time tag must never decide whether a decision opens or
@@ -869,7 +869,12 @@ _fm_decision_fold_line() {  # <open-set> <status-line> <resolve-verb> <held-verb
       note=$(status_line_note "$line")
       open=$(_fm_decision_drop "$open" "$key")
       [ -n "$open" ] && open="${open}"$'\n'
-      open="${open}${key}"$'\t'"${verb}"$'\t'"${note}"$'\n'
+      open="${open}${key}"$'\t'"${verb}"$'\t'"${note}"
+      if [ "${6:-}" = at ]; then
+        epoch=$(status_line_at_epoch "$line") || epoch=''
+        open="${open}"$'\t'"${epoch}"
+      fi
+      open="${open}"$'\n'
       ;;
     "$resolve"|"$held")
       open=$(_fm_decision_drop "$open" "$key")
@@ -904,13 +909,24 @@ status_open_decisions() {  # <status-file> [<kind>]
     status_line_verb "$line" verb
     case "$verb" in
       needs-decision|blocked|done|failed|"$resolve"|"$held")
-        open=$(_fm_decision_fold_line "$open" "$line" "$resolve" "$held" "$kind")
+        open=$(_fm_decision_fold_line "$open" "$line" "$resolve" "$held" "$kind" "${3:-}")
         ;;
     esac
   done < "$f"
   done_rc=$?
   [ "$done_rc" -eq 0 ] || return 1
   printf '%s' "$open"
+}
+
+# status_open_decisions plus the opening line's `[at=<epoch>]` stamp: prints one
+# "<key>\t<verb>\t<summary>\t<epoch>" line per still-open decision, with an empty
+# epoch when the opening line carries no well-formed stamp. The open set and its
+# order are exactly status_open_decisions's, because every line goes through the
+# same _fm_decision_fold_line rule; this only records when each surviving record
+# was last opened. It is a separate function so the three-column fold every other
+# consumer uses, and the incremental fold's persisted open set, keep their shape.
+status_open_decisions_at() {  # <status-file> [<kind>]
+  status_open_decisions "$1" "${2:-}" at
 }
 
 # Resolve the log's current declaration at one boundary for crew-state consumers.

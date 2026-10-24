@@ -1,6 +1,6 @@
 # Fleet activity ledger
 
-The fleet activity ledger is an opt-in, append-only file that outside tools can read to follow what a firstmate home is doing: which tasks were dispatched, what their workers reported, when a PR became ready for review, when their work merged, and when they were cleaned up.
+The fleet activity ledger is an opt-in, append-only file that outside tools can read to follow what a firstmate home is doing: which tasks were dispatched, what their workers reported, when a PR became ready for review, when their work merged, when they were cleaned up, and when a decision was put to the captain or answered.
 It is the stable, documented hook for firstmate status; this page is its contract.
 
 ## Turning it on and off
@@ -20,7 +20,7 @@ Every record carries these members:
 | ------- | --------------------------------------------------------- |
 | `v`     | Record format version, currently `1`                      |
 | `ts`    | Unix time in seconds when the record was written          |
-| `event` | One of the five event names below                         |
+| `event` | One of the event names below                              |
 | `task`  | The firstmate task id the record is about                 |
 
 Readers must ignore members and events they do not recognize, so later versions can add them without breaking existing readers.
@@ -34,6 +34,9 @@ Readers must ignore members and events they do not recognize, so later versions 
 | `task.pr_ready`    | `pr`                                           | Firstmate records the task's PR as ready for review. |
 | `task.merged`      | `via` (`"pr"` or `"local"`), plus `pr` when `via` is `"pr"` | The task's PR merge is recorded, or its local-only branch landed. |
 | `task.cleaned_up`  | none                                           | The task's worker and local copy were removed. |
+| `captain.held`     | none                                           | A task is held for the captain with no deferral date. |
+| `captain.deferred` | `until`                                        | A task is held for the captain with a deferral date. |
+| `captain.answered` | `mode` (`"done"`, `"release"`, or `"reconciled"`) | A captain-held task's call was answered, released, or closed as moot. |
 
 `task.dispatched` members: `kind` is `ship`, `scout`, or `secondmate`; `project` is the project directory name, or `null` for a remote second mate; `harness` names the agent tool; `model` is the requested model, or `null` for the tool's default.
 
@@ -44,6 +47,14 @@ It is written each time firstmate records a PR for the task, so registering a re
 `key` is the line's `[key=...]` decision key, or `null`.
 `text` is the status line after its first colon, verbatim, capped at 2000 characters; if the line has no colon, it is the whole line.
 
+`captain.held` and `captain.deferred` are the two spellings of one hold: a new hold or a change to its reason or deferral date writes exactly one of them.
+`captain.deferred` has `until`, the `YYYY-MM-DD` date the captain deferred the call to.
+`captain.answered` has `mode`: `done` when the captain's answer closed the task, `release` when the answer released the hold and kept the task, and `reconciled` when the call closed as moot on evidence rather than an answer.
+`task` is the held task's id.
+These events come from `bin/fm-captain-hold.sh`, which writes them as it publishes the hold or answer, and an unchanged re-hold writes no new event.
+Each task's newest `captain.*` event describes its latest recorded hold or answer transition, not its complete current state: holds can predate recording or change while recording is off.
+For the current open calls, use the [attention feed](#open-decisions-for-outside-readers), which reads the current backlog and status decisions rather than inferring membership from ledger history.
+
 Example:
 
 ```json
@@ -53,7 +64,31 @@ Example:
 {"v":1,"ts":1790133410,"event":"task.pr_ready","task":"fix-login","pr":"https://github.com/acme/webapp/pull/7"}
 {"v":1,"ts":1790133900,"event":"task.merged","task":"fix-login","via":"pr","pr":"https://github.com/acme/webapp/pull/7"}
 {"v":1,"ts":1790133960,"event":"task.cleaned_up","task":"fix-login"}
+{"v":1,"ts":1790134000,"event":"captain.held","task":"pick-auth-flow"}
+{"v":1,"ts":1790134100,"event":"captain.deferred","task":"rename-api","until":"2026-12-01"}
+{"v":1,"ts":1790134200,"event":"captain.answered","task":"pick-auth-flow","mode":"done"}
 ```
+
+## Open decisions for outside readers
+
+`bin/fm-attention.sh --json` prints the decisions waiting on the captain, newest first, as one JSON object with schema `fm-attention.v1`.
+It is read-only: it folds the home's local fleet snapshot and this ledger on every call and stores no separate board.
+The local projection reads holds through the configured backlog adapter and skips secondmate summary collection and its cache.
+It works without a ledger, in which case each row's `last_touched_at` equals its `opened_at`.
+Turning recording off leaves existing ledger history available to this read.
+
+The object has `schema`, `generated` (UTC, ISO 8601, second precision), and `open_decisions`.
+Each row has `task`, `home` (`"main"`), `title`, `kind`, `reason`, `bucket`, `opened_at`, `opened_precision`, and `last_touched_at`.
+A `kind` of `captain_hold` is a backlog task held for the captain.
+Its `opened_at` is the hold-set stamp, and its `bucket` is the fleet snapshot's `hold_bucket` (`live`, `dated`, `blocked`, or `aged`) unchanged.
+A date-only hold-set stamp uses `opened_precision` of `day`.
+A legacy hold with no stamp falls back to the backlog `since` date, with `opened_precision` of `day` instead of `second`.
+A `kind` of `keyed` is a keyed status decision a task still holds open, such as a second mate's escalated call; it adds `key`, has a `null` `bucket`, and takes `opened_at` from the opening line's `[at=<epoch>]` stamp, or `null` when the line has none.
+`opened_precision` is `second` for a timestamp, `day` for a date, or `null` when no opening time is known.
+`last_touched_at` is the newest of `opened_at` and this ledger's `captain.held` or `captain.deferred` events for a hold.
+For a keyed decision, `last_touched_at` equals `opened_at`; ledger capture time does not change source emission ordering.
+Rows sort newest first by `last_touched_at`, and rows with no time sort last.
+The read covers the home it runs in, and not the second mate homes it supervises, except for the keyed decisions those mates escalate into this home's status logs.
 
 ## Limits
 
