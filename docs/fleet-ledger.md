@@ -71,13 +71,62 @@ Example:
 
 ## Open decisions for outside readers
 
-`bin/fm-attention.sh --json` prints the decisions waiting on the captain, newest first, as one JSON object with schema `fm-attention.v1`.
+`bin/fm-attention.sh --json` prints the decisions waiting on the captain, this session's activity, and the in-flight items, as one JSON object with schema `fm-attention.v1`.
 It is read-only: it folds the home's local fleet snapshot and this ledger on every call and stores no separate board.
 The local projection reads holds through the configured backlog adapter and skips secondmate summary collection and its cache.
-It works without a ledger, in which case each row's `last_touched_at` equals its `opened_at`.
+It works without a ledger, in which case each row's `last_touched_at` equals its `opened_at` and `session_activity` is empty.
 Turning recording off leaves existing ledger history available to this read.
 
-The object has `schema`, `generated` (UTC, ISO 8601, second precision), and `open_decisions`.
+The object has `schema`, `generated` (UTC, ISO 8601, second precision), `session`, `session_activity`, `in_flight`, and `open_decisions`.
+Readers must ignore members they do not recognize, so later versions can add members without changing the schema name.
+All times are UTC, ISO 8601, second precision.
+
+### Session activity
+
+`session` has `started_at` and `source`, which name where the current firstmate session's start came from:
+
+| `source`           | `started_at` is                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `session_start`    | when the last full session start finished, the modification time of `state/.session-start-complete` |
+| `session_identity` | when the session lock last recorded a new session identity, such as a `/clear`, the modification time of `state/.lock-session` |
+| `fallback_window`  | 24 hours before the read, when neither record exists                                               |
+
+When both records exist, the later one wins.
+
+`session_activity` lists this ledger's events from `started_at` on, newest first, at most 100 items.
+Each item has `at`, `task`, `event` (the ledger event name), `state`, `line`, `detail`, and `pr`.
+`line` is one plain sentence built from the task's backlog title, or its task id when the backlog no longer has it:
+
+| Event                                   | `line`                                    |
+| --------------------------------------- | ----------------------------------------- |
+| `task.dispatched`                       | `Started: <title>`                        |
+| `task.status` with `state` `needs-decision` | `Needs your decision: <title>`        |
+| `task.status` with `state` `blocked`    | `Blocked: <title>`                        |
+| `task.status` with `state` `done`       | `Worker finished: <title>`                |
+| `task.pr_ready`                         | `PR ready: <title>`                       |
+| `task.merged`                           | `Merged: <title>`, or `Landed locally: <title>` for a local-only landing |
+| `task.cleaned_up`                       | `Cleaned up: <title>`                     |
+| `captain.held`                          | `Waiting on you: <title>`                 |
+| `captain.deferred`                      | `Deferred to <until>: <title>`            |
+| `captain.answered`                      | `You answered: <title>`, `You answered and kept it open: <title>` for `release`, or `Closed as moot: <title>` for `reconciled` |
+
+Other status lines, such as `working` or `paused`, and events this list does not name are left out.
+Repeats collapse: for each task, event, and status `state`, only the newest item is kept.
+`state` is the status line's state for a `task.status` item and `null` otherwise.
+`detail` is the status line's text, trimmed to 160 characters, for a `task.status` item and `null` otherwise.
+`pr` is the event's own PR URL, else the newest PR URL this ledger records for the task, else the PR the task's local record or backlog item names, else `null`.
+The list reports only what the ledger recorded, so its [limits](#limits) apply: status lines already in a log when recording was turned on appear at the time they were recorded, not when they were written.
+
+### In-flight items
+
+`in_flight` lists the backlog's in-flight items in backlog order, the same items `bin/fm-inbox.sh status` prints as text.
+Each item has `task`, `title`, `repo`, `kind`, `worker`, `last_event`, and `pr`.
+`worker` is the fleet snapshot's current state for the task's worker, such as `working`, `done`, or `unknown`, or `null` when no worker is recorded for it.
+`last_event` is the task's newest status line, trimmed to 160 characters, or `null`; like any status line, it is history rather than current state.
+`pr` follows the same order as in `session_activity`.
+
+### Open decisions
+
 Each row has `task`, `home` (`"main"`), `title`, `kind`, `reason`, `bucket`, `opened_at`, `opened_precision`, and `last_touched_at`.
 A `kind` of `captain_hold` is a backlog task held for the captain.
 Its `opened_at` is the hold-set stamp, and its `bucket` is the fleet snapshot's `hold_bucket` (`live`, `dated`, `blocked`, or `aged`) unchanged.
