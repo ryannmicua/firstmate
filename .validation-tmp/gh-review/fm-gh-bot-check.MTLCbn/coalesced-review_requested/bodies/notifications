@@ -1,0 +1,18 @@
+[
+  {
+    "id": "3",
+    "reason": "review_requested",
+    "updated_at": "2026-11-12T02:42:56Z",
+    "last_read_at": "2099-01-01T00:00:00Z",
+    "repository": {
+      "full_name": "acme/widget"
+    },
+    "subject": {
+      "title": "Add export",
+      "type": "PullRequest",
+      "url": "https://api.test.invalid/repos/acme/widget/pulls/7",
+      "latest_comment_url": null
+    },
+    "unread": false
+  }
+]

@@ -1,0 +1,5 @@
+GET /notifications?all=true&participating=true&per_page=50&since=2026-11-11T03:42:45Z&page=1
+GET /repos/acme/widget/issues/5
+GET /repos/acme/widget/issues/comments/501
+GET /repos/acme/widget/issues/5/comments?per_page=100&page=1
+GET /repos/acme/widget/issues/5/events?per_page=100&page=1

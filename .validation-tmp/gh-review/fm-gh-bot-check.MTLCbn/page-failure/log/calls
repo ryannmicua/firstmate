@@ -1,0 +1,4 @@
+GET /notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1
+GET /notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=2
+GET /notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1
+GET /notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=2

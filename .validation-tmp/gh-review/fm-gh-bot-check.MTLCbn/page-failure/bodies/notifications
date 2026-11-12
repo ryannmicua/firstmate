@@ -1,0 +1,262 @@
+[
+  {
+    "id": "1",
+    "reason": "mention",
+    "updated_at": "2026-11-12T02:42:53Z",
+    "last_read_at": null,
+    "repository": {
+      "full_name": "acme/widget"
+    },
+    "subject": {
+      "title": "Flaky tests",
+      "type": "Issue",
+      "url": "https://api.test.invalid/repos/acme/widget/issues/5",
+      "latest_comment_url": "https://api.test.invalid/repos/acme/widget/issues/comments/501"
+    }
+  },
+  {
+    "id": "2000",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2001",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2002",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2003",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2004",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2005",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2006",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2007",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2008",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2009",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2010",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2011",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2012",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2013",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2014",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2015",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2016",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2017",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2018",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2019",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2020",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2021",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2022",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2023",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2024",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2025",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2026",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2027",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2028",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2029",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2030",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2031",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2032",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2033",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2034",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2035",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2036",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2037",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2038",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2039",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2040",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2041",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2042",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2043",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2044",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2045",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2046",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2047",
+    "reason": "subscribed",
+    "unread": true
+  },
+  {
+    "id": "2048",
+    "reason": "subscribed",
+    "unread": true
+  }
+]

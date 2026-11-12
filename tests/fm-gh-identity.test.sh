@@ -28,7 +28,7 @@ make_world() {
   LOG="$TMP_ROOT/$name/log"
   ROUTES="$TMP_ROOT/$name/routes"
   BODIES="$TMP_ROOT/$name/bodies"
-  mkdir -p "$HOME_DIR/config" "$HOME_DIR/state" "$BODIES"
+  mkdir -p "$HOME_DIR/config" "$HOME_DIR/state" "$HOME_DIR/user-home" "$BODIES"
   (umask 077 && openssl genrsa -out "$HOME_DIR/config/github-identity.pem" 2048 2>/dev/null) \
     || fail "could not generate a throwaway key"
   openssl rsa -in "$HOME_DIR/config/github-identity.pem" -pubout -out "$TMP_ROOT/$name/pub.pem" 2>/dev/null
@@ -50,7 +50,7 @@ route() {  # <method> <glob> <status> <body-name>
 }
 
 app() {
-  env -u FM_STATE_OVERRIDE -u FM_CONFIG_OVERRIDE FM_HOME="$HOME_DIR" \
+  env -u FM_STATE_OVERRIDE -u FM_CONFIG_OVERRIDE HOME="$HOME_DIR/user-home" FM_HOME="$HOME_DIR" \
     FM_GH_API_URL=https://api.test.invalid PATH="$FAKEBIN:$PATH" "$APP" "$@"
 }
 
@@ -596,6 +596,56 @@ test_worker_clears_inherited_github_headers() {
   pass "worker GitHub HTTP configuration clears generic, scoped, file, and inherited environment headers"
 }
 
+test_netrc_owner_credentials_refuse_spawn() {
+  local variant id proj wt fakebin launchlog out status file dir
+  for variant in dot underscore default override; do
+    id="netrc-$variant"
+    make_world "$id"
+    proj="$TMP_ROOT/$id/project"
+    wt="$TMP_ROOT/$id/worktree"
+    fakebin=$(fm_test_make_spawn_fakebin "$TMP_ROOT/$id/fake" codex)
+    launchlog="$TMP_ROOT/$id/launch"
+    : > "$launchlog"
+    fm_test_spawn_home "$HOME_DIR" codex
+    fm_git_worktree "$proj" "$wt" "branch-$id"
+    fm_test_spawn_brief "$HOME_DIR" "$id"
+    git -C "$proj" remote set-url origin https://github.com/acme/widget.git
+    case "$variant" in
+      dot|default) file="$HOME_DIR/user-home/.netrc" ;;
+      underscore) file="$HOME_DIR/user-home/_netrc" ;;
+      override) file="$TMP_ROOT/$id/explicit-netrc" ;;
+    esac
+    if [ "$variant" = default ]; then
+      printf 'default login owner password InventedNetrcPassword991\n' > "$file"
+    else
+      printf 'machine github.com login owner password InventedNetrcPassword991\n' > "$file"
+    fi
+    if [ "$variant" = override ]; then
+      out=$(NETRC="$file" FM_FAKE_LAUNCH_LOG="$launchlog" fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" "$id" "$proj" \
+        --harness 'echo worker-ran' --mode direct-PR --yolo off)
+    else
+      out=$(NETRC= FM_FAKE_LAUNCH_LOG="$launchlog" fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" "$id" "$proj" \
+        --harness 'echo worker-ran' --mode direct-PR --yolo off)
+    fi
+    status=$?
+    expect_code 1 "$status" "netrc $variant must refuse spawn"
+    assert_contains "$out" "$file" "refusal lacks the netrc filename"
+    assert_contains "$out" 'remove that entry' "netrc refusal lacks remediation"
+    assert_not_contains "$out" InventedNetrcPassword991 "netrc password leaked"
+    [ ! -s "$launchlog" ] || fail "netrc refusal launched a worker"
+  done
+  make_world netrc-pane
+  dir="$HOME_DIR/state/pane.gh-identity"
+  app prepare-worker "$dir" acme/widget >/dev/null || fail "worker prepare failed"
+  printf 'machine github.com login owner password InventedNetrcPassword992\n' > "$HOME_DIR/user-home/.netrc"
+  out=$(app env-file "$dir" "$TMP_ROOT/netrc-pane/env.sh" 2>&1); status=$?
+  expect_code 1 "$status" "pane-time environment must refuse newly present netrc credentials"
+  assert_not_contains "$out" InventedNetrcPassword992 "pane netrc password leaked"
+  printf 'machine example.invalid login owner password InventedNetrcPassword992\n' > "$HOME_DIR/user-home/.netrc"
+  app env-file "$dir" "$TMP_ROOT/netrc-pane/env.sh" || fail "unrelated netrc machine refused"
+  pass "GitHub and default netrc entries refuse spawn and pane setup without revealing credentials"
+}
+
 test_prepare_worker_resolves_identity_and_installation
 test_prepare_worker_reports_not_installed
 test_refuses_shared_private_key
@@ -615,3 +665,5 @@ test_worker_rejects_embedded_credentials
 test_effective_remotes_require_identity_transport
 
 test_worker_clears_inherited_github_headers
+
+test_netrc_owner_credentials_refuse_spawn

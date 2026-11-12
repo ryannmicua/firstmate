@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+log=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M76SRAYFNN4HYKJKEQJVSMDM/.validation-tmp/gh-review/fm-gh-bot-check.MTLCbn/coalesced-mention/log
+routes=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M76SRAYFNN4HYKJKEQJVSMDM/.validation-tmp/gh-review/fm-gh-bot-check.MTLCbn/coalesced-mention/routes
+printf '%s\n' "$*" >> "$log/argv"
+cfg=$(cat)
+auth=$(printf '%s\n' "$cfg" | sed -n 's/^header = "Authorization: \(.*\)"$/\1/p')
+method=GET out=/dev/null data= url=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -X) method=$2; shift 2 ;;
+    -o) out=$2; shift 2 ;;
+    --data-binary) data=$2; shift 2 ;;
+    -w|--max-time|-H|--config) shift 2 ;;
+    -*) shift ;;
+    *) url=$1; shift ;;
+  esac
+done
+path=${url#"${FM_GH_API_URL:-https://api.github.com}"}
+printf '%s %s\n' "$method" "$path" >> "$log/calls"
+printf '%s\n' "$auth" >> "$log/auth"
+[ -z "$data" ] || printf '%s\n' "$data" >> "$log/bodies"
+status=404 body=
+while IFS=$'\t' read -r m glob st file; do
+  [ -n "$m" ] || continue
+  [ "$m" = "$method" ] || continue
+  # shellcheck disable=SC2053 # The route column is a glob on purpose.
+  [[ "$path" == $glob ]] || continue
+  status=$st body=$file
+  break
+done < "$routes"
+if [ -n "$body" ]; then cat "$body" > "$out"; else printf '{}' > "$out"; fi
+printf '%s' "$status"

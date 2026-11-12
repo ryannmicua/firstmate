@@ -381,9 +381,38 @@ transport_config() {
   TRANSPORT_VALUES=(die 'git@github.com:' 'ssh://git@github.com/')
 }
 
+check_netrc() {
+  local file rc
+  local -a files
+  if [ -n "${NETRC:-}" ]; then
+    files=("$NETRC")
+  else
+    files=("$HOME/.netrc" "$HOME/_netrc")
+  fi
+  for file in "${files[@]}"; do
+    [ -e "$file" ] || continue
+    rc=0
+    python3 - "$file" <<'PY_NETRC' || rc=$?
+import netrc
+import sys
+try:
+    hosts = netrc.netrc(sys.argv[1]).hosts
+except (OSError, netrc.NetrcParseError):
+    sys.exit(2)
+sys.exit(1 if any(host.lower() in ("github.com", "default") for host in hosts) else 0)
+PY_NETRC
+    case "$rc" in
+      0) ;;
+      1) die "$file contains a github.com or default netrc entry; remove that entry before using config/github-identity" ;;
+      *) die "cannot safely inspect $file; remove its github.com/default entry or repair the file before using config/github-identity" ;;
+    esac
+  done
+}
+
 action_check_remotes() {
   local wt=$1 urls url authority effective setting expected resolved i
   local -a transport_args
+  check_netrc
   transport_config
   transport_args=()
   for i in "${!TRANSPORT_KEYS[@]}"; do
@@ -456,6 +485,7 @@ action_env_file() {
   local -a keys values
   dir=$(CDPATH='' cd -- "$dir" 2>/dev/null && pwd -P) || die "cannot resolve worker directory $1"
   read_profile "$dir" || exit 1
+  check_netrc
   case "$count" in *[!0-9]*) die "invalid inherited GIT_CONFIG_COUNT" ;; esac
   while [ "${count#0}" != "$count" ]; do count=${count#0}; done
   count=${count:-0}

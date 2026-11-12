@@ -19,10 +19,11 @@
 # Only the configured owner's items are instructions; other authors' items
 # are marked NOT FROM THE OWNER and only surfaced. Saved owner items get an
 # "eyes" reaction. Notification read state is never changed or used as a filter.
-# state/.github-bot-check records polled_at only after a complete successful
-# poll, using its start time. Discovery overlaps that cursor by ten minutes;
-# without a cursor the initial window is the preceding day. Failures and
-# budget interruption retain the cursor; durable inbox request ids deduplicate.
+# state/.github-bot-check stores the since cursor. Threads run oldest first
+# across pages and checkpoint after completion, never past ten minutes before
+# the poll start; equal timestamps checkpoint together. A completed poll also
+# advances to that boundary, without moving backward. The initial window is the preceding day.
+# Budget interruption preserves completed progress; inbox request ids deduplicate.
 # The inbox note's own wake reaches firstmate; this check prints nothing on a
 # clean poll and one line when its problem report changes.
 #
@@ -37,7 +38,7 @@
 #
 # FM_GH_BOT_CHECK_BUDGET (default 20, valid 5..25) bounds one poll, cut down to
 # fit inside the watcher's FM_CHECK_TIMEOUT. A poll cut off mid-way is safe:
-# saved notes replay by request id and the cursor remains unchanged.
+# saved notes replay by request id and completed cursor progress is retained.
 set -u
 export LC_ALL=C
 
@@ -121,7 +122,7 @@ api() {  # <method> <path-or-url> [json-body]
 }
 
 api_list() {
-  local target=$1 page=1 batch size all='[]'
+  local target=$1 limit=${2:-100} page=1 batch size all='[]'
   while :; do
     if ! api GET "$target&page=$page" || [ "$FM_GH_API_STATUS" != 200 ]; then
       problem "could not retrieve all GitHub items for $target"
@@ -133,7 +134,7 @@ api_list() {
       return 1
     }
     all=$(printf '%s\n%s\n' "$all" "$batch" | jq -sc 'add') || return 1
-    [ "$size" -eq 100 ] || break
+    [ "$size" -eq "$limit" ] || break
     page=$((page + 1))
   done
   FM_GH_API_BODY=$all
@@ -155,14 +156,22 @@ mentions_bot() {
 # save_note <request-id> <body>: 0 when the inbox note is saved and announced
 # (or already was); nonzero prevents the poll cursor from advancing.
 save_note() {
-  local rid=$1 body=$2 rc=0
-  printf '%s\n' "$body" | FM_HOME="$FM_HOME" "$INBOX_BIN" note --request-id "$rid" - >/dev/null 2>&1 || rc=$?
-  [ "$rc" -eq 0 ] && return 0
+  local rid=$1 body=$2 rc=0 result
+  NOTE_REPLAY=false
+  result=$(printf '%s\n' "$body" | FM_HOME="$FM_HOME" "$INBOX_BIN" note --request-id "$rid" --json - 2>/dev/null) || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    NOTE_REPLAY=$(jq -r '.outcome == "replay"' <<<"$result") || return 1
+    return 0
+  fi
   problem "could not save an inbox note for a GitHub notification (fm-inbox exit $rc)"
   return 1
 }
 
 react() {  # <reactions-url>
+  api_list "$1?per_page=100" || return 1
+  if jq -e --arg bot "$(lower "$BOT_LOGIN")" 'any(.[]; .content == "eyes" and ((.user.login // "") | ascii_downcase) == $bot)' <<<"$FM_GH_API_BODY" >/dev/null; then
+    return 0
+  fi
   api POST "$1" '{"content":"eyes"}' && case "$FM_GH_API_STATUS" in 200|201) return 0 ;; esac
   problem "could not add the eyes reaction (HTTP $FM_GH_API_STATUS)"
   return 1
@@ -242,7 +251,7 @@ handle_thread() {
       ok=1
       continue
     fi
-    if [ "$(lower "$author")" = "$(lower "$OWNER_LOGIN")" ]; then
+    if [ "$NOTE_REPLAY" = false ] && [ "$(lower "$author")" = "$(lower "$OWNER_LOGIN")" ]; then
       case "$url" in
         */comments/*) react "$url/reactions" || : ;;
         *) [ -z "$subject_url" ] || react "$(issue_api_url "$subject_url")/reactions" || : ;;
@@ -258,7 +267,7 @@ handle_thread() {
       ok=1
       continue
     fi
-    if [ "$(lower "$actor")" = "$(lower "$OWNER_LOGIN")" ]; then
+    if [ "$NOTE_REPLAY" = false ] && [ "$(lower "$actor")" = "$(lower "$OWNER_LOGIN")" ]; then
       react "$(issue_api_url "$subject_url")/reactions" || :
     fi
   done < <(jq -c '.[]' <<<"$events")
@@ -266,46 +275,48 @@ handle_thread() {
 }
 
 action_poll() {
-  local threads thread reason page=1 size started cursor since
+  local threads group thread reason started boundary cursor since updated checkpoint
   if ! load_config; then
     printf '%s\n' "${PROBLEMS[0]}"
     return 1
   fi
-  started=$(jq -nr 'now | floor | todateiso8601') || return 1
+  started=$(jq -nr 'now | floor') || return 1
+  boundary=$(jq -nr --argjson started "$started" '$started - 600 | todateiso8601') || return 1
   cursor=$(record_cursor)
-  since=$(jq -nr --arg cursor "$cursor" --arg started "$started" '
-    (if $cursor == "" then ($started | fromdateiso8601) - 86400
-     else ($cursor | fromdateiso8601) - 600 end) | todateiso8601') || return 1
-  while :; do
-    if ! api GET "/notifications?all=true&participating=true&per_page=50&since=$since&page=$page" || [ "$FM_GH_API_STATUS" != 200 ]; then
-      case "$FM_GH_API_STATUS" in
-        401|403) problem "GitHub refused the bot token (HTTP $FM_GH_API_STATUS); it needs the notifications and repo scopes" ;;
-        *) problem "could not read GitHub bot notification page $page (HTTP $FM_GH_API_STATUS)" ;;
-      esac
-      break
-    fi
-    threads=$FM_GH_API_BODY
-    size=$(jq -er 'if type == "array" then length else error("expected array") end' <<<"$threads") || {
-      problem "invalid GitHub notification page $page"
-      break
-    }
-    while IFS= read -r thread; do
-      [ -n "$thread" ] || continue
-      reason=$(jq -r '.reason // empty' <<<"$thread")
-      case "$reason" in mention|assign|review_requested) ;; *) continue ;; esac
-      if ! handle_thread "$thread"; then
-        problem "could not completely capture a GitHub notification"
-      fi
-    done < <(jq -c '.[]' <<<"$threads")
-    [ "$size" -eq 50 ] || break
-    page=$((page + 1))
-  done
-  if [ "${#PROBLEMS[@]}" -gt 0 ]; then
-    printf '%s\n' "${PROBLEMS[0]}"
+  since=$(jq -nr --arg cursor "$cursor" --argjson started "$started" '
+    if $cursor == "" then ($started - 86400 | todateiso8601)
+    else $cursor end') || return 1
+  if ! api_list "/notifications?all=true&participating=true&per_page=50&since=$since" 50; then
+    case "$FM_GH_API_STATUS" in
+      401|403) printf 'GitHub refused the bot token (HTTP %s); it needs the notifications and repo scopes\n' "$FM_GH_API_STATUS" ;;
+      *) printf '%s\n' "${PROBLEMS[0]:-could not retrieve GitHub notifications}" ;;
+    esac
     return 1
   fi
+  threads=$FM_GH_API_BODY
   mkdir -p "$STATE" || return 1
-  record_write "$(record_read)" "$started"
+  while IFS= read -r group; do
+    updated=$(jq -r '.[0].updated_at // empty' <<<"$group")
+    if [ -n "$cursor" ] && [[ "$updated" < "$cursor" || "$updated" = "$cursor" ]]; then continue; fi
+    while IFS= read -r thread; do
+      reason=$(jq -r '.reason // empty' <<<"$thread")
+      case "$reason" in mention|assign|review_requested) ;; *) continue ;; esac
+      if [ -z "$updated" ] || ! handle_thread "$thread" || [ "${#PROBLEMS[@]}" -gt 0 ]; then
+        printf '%s\n' "${PROBLEMS[0]:-could not completely capture a GitHub notification}"
+        return 1
+      fi
+    done < <(jq -c 'sort_by(.id) | .[]' <<<"$group")
+    if [ -n "$updated" ]; then
+      checkpoint=$updated
+      [[ "$checkpoint" < "$boundary" ]] || checkpoint=$boundary
+      record_write "$(record_read)" "$checkpoint" || return 1
+    fi
+  done < <(jq -c 'group_by(.updated_at)[]' <<<"$threads")
+  cursor=$(record_cursor)
+  if [ -z "$cursor" ] || [[ "$cursor" < "$boundary" ]]; then
+    record_write "$(record_read)" "$boundary" || return 1
+  fi
+  return 0
 }
 
 record_cursor() {

@@ -1,0 +1,11 @@
+GET /notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1
+GET /repos/acme/widget/pulls/7
+GET /repos/acme/widget/issues/7/comments?per_page=100&page=1
+GET /repos/acme/widget/pulls/7/comments?per_page=100&page=1
+GET /repos/acme/widget/pulls/7/reviews?per_page=100&page=1
+GET /repos/acme/widget/issues/7/events?per_page=100&page=1
+GET /repos/acme/widget/issues/7/reactions?per_page=100&page=1
+POST /repos/acme/widget/issues/7/reactions
+GET /repos/acme/widget/issues/7/reactions?per_page=100&page=1
+POST /repos/acme/widget/issues/7/reactions
+GET /notifications?all=true&participating=true&per_page=50&since=2026-11-12T03:32:53Z&page=1

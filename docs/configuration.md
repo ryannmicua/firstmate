@@ -1989,6 +1989,8 @@ A `kind=app` App commits as its `<app-slug>[bot]` user; give it the repository p
 When `config/github-identity` exists, every ship and scout spawn whose configured `origin` is on github.com checks that the identity can write to that repository: write access for a token, an installation covering the repository with Contents write permission for an App.
 Origin fetch and push URLs must resolve under the worker's Git rewrite settings to plain HTTPS on github.com for the same repository, without userinfo or a port.
 Remove embedded credentials and unsupported transport rewrites before spawning.
+A netrc entry for `github.com` or `default` also refuses spawn and worker environment setup: remove that entry from `$NETRC` when set, otherwise from the worker home's `.netrc` or `_netrc`.
+The refusal names the file without revealing its contents.
 If it can, the worker:
 
 - runs `gh` through a wrapper that supplies the identity's token on every call, with gh pointed at an empty config directory so the owner's stored login cannot answer;
@@ -2027,13 +2029,16 @@ Arm the poll with `bin/fm-gh-bot-check.sh arm` and remove it with `bin/fm-gh-bot
 GitHub cannot reach this machine, so the watcher polls on its normal check interval (`FM_CHECK_INTERVAL`, five minutes by default).
 
 Each poll reads participating notifications updated within an overlapping time window, regardless of read state.
-The window begins ten minutes before the last successful poll's start time, or one day before the first poll.
-Only a complete successful poll advances that cursor in `state/.github-bot-check`; retrieval or note-save failures and budget interruptions retain it for retry.
+The first window covers the preceding day; later polls resume the since cursor in `state/.github-bot-check`.
+After discovery, threads run oldest-updated first across pages, checkpointing the cursor as each timestamp completes, but never past ten minutes before the poll start; threads with the same update time checkpoint together.
+A completed poll also advances the cursor to ten minutes before its start when that moves it forward.
+Retrieval or note-save failure stops processing before that timestamp is checkpointed, while a budget interruption preserves already completed progress.
 An @-mention in an issue or pull request body, an issue comment, a pull request review comment, or a submitted review summary, an assignment, or a review request becomes one captain inbox note with the repository, the issue or pull request title and URL, the comment URL, and the text.
 A note from the owner says it is an instruction for firstmate.
 Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
 For every mention, assignment, or review-request thread, the poll retrieves all mentions and assignment/review-request events naming the bot, regardless of the notification's reason.
-After a note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up.
+After a new note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up.
+Replayed notes and items already carrying the bot's own eyes reaction skip another reaction POST.
 The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried.
 Other notification reasons, including team mentions, are skipped.
 The check prints a line only when its problem changes, such as a missing or refused token; `bin/fm-gh-bot-check.sh --help` owns the details.

@@ -49,6 +49,8 @@ make_world() {
              "latest_comment_url":null}}
 ]
 EOF
+  jq 'map(.updated_at = (now - 3600 | floor | todateiso8601))' "$BODIES/notifications" > "$BODIES/dated"
+  mv "$BODIES/dated" "$BODIES/notifications"
   printf '{"html_url":"https://github.com/acme/widget/issues/5","title":"Flaky tests"}' > "$BODIES/issue5"
   printf '{"html_url":"https://github.com/acme/widget/pull/7","title":"Add export"}' > "$BODIES/pr7"
   printf '{"id":501,"url":"%s/repos/acme/widget/issues/comments/501","html_url":"https://github.com/acme/widget/issues/5#issuecomment-501","user":{"login":"owner-one"},"body":"@example-bot please fix the flaky tests"}' "$API" > "$BODIES/c501"
@@ -69,6 +71,7 @@ EOF
   route GET '/repos/acme/widget/issues/7/comments?per_page=100&page=1' 200 list-empty
   route GET '/repos/acme/widget/pulls/7/comments?per_page=100&page=1' 200 list-empty
   route GET '/repos/acme/widget/pulls/7/reviews?per_page=100&page=1' 200 list-empty
+  route GET '/repos/acme/widget/*/reactions?per_page=100&page=*' 200 list-empty
   route POST '/repos/acme/widget/issues/comments/*/reactions' 201 empty
   route POST '/repos/acme/widget/issues/*/reactions' 201 empty
   fm_test_fake_github_api "$FAKEBIN" "$LOG" "$ROUTES"
@@ -193,6 +196,8 @@ test_complete_retrieval_and_retry() {
   route GET '/repos/acme/widget/pulls/5/comments?per_page=100&page=1' 500 empty
   route GET '/repos/acme/widget/pulls/5/reviews?per_page=100&page=1' 200 list-empty
   route GET '/repos/acme/widget/issues/5/events?per_page=100&page=1' 200 list-empty
+  route GET '/repos/acme/widget/*/reactions?per_page=100&page=*' 200 list-empty
+  route POST '/repos/acme/widget/*/reactions' 201 empty
   out=$(run_check poll)
   [ -n "$out" ] || fail "partial retrieval did not report a problem"
   [ -z "$(note_files)" ] || fail "partial retrieval created notes"
@@ -280,27 +285,19 @@ test_submitted_review_summaries_are_complete() {
 }
 
 test_later_notification_page_failure_keeps_progress() {
-  local out status reaction_line page_line before
+  local out status
   make_world page-failure
-  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2026-11-10T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2000-01-01T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
   jq '.[0:1] + [range(49) | {id:(2000+.|tostring),reason:"subscribed",unread:true}]' "$BODIES/notifications" > "$BODIES/page1"
   mv "$BODIES/page1" "$BODIES/notifications"
   route GET '/notifications?all=true&participating=true&per_page=50&since=*&page=2' 500 empty
   out=$(run_check poll); status=$?
-  expect_code 1 "$status" "later page failure must report a problem"
-  assert_contains "$out" 'notification page 2' "later-page failure lacks page context"
-  [ -n "$(note_with 'please fix the flaky tests')" ] || fail "later page failure blocked first-page owner note"
-  reaction_line=$(sed -n '/POST \/repos\/acme\/widget\/issues\/comments\/501\/reactions/=' "$LOG/calls" | head -n 1)
-  page_line=$(sed -n '/GET \/notifications?.*page=2/=' "$LOG/calls" | head -n 1)
-  [ "$reaction_line" -lt "$page_line" ] || fail "saving first-page items waited for later discovery"
-  [ "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")" = 2026-11-10T00:00:00Z ] || fail "failed poll advanced its cursor"
-  before=$(note_files | wc -l | tr -d ' ')
-  jq '.[0].unread=false | .[0].last_read_at="2099-01-01T00:00:00Z"' "$BODIES/notifications" > "$BODIES/read"
-  mv "$BODIES/read" "$BODIES/notifications"
+  expect_code 1 "$status" "later discovery failure must report a problem"
+  assert_contains "$out" notifications "discovery failure lacks context"
+  [ -z "$(note_files)" ] || fail "incomplete oldest-first discovery produced notes"
   run_check check >/dev/null
-  [ "$(note_files | wc -l | tr -d ' ')" = "$before" ] || fail "retry duplicated notes"
-  [ "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")" = 2026-11-10T00:00:00Z ] || fail "check problem reporting replaced the cursor"
-  pass "later discovery failure preserves saved notes and cursor, including through check reporting"
+  [ "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")" = 2000-01-01T00:00:00Z ] || fail "failed discovery advanced its cursor"
+  pass "complete discovery is required for oldest-first ordering and failed discovery preserves its cursor"
 
 }
 
@@ -312,7 +309,7 @@ test_coalesced_events_ignore_reason_and_read_state() {
     mv "$BODIES/only" "$BODIES/notifications"
     jq -s '.' "$BODIES/c502" > "$BODIES/list-empty"
     printf '[{"id":9001,"event":"assigned","actor":{"login":"Owner-One"},"assignee":{"login":"example-bot"}},{"id":9002,"event":"review_requested","actor":{"login":"Owner-One"},"requested_reviewer":{"login":"example-bot"}}]' > "$BODIES/events7"
-    printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2026-11-10T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+    printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2000-01-01T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
     start=$(date +%s)
     run_check check >/dev/null
     end=$(date +%s)
@@ -321,8 +318,8 @@ test_coalesced_events_ignore_reason_and_read_state() {
     [ -n "$(note_with 'GitHub review request of @example-bot by Owner-One (the owner)')" ] || fail "coalesced review request lost under $reason"
     cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")
     cursor=$(jq -nr --arg c "$cursor" '$c | fromdateiso8601')
-    [ "$cursor" -ge "$start" ] && [ "$cursor" -le "$end" ] || fail "successful poll did not preserve a start-time cursor"
-    assert_grep 'since=2026-11-09T23:50:00Z' "$LOG/calls" "poll did not overlap the previous cursor by ten minutes"
+    [ "$cursor" -ge "$((start - 600))" ] && [ "$cursor" -le "$end" ] || fail "successful poll did not advance its since cursor"
+    assert_grep 'since=2000-01-01T00:00:00Z' "$LOG/calls" "poll did not resume the saved since cursor"
     assert_no_grep 'PATCH ' "$LOG/calls" "poll modified notification read state"
     run_check poll >/dev/null
     [ "$(note_files | wc -l | tr -d ' ')" = 3 ] || fail "coalesced event replay duplicated notes"
@@ -352,11 +349,11 @@ SH
   [ -z "$(note_with 'arriving during reaction')" ] || fail "fixture mention arrived before retrieval completed"
   out=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")
   out=$(jq -nr --arg c "$out" '$c | fromdateiso8601')
-  [ "$out" -ge "$before" ] && [ "$out" -le "$after" ] || fail "initial poll did not commit its start time"
+  [ "$out" -ge "$((before - 600))" ] && [ "$out" -le "$after" ] || fail "initial poll did not commit its overlapping since boundary"
   out=$(sed -n 's/.*since=\([^&]*\).*/\1/p' "$LOG/calls" | head -n 1)
   out=$(jq -nr --arg c "$out" '$c | fromdateiso8601')
   [ "$out" -ge "$((before - 86400))" ] && [ "$out" -le "$((after - 86400))" ] || fail "initial window was not bounded to one day"
-  jq '.[0].unread=false | .[0].last_read_at="2099-01-01T00:00:00Z"' "$BODIES/notifications" > "$BODIES/read"
+  jq '.[0].unread=false | .[0].last_read_at="2099-01-01T00:00:00Z" | .[0].updated_at=(now | floor | todateiso8601)' "$BODIES/notifications" > "$BODIES/read"
   mv "$BODIES/read" "$BODIES/notifications"
   run_check poll >/dev/null || fail "overlapping retry failed"
   [ -n "$(note_with 'arriving during reaction')" ] || fail "in-flight owner mention was lost"
@@ -367,7 +364,7 @@ SH
 test_poll_budget_keeps_cursor() {
   local out
   make_world budget-cursor
-  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2026-11-10T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2000-01-01T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
   jq '.[0:1] + [range(49) | {id:(3000+.|tostring),reason:"subscribed"}]' "$BODIES/notifications" > "$BODIES/page1"
   mv "$BODIES/page1" "$BODIES/notifications"
   cp "$FAKEBIN/curl" "$FAKEBIN/curl-before"
@@ -379,9 +376,82 @@ SH
   chmod +x "$FAKEBIN/curl"
   out=$(FM_GH_BOT_CHECK_BUDGET=5 run_check check)
   assert_contains "$out" 'poll did not finish within the 5s budget' "budget did not interrupt discovery"
-  [ -n "$(note_with 'please fix the flaky tests')" ] || fail "budget interruption lost saved progress"
-  [ "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")" = 2026-11-10T00:00:00Z ] || fail "budget interruption advanced the cursor"
+  [ -z "$(note_files)" ] || fail "interrupted discovery produced notes before oldest-first ordering"
+  [ "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")" = 2000-01-01T00:00:00Z ] || fail "budget interruption advanced the cursor"
   pass "budget interruption preserves the poll cursor and saved notes"
+}
+
+test_oldest_first_across_pages_and_reaction_replay() {
+  local first second posts
+  make_world ordering
+  jq '.[2:3] | .[0].updated_at=(now - 3600 | floor | todateiso8601)' "$BODIES/notifications" > "$BODIES/older"
+  jq '.[0:1] | .[0].updated_at=(now - 1800 | floor | todateiso8601)' "$BODIES/notifications" > "$BODIES/newer"
+  jq '.[0:1] + [range(49) | {id:(4000+.|tostring),reason:"subscribed"}]' "$BODIES/newer" > "$BODIES/notifications"
+  route GET '/notifications?all=true&participating=true&per_page=50&since=*&page=2' 200 older
+  run_check poll >/dev/null || fail "ordered poll failed"
+  first=$(sed -n '/POST \/repos\/acme\/widget\/issues\/7\/reactions/=' "$LOG/calls" | head -n 1)
+  second=$(sed -n '/POST \/repos\/acme\/widget\/issues\/comments\/501\/reactions/=' "$LOG/calls" | head -n 1)
+  [ "$first" -lt "$second" ] || fail "page-one newer thread ran before page-two older thread"
+  posts=$(grep -c '^POST ' "$LOG/calls")
+  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2000-01-01T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+  run_check poll >/dev/null || fail "replay poll failed"
+  [ "$(grep -c '^POST ' "$LOG/calls")" = "$posts" ] || fail "replayed notes repeated eyes reactions"
+  pass "threads run oldest first across pages and replayed notes skip reactions"
+}
+
+test_existing_bot_eyes_skips_post() {
+  make_world existing-eyes
+  jq '.[0:1]' "$BODIES/notifications" > "$BODIES/only"
+  mv "$BODIES/only" "$BODIES/notifications"
+  printf '[{"content":"eyes","user":{"login":"example-bot"}}]' > "$BODIES/eyes"
+  printf 'GET\t/repos/acme/widget/issues/comments/501/reactions?per_page=100&page=1\t200\t%s\n' "$BODIES/eyes" > "$ROUTES.new"
+  cat "$ROUTES" >> "$ROUTES.new"
+  mv "$ROUTES.new" "$ROUTES"
+  run_check poll >/dev/null || fail "existing-eyes poll failed"
+  [ -n "$(note_with 'please fix the flaky tests')" ] || fail "existing reaction prevented note capture"
+  assert_no_grep 'POST /repos/acme/widget/issues/comments/501/reactions' "$LOG/calls" "bot's existing eyes reaction was posted again"
+  pass "the bot's existing eyes reaction skips another POST while preserving note capture"
+}
+
+test_budget_resumes_completed_threads() {
+  local i out count cursor
+  make_world resumable
+  jq -n --arg api "$API" '[range(20;25) | {id:(.|tostring),reason:"mention",updated_at:(now - (25-.)*1200 | floor | todateiso8601),repository:{full_name:"acme/widget"},subject:{type:"Issue",title:("Backlog " + (.|tostring)),url:($api+"/repos/acme/widget/issues/"+(.|tostring))}}] | reverse' > "$BODIES/master"
+  for i in 20 21 22 23 24; do
+    printf '{"html_url":"https://github.com/acme/widget/issues/%s","user":{"login":"Owner-One"},"body":"@example-bot backlog %s"}' "$i" "$i" > "$BODIES/issue$i"
+    route GET "/repos/acme/widget/issues/$i" 200 "issue$i"
+    route GET "/repos/acme/widget/issues/$i/comments?per_page=100&page=1" 200 list-empty
+    route GET "/repos/acme/widget/issues/$i/events?per_page=100&page=1" 200 list-empty
+  done
+  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2000-01-01T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+  cp "$FAKEBIN/curl" "$FAKEBIN/curl-before"
+  printf '#!/usr/bin/env bash\noriginal=%q\nmaster=%q\nnotifications=%q\n' "$FAKEBIN/curl-before" "$BODIES/master" "$BODIES/notifications" > "$FAKEBIN/curl"
+  cat >> "$FAKEBIN/curl" <<'SH'
+for url in "$@"; do :; done
+case "$url" in
+  *'/notifications?'*)
+    since=${url#*since=}; since=${since%%&*}
+    jq --arg since "$since" '[.[] | select(.updated_at > $since)]' "$master" > "$notifications"
+    ;;
+  */issues/2[0-4]) sleep 2 ;;
+esac
+exec "$original" "$@"
+SH
+  chmod +x "$FAKEBIN/curl"
+  out=$(FM_GH_BOT_CHECK_BUDGET=5 run_check check)
+  assert_contains "$out" 'poll did not finish within the 5s budget' "fixture did not interrupt processing"
+  count=$(note_files | wc -l | tr -d ' ')
+  [ "$count" -gt 0 ] && [ "$count" -lt 5 ] || fail "fixture did not checkpoint partial progress"
+  cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")
+  [ "$cursor" != 2000-01-01T00:00:00Z ] || fail "completed thread did not advance its cursor"
+  for i in 1 2 3 4 5; do
+    FM_GH_BOT_CHECK_BUDGET=5 run_check check >/dev/null
+    [ "$(note_files | wc -l | tr -d ' ')" -lt 5 ] || break
+  done
+  [ "$(note_files | wc -l | tr -d ' ')" = 5 ] || fail "bounded retries starved later owner requests"
+  [ "$(grep -cxF 'GET /repos/acme/widget/issues/20' "$LOG/calls")" = 1 ] || fail "completed oldest thread was fetched again"
+  [ "$(grep -c '^POST ' "$LOG/calls")" -le 5 ] || fail "retries repeated eyes reactions"
+  pass "bounded polls checkpoint completed oldest threads and eventually capture the entire backlog"
 }
 
 test_poll_turns_mentions_and_assignments_into_notes
@@ -401,3 +471,7 @@ test_coalesced_events_ignore_reason_and_read_state
 test_owner_mention_arriving_during_reaction_is_retried
 
 test_poll_budget_keeps_cursor
+
+test_oldest_first_across_pages_and_reaction_replay
+test_existing_bot_eyes_skips_post
+test_budget_resumes_completed_threads

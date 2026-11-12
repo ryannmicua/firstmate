@@ -1,0 +1,213 @@
+[
+  {
+    "id": "1000",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1001",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1002",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1003",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1004",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1005",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1006",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1007",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1008",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1009",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1010",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1011",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1012",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1013",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1014",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1015",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1016",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1017",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1018",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1019",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1",
+    "reason": "mention",
+    "updated_at": "2026-11-12T02:42:49Z",
+    "last_read_at": null,
+    "repository": {
+      "full_name": "acme/widget"
+    },
+    "subject": {
+      "title": "Flaky tests",
+      "type": "Issue",
+      "url": "https://api.test.invalid/repos/acme/widget/issues/5",
+      "latest_comment_url": "https://api.test.invalid/repos/acme/widget/issues/comments/501"
+    }
+  },
+  {
+    "id": "1021",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1022",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1023",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1024",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1025",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1026",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1027",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1028",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1029",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1030",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1031",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1032",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1033",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1034",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1035",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1036",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1037",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1038",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1039",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1040",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1041",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1042",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1043",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1044",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1045",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1046",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1047",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1048",
+    "reason": "subscribed"
+  },
+  {
+    "id": "1049",
+    "reason": "subscribed"
+  }
+]
