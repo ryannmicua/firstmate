@@ -410,7 +410,7 @@ test_pr_based_dod_draft_check_uses_gh_axi() {
 # and the public-repository summary rule; local-only has no PR, and a gerrit
 # review has no PR body to shape.
 # The generated instruction contract follows the fixed-layout requirement and
-# the owner's decision to omit a footer; reject an extra footer in either mode.
+# the owner's decision to define the footer as a stack-place and author line.
 test_pr_based_dod_carries_the_pr_shape() {
   local mode out heading
   for mode in direct-PR no-mistakes; do
@@ -422,7 +422,6 @@ test_pr_based_dod_carries_the_pr_shape() {
     assert_grep 'Re-read the body against the final diff' "$out" "$mode: DoD lacks the re-read rule"
     assert_grep 'showing invented data only' "$out" "$mode: DoD lacks the screenshot data rule"
     assert_no_grep 'demo or invented' "$out" "$mode: DoD permits demo data without requiring it to be invented"
-    assert_no_grep 'footer' "$out" "$mode: DoD adds a footer beyond the fixed PR layout"
     assert_grep 'repository is public' "$out" "$mode: DoD lacks the public-repository rule"
   done
   assert_grep '--no-publish-intent' "$TMP_ROOT/shape-no-mistakes.md" "no-mistakes DoD must keep the ask out of a public PR"
