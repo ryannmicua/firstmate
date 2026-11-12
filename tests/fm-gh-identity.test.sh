@@ -205,9 +205,28 @@ test_spawn_wires_app_identity() {
   cp "$FAKEBIN/curl" "$fakebin/curl"
   fm_test_spawn_home "$home" codex
   fm_git_worktree "$proj" "$wt" "wt-gh-identity"
-  # Spawn fetches origin, so the configured GitHub URL is rewritten to the
-  # local bare origin for git transport while slug-of reads the configured URL.
-  git -C "$proj" config url."file://$(cd "$proj.origin.git" && pwd)".insteadOf git@github.com:acme/widget.git
+  printf '#!/usr/bin/env bash\nreal_git=%q\nlocal_origin=%q\n' "$(command -v git)" "$proj.origin.git" > "$fakebin/git"
+  cat >> "$fakebin/git" <<'SH'
+args=("$@")
+fetch=0
+refspec=0
+for arg in "${args[@]}"; do
+  case "$arg" in fetch) fetch=2 ;; ls-remote) fetch=1 ;; +refs/*) refspec=1 ;; esac
+done
+for arg in "${args[@]}"; do
+  [ "$arg" != --get-url ] || fetch=0
+done
+for i in "${!args[@]}"; do
+  if [ "$fetch" != 0 ] && [ "${args[$i]}" = origin ]; then args[$i]=$local_origin; fi
+  if [ "${args[$i]}" = --auto ]; then
+    args[$i]=$("$real_git" --git-dir="$local_origin" symbolic-ref --short HEAD) || exit 1
+  fi
+done
+if [ "$fetch" = 2 ] && [ "$refspec" = 0 ]; then args+=('+refs/heads/*:refs/remotes/origin/*'); fi
+export GIT_SSH_COMMAND=false
+exec "$real_git" "${args[@]}"
+SH
+  chmod +x "$fakebin/git"
   git -C "$proj" remote set-url origin git@github.com:acme/widget.git
   fm_test_spawn_brief "$home" "$id"
   out=$(FM_FAKE_LAUNCH_LOG="$launchlog" FM_GH_API_URL=https://api.test.invalid \
@@ -247,7 +266,7 @@ test_spawn_wires_app_identity() {
     --harness 'echo worker-ran' --mode direct-PR --yolo off)
   status=$?
   expect_code 1 "$status" "spawn without a github.com origin must refuse: $out"
-  assert_contains "$out" "$wt-3" "origin refusal lacks the repository"
+  assert_contains "$out" "$proj" "origin refusal lacks the repository"
   assert_contains "$out" "remove config/github-identity" "origin refusal lacks remediation"
   [ ! -s "$launchlog" ] || fail "a non-GitHub origin launched a worker"
   pass "spawn runs a configured worker as the App and refuses when it is not installed"
@@ -490,6 +509,66 @@ test_worker_rejects_embedded_credentials() {
   pass "worker helper and fetch/push transport reject embedded credentials without disclosure"
 }
 
+test_effective_remotes_require_identity_transport() {
+  local variant id proj wt fakebin launchlog out status dir envf transport op
+  for variant in ssh-port https-port other-repo other-host file-rewrite fetch-rewrite; do
+    id="transport-$variant"
+    make_world "$id"
+    proj="$TMP_ROOT/$id/project"
+    wt="$TMP_ROOT/$id/worktree"
+    fakebin=$(fm_test_make_spawn_fakebin "$TMP_ROOT/$id/fake" codex)
+    launchlog="$TMP_ROOT/$id/launch"
+    : > "$launchlog"
+    fm_test_spawn_home "$HOME_DIR" codex
+    fm_git_worktree "$proj" "$wt" "branch-$id"
+    fm_test_spawn_brief "$HOME_DIR" "$id"
+    git -C "$proj" remote set-url origin https://github.com/acme/widget.git
+    case "$variant" in
+      ssh-port) git -C "$proj" config remote.origin.pushurl ssh://git@github.com:22/acme/widget.git ;;
+      https-port) git -C "$proj" config remote.origin.pushurl https://github.com:443/acme/widget.git ;;
+      other-repo) git -C "$proj" config remote.origin.pushurl https://github.com/acme/other.git ;;
+      other-host) git -C "$proj" config remote.origin.pushurl https://example.invalid/acme/widget.git ;;
+      file-rewrite) git -C "$proj" config "url.file://$proj.origin.git.pushInsteadOf" https://github.com/acme/widget.git ;;
+      fetch-rewrite) git -C "$proj" config url.https://example.invalid/.insteadOf https://github.com/ ;;
+    esac
+    out=$(FM_FAKE_LAUNCH_LOG="$launchlog" fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" "$id" "$proj" \
+      --harness 'echo worker-ran' --mode direct-PR --yolo off)
+    status=$?
+    expect_code 1 "$status" "unsupported effective $variant transport must refuse: $out"
+    if [ "$variant" = fetch-rewrite ]; then
+      assert_contains "$out" remote.origin.url "refusal lacks fetch setting"
+    else
+      assert_contains "$out" remote.origin.pushurl "refusal lacks push setting"
+    fi
+    [ ! -s "$launchlog" ] || fail "unsupported $variant transport launched a worker"
+  done
+  make_world allowed-transports
+  proj="$TMP_ROOT/allowed-transports/repo"
+  git init -q "$proj"
+  for transport in https://github.com/acme/widget.git git@github.com:acme/widget.git ssh://git@github.com/acme/widget.git; do
+    git -C "$proj" config remote.origin.url "$transport"
+    git -C "$proj" config remote.origin.pushurl "$transport"
+    app check-remotes "$proj" || fail "supported identity transport refused"
+  done
+  dir="$HOME_DIR/state/transport.gh-identity"
+  envf="$TMP_ROOT/allowed-transports/env.sh"
+  app prepare-worker "$dir" acme/widget >/dev/null || fail "worker prepare failed"
+  app env-file "$dir" "$envf" || fail "worker environment failed"
+  git -C "$proj" config remote.origin.url ssh://git@github.com:22/acme/widget.git
+  git -C "$proj" config remote.origin.pushurl ssh://git@github.com:22/acme/widget.git
+  git -C "$proj" -c user.name=Test -c user.email=test@example.invalid commit -q --allow-empty -m initial
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "$TMP_ROOT/allowed-transports/ssh"
+  chmod +x "$TMP_ROOT/allowed-transports/ssh"
+  for op in fetch push; do
+    out=$(env -i GIT_SSH_COMMAND="$TMP_ROOT/allowed-transports/ssh" HOME="$TMP_ROOT/allowed-transports" PATH="$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+      bash -c '. "$1" || exit 9; if [ "$3" = push ]; then git -C "$2" push origin HEAD:refs/heads/probe; else git -C "$2" fetch origin; fi' _ "$envf" "$proj" "$op" 2>&1)
+    status=$?
+    [ "$status" -ne 0 ] || fail "worker $op allowed SSH bypass"
+    assert_contains "$out" "transport 'ssh' not allowed" "worker $op did not enforce HTTPS transport"
+  done
+  pass "effective remotes require same-repository HTTPS; workers refuse SSH port bypasses"
+}
+
 test_prepare_worker_resolves_identity_and_installation
 test_prepare_worker_reports_not_installed
 test_refuses_shared_private_key
@@ -505,3 +584,5 @@ test_paseo_agent_refuses_configured_identity
 
 test_spawn_refuses_embedded_remote_credentials
 test_worker_rejects_embedded_credentials
+
+test_effective_remotes_require_identity_transport

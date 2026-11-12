@@ -296,35 +296,43 @@ mark_read() {  # <thread-id>
 }
 
 action_poll() {
-  local threads thread id reason rc n=0
+  local threads thread id reason rc n=0 page=1 size
   if ! load_config; then
     printf '%s\n' "${PROBLEMS[0]}"
     return 1
   fi
-  if ! api_list "/notifications?participating=true&per_page=100"; then
-    case "$FM_GH_API_STATUS" in
-      401|403) printf 'GitHub refused the bot token (HTTP %s); it needs the notifications and repo scopes\n' "$FM_GH_API_STATUS" ;;
-      *) printf 'could not read all GitHub bot notifications (HTTP %s)\n' "$FM_GH_API_STATUS" ;;
-    esac
-    return 1
-  fi
-  threads=$FM_GH_API_BODY
-  while IFS= read -r thread; do
-    [ -n "$thread" ] || continue
-    id=$(jq -r '.id // empty' <<<"$thread")
-    case "$id" in ''|*[!0-9]*) continue ;; esac
-    reason=$(jq -r '.reason // empty' <<<"$thread")
-    case "$reason" in mention|assign|review_requested) ;; *) continue ;; esac
-    n=$((n + 1))
-    [ "$n" -le "$MAX_THREADS" ] || break
-    rc=0
-    case "$reason" in
-      mention) handle_mention "$thread" || rc=$? ;;
-      assign) handle_assignment "$thread" assigned "assignment" || rc=$? ;;
-      review_requested) handle_assignment "$thread" review_requested "review request" || rc=$? ;;
-    esac
-    [ "$rc" -ne 0 ] || mark_read "$id" || :
-  done < <(jq -c 'if type == "array" then .[] else empty end' <<<"$threads" 2>/dev/null)
+  while :; do
+    if ! api GET "/notifications?all=true&participating=true&per_page=100&page=$page" || [ "$FM_GH_API_STATUS" != 200 ]; then
+      case "$FM_GH_API_STATUS" in
+        401|403) problem "GitHub refused the bot token (HTTP $FM_GH_API_STATUS); it needs the notifications and repo scopes" ;;
+        *) problem "could not read GitHub bot notification page $page (HTTP $FM_GH_API_STATUS)" ;;
+      esac
+      break
+    fi
+    threads=$FM_GH_API_BODY
+    size=$(jq -er 'if type == "array" then length else error("expected array") end' <<<"$threads") || {
+      problem "invalid GitHub notification page $page"
+      break
+    }
+    while IFS= read -r thread; do
+      [ -n "$thread" ] || continue
+      id=$(jq -r '.id // empty' <<<"$thread")
+      case "$id" in ''|*[!0-9]*) continue ;; esac
+      reason=$(jq -r '.reason // empty' <<<"$thread")
+      case "$reason" in mention|assign|review_requested) ;; *) continue ;; esac
+      n=$((n + 1))
+      [ "$n" -le "$MAX_THREADS" ] || break
+      rc=0
+      case "$reason" in
+        mention) handle_mention "$thread" || rc=$? ;;
+        assign) handle_assignment "$thread" assigned "assignment" || rc=$? ;;
+        review_requested) handle_assignment "$thread" review_requested "review request" || rc=$? ;;
+      esac
+      [ "$rc" -ne 0 ] || mark_read "$id" || :
+    done < <(jq -c '.[] | select(.unread != false)' <<<"$threads")
+    [ "$n" -lt "$MAX_THREADS" ] && [ "$size" -eq 100 ] || break
+    page=$((page + 1))
+  done
   if [ "${#PROBLEMS[@]}" -gt 0 ]; then
     printf '%s\n' "${PROBLEMS[0]}"
     return 1

@@ -376,29 +376,57 @@ action_slug_of() {
   printf '%s\n' "$slug"
 }
 
+transport_config() {
+  TRANSPORT_KEYS=(transfer.credentialsInUrl url.https://github.com/.insteadOf url.https://github.com/.insteadOf)
+  TRANSPORT_VALUES=(die 'git@github.com:' 'ssh://git@github.com/')
+}
+
 action_check_remotes() {
-  local wt=$1 urls url authority effective
-  urls=$(git -C "$wt" config --get-all remote.origin.url 2>/dev/null) || urls=
-  effective=$(git -C "$wt" config --get-all remote.origin.pushurl 2>/dev/null) || effective=
-  urls="$urls"$'\n'"$effective"
-  effective=$(git -C "$wt" remote get-url --all origin 2>/dev/null) || die "could not inspect origin fetch URLs; remove embedded credentials from the remote URL"
-  urls="$urls"$'\n'"$effective"
-  effective=$(git -C "$wt" remote get-url --push --all origin 2>/dev/null) || die "could not inspect origin push URLs; remove embedded credentials from the remote URL"
-  urls="$urls"$'\n'"$effective"
-  while IFS= read -r url; do
-    case "$url" in
-      http://*|https://*)
-        authority=${url#*://}
-        authority=${authority%%/*}
-        case "$authority" in *@*) die "remove embedded credentials from the remote URL before using config/github-identity" ;; esac
-        ;;
-      ssh://*)
-        authority=${url#*://}
-        authority=${authority%%/*}
-        case "$authority" in *:*@*) die "remove embedded credentials from the remote URL before using config/github-identity" ;; esac
-        ;;
-    esac
-  done <<<"$urls"
+  local wt=$1 urls url authority effective setting expected resolved i
+  local -a transport_args
+  transport_config
+  transport_args=()
+  for i in "${!TRANSPORT_KEYS[@]}"; do
+    transport_args+=(-c "${TRANSPORT_KEYS[$i]}=${TRANSPORT_VALUES[$i]}")
+  done
+  for setting in remote.origin.url remote.origin.pushurl; do
+    urls=$(git -C "$wt" config --get-all "$setting" 2>/dev/null) || urls=
+    while IFS= read -r url; do
+      case "$url" in
+        http://*|https://*)
+          authority=${url#*://}
+          authority=${authority%%/*}
+          case "$authority" in *@*) die "$setting: remove embedded credentials from the remote URL before using config/github-identity" ;; esac
+          ;;
+        ssh://*)
+          authority=${url#*://}
+          authority=${authority%%/*}
+          case "$authority" in *:*@*) die "$setting: remove embedded credentials from the remote URL before using config/github-identity" ;; esac
+          ;;
+      esac
+    done <<<"$urls"
+  done
+  url=$(git -C "$wt" config --get remote.origin.url 2>/dev/null) || url=
+  expected=$(fm_gh_slug_from_url "$url") || die "remote.origin.url in repository $wt must name a github.com repository; fix it or remove config/github-identity"
+  for setting in remote.origin.url remote.origin.pushurl; do
+    if [ "$setting" = remote.origin.url ]; then
+      urls=$(git -C "$wt" config --get-all remote.origin.url 2>/dev/null) || return 1
+    else
+      urls=$(git -C "$wt" "${transport_args[@]}" remote get-url --push --all origin 2>/dev/null) || die "cannot resolve remote.origin.pushurl; remove embedded credentials from the remote URL and fix transport rewrites, or remove config/github-identity"
+    fi
+    while IFS= read -r url; do
+      if [ "$setting" = remote.origin.url ]; then
+        effective=$(git -C "$wt" "${transport_args[@]}" ls-remote --get-url "$url" 2>/dev/null) || die "cannot resolve remote.origin.url; remove embedded credentials from the remote URL and fix transport rewrites, or remove config/github-identity"
+      else
+        effective=$url
+      fi
+      case "$effective" in
+        https://github.com/*) resolved=${effective#https://github.com/}; resolved=${resolved%.git} ;;
+        *) die "$setting must resolve to plain https://github.com for the configured identity; remove embedded credentials from the remote URL and fix transport rewrites, or remove config/github-identity" ;;
+      esac
+      fm_gh_slug_ok "$resolved" && [ "$resolved" = "$expected" ] || die "$setting must resolve to the same repository as remote.origin.url; fix it or remove config/github-identity"
+    done <<<"$urls"
+  done
 }
 
 action_prepare_worker() {
@@ -435,12 +463,12 @@ action_env_file() {
   helper="!$(quote_sq "$SELF") git-credential $(quote_sq "$dir")"
   # The empty helper first clears every inherited helper for github.com, so
   # neither the owner's stored login nor gh's own helper can answer instead.
+  transport_config
   keys=(credential.https://github.com.helper credential.https://github.com.helper
-    credential.https://github.com.useHttpPath transfer.credentialsInUrl
-    url.https://github.com/.insteadOf url.https://github.com/.insteadOf)
-  values=('' "$helper" true die 'git@github.com:' 'ssh://git@github.com/')
+    credential.https://github.com.useHttpPath "${TRANSPORT_KEYS[@]}")
+  values=('' "$helper" true "${TRANSPORT_VALUES[@]}")
   line="export PATH=$(quote_sq "$dir/bin:${PATH:-}") GH_CONFIG_DIR=$(quote_sq "$dir/gh-config")"
-  line="$line GIT_TERMINAL_PROMPT='0'"
+  line="$line GIT_TERMINAL_PROMPT='0' GIT_ALLOW_PROTOCOL='https'"
   line="$line GIT_AUTHOR_NAME=$(quote_sq "$PROFILE_NAME") GIT_AUTHOR_EMAIL=$(quote_sq "$PROFILE_EMAIL")"
   line="$line GIT_COMMITTER_NAME=$(quote_sq "$PROFILE_NAME") GIT_COMMITTER_EMAIL=$(quote_sq "$PROFILE_EMAIL")"
   n=$count

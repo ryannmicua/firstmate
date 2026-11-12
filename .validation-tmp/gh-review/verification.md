@@ -34,3 +34,13 @@ The worker regression sends supplied credentials directly to the helper and exer
 Both transport operations refuse plaintext credentials before invoking the fake HTTPS transport.
 The fake transport prevents real network access if the guard regresses.
 The oracle is the configured-identity isolation requirement: embedded owner credentials cannot bypass the bot identity.
+
+## Effective transport and incremental discovery
+
+Verified 2026-11-12: the focused identity script passed thirteen cases and the focused inbox script passed nine cases using the commands above.
+Effective-origin tests cover SSH ports, HTTPS ports, a different repository, another host, file push rewrites, and fetch rewrites; each unsupported configuration refuses before launch and identifies its remote setting.
+Credential-free HTTPS and both supported SSH spellings resolve successfully through the worker's shared rewrite entries.
+Actual worker fetch and push refuse SSH transport after a remote is changed to the port-bearing SSH form; a fake SSH command prevents network access if enforcement regresses.
+The spawn fixture routes network operations to a local bare repository without changing URL resolution, including remote-tracking refs and default-branch discovery.
+The incremental-discovery regression checks persisted owner notes, HTTP acknowledgement, and call ordering before a second-page HTTP 500; read notifications are skipped.
+Discovery includes read records so acknowledgements do not shrink the list during pagination, while only unread supported notifications consume the handling allowance.
