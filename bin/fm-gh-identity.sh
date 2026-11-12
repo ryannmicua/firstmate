@@ -452,7 +452,7 @@ action_prepare_worker() {
 }
 
 action_env_file() {
-  local dir=$1 out=$2 count=${GIT_CONFIG_COUNT:-0} tmp helper n line i
+  local dir=$1 out=$2 count=${GIT_CONFIG_COUNT:-0} tmp helper n line i header_key normalized header_keys rc=0
   local -a keys values
   dir=$(CDPATH='' cd -- "$dir" 2>/dev/null && pwd -P) || die "cannot resolve worker directory $1"
   read_profile "$dir" || exit 1
@@ -465,10 +465,21 @@ action_env_file() {
   # neither the owner's stored login nor gh's own helper can answer instead.
   transport_config
   keys=(credential.https://github.com.helper credential.https://github.com.helper
-    credential.https://github.com.useHttpPath "${TRANSPORT_KEYS[@]}")
-  values=('' "$helper" true "${TRANSPORT_VALUES[@]}")
+    credential.https://github.com.useHttpPath http.https://github.com/.extraHeader "${TRANSPORT_KEYS[@]}")
+  values=('' "$helper" true '' "${TRANSPORT_VALUES[@]}")
+  header_keys=$(git config --name-only --get-regexp '^http\..*extraheader$' 2>/dev/null) || rc=$?
+  [ "$rc" -le 1 ] || die "cannot inspect Git HTTP header configuration"
+  while IFS= read -r header_key; do
+    normalized=$(printf '%s' "$header_key" | tr '[:upper:]' '[:lower:]')
+    case "$normalized" in
+      http.https://github.com/*.extraheader|http.https://github.com:443/*.extraheader|http.https://github.com.extraheader|http.https://github.com:443.extraheader)
+        keys+=("$header_key")
+        values+=('')
+        ;;
+    esac
+  done <<<"$header_keys"
   line="export PATH=$(quote_sq "$dir/bin:${PATH:-}") GH_CONFIG_DIR=$(quote_sq "$dir/gh-config")"
-  line="$line GIT_TERMINAL_PROMPT='0' GIT_ALLOW_PROTOCOL='https'"
+  line="$line GIT_TERMINAL_PROMPT='0'"
   line="$line GIT_AUTHOR_NAME=$(quote_sq "$PROFILE_NAME") GIT_AUTHOR_EMAIL=$(quote_sq "$PROFILE_EMAIL")"
   line="$line GIT_COMMITTER_NAME=$(quote_sq "$PROFILE_NAME") GIT_COMMITTER_EMAIL=$(quote_sq "$PROFILE_EMAIL")"
   n=$count

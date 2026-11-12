@@ -58,7 +58,7 @@ EOF
   jq -s '.' "$BODIES/c501" "$BODIES/c502" > "$BODIES/comments5"
   printf '[]' > "$BODIES/list-empty"
   : > "$ROUTES"
-  route GET '/notifications?all=true&participating=true&per_page=100&page=1' 200 notifications
+  route GET '/notifications?all=true&participating=true&per_page=50&page=1' 200 notifications
   route GET /repos/acme/widget/issues/5 200 issue5
   route GET /repos/acme/widget/pulls/7 200 pr7
   route GET /repos/acme/widget/issues/comments/501 200 c501
@@ -155,7 +155,7 @@ test_problems_report_once() {
   [ ! -s "$LOG/calls" ] || fail "a refused token file still called GitHub"
   chmod 0600 "$HOME_DIR/config/github-bot.token"
   : > "$ROUTES"
-  route GET '/notifications?all=true&participating=true&per_page=100&page=1' 401 empty
+  route GET '/notifications?all=true&participating=true&per_page=50&page=1' 401 empty
   out=$(run_check check)
   assert_contains "$out" "GitHub refused the bot token (HTTP 401)" "a refused token was not reported"
   pass "configuration and token problems are reported once per change"
@@ -187,7 +187,7 @@ test_complete_retrieval_and_retry() {
   jq -s '.' "$BODIES/c501" > "$BODIES/page2"
   jq '. + {html_url:"https://github.com/acme/widget/pull/5#review-2",body:"@example-bot review instruction"}' "$BODIES/c502" | jq -s '.' > "$BODIES/reviews"
   : > "$ROUTES"
-  route GET '/notifications?all=true&participating=true&per_page=100&page=1' 200 notifications
+  route GET '/notifications?all=true&participating=true&per_page=50&page=1' 200 notifications
   route GET /repos/acme/widget/pulls/5 200 subject
   route GET /repos/acme/widget/issues/comments/501 200 c501
   route GET '/repos/acme/widget/issues/5/comments?per_page=100&page=1' 200 page1
@@ -252,12 +252,12 @@ test_latest_event_authority_and_retry() {
 test_notification_discovery_skips_unsupported_pages() {
   make_world discovery
   jq '.[0:1]' "$BODIES/notifications" > "$BODIES/notifications2"
-  jq -n '[range(100) | {id:(1000+.|tostring),reason:"subscribed"}]' > "$BODIES/notifications"
+  jq -n '[range(50) | {id:(1000+.|tostring),reason:"subscribed"}]' > "$BODIES/notifications"
   jq -s '.[0][0:20] + .[1] + .[0][21:]' "$BODIES/notifications" "$BODIES/notifications2" > "$BODIES/mixed"
   mv "$BODIES/mixed" "$BODIES/notifications"
   jq '.[0].id="6"' "$BODIES/notifications2" > "$BODIES/next"
   mv "$BODIES/next" "$BODIES/notifications2"
-  route GET '/notifications?all=true&participating=true&per_page=100&page=2' 200 notifications2
+  route GET '/notifications?all=true&participating=true&per_page=50&page=2' 200 notifications2
   run_check poll >/dev/null || fail "paginated discovery failed"
   assert_grep 'PATCH /notifications/threads/1' "$LOG/calls" "unsupported entries consumed the handling allowance"
   assert_grep 'PATCH /notifications/threads/6' "$LOG/calls" "unsupported entries hid a later page"
@@ -292,9 +292,9 @@ test_submitted_review_summaries_are_complete() {
 test_later_notification_page_failure_keeps_progress() {
   local out status patch_line page_line
   make_world page-failure
-  jq '.[0:1] + [range(99) | {id:(2000+.|tostring),reason:"subscribed",unread:true}]' "$BODIES/notifications" > "$BODIES/page1"
+  jq '.[0:1] + [range(49) | {id:(2000+.|tostring),reason:"subscribed",unread:true}]' "$BODIES/notifications" > "$BODIES/page1"
   mv "$BODIES/page1" "$BODIES/notifications"
-  route GET '/notifications?all=true&participating=true&per_page=100&page=2' 500 empty
+  route GET '/notifications?all=true&participating=true&per_page=50&page=2' 500 empty
   out=$(run_check poll); status=$?
   expect_code 1 "$status" "later page failure must report a problem"
   assert_contains "$out" 'notification page 2' "later-page failure lacks page context"

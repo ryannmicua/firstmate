@@ -302,7 +302,7 @@ action_poll() {
     return 1
   fi
   while :; do
-    if ! api GET "/notifications?all=true&participating=true&per_page=100&page=$page" || [ "$FM_GH_API_STATUS" != 200 ]; then
+    if ! api GET "/notifications?all=true&participating=true&per_page=50&page=$page" || [ "$FM_GH_API_STATUS" != 200 ]; then
       case "$FM_GH_API_STATUS" in
         401|403) problem "GitHub refused the bot token (HTTP $FM_GH_API_STATUS); it needs the notifications and repo scopes" ;;
         *) problem "could not read GitHub bot notification page $page (HTTP $FM_GH_API_STATUS)" ;;
@@ -330,7 +330,7 @@ action_poll() {
       esac
       [ "$rc" -ne 0 ] || mark_read "$id" || :
     done < <(jq -c '.[] | select(.unread != false)' <<<"$threads")
-    [ "$n" -lt "$MAX_THREADS" ] && [ "$size" -eq 100 ] || break
+    [ "$n" -lt "$MAX_THREADS" ] && [ "$size" -eq 50 ] || break
     page=$((page + 1))
   done
   if [ "${#PROBLEMS[@]}" -gt 0 ]; then

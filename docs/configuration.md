@@ -1988,11 +1988,11 @@ A `kind=app` App commits as its `<app-slug>[bot]` user; give it the repository p
 
 When `config/github-identity` exists, every ship and scout spawn whose configured `origin` is on github.com checks that the identity can write to that repository: write access for a token, an installation covering the repository with Contents write permission for an App.
 Origin fetch and push URLs must resolve under the worker's Git rewrite settings to plain HTTPS on github.com for the same repository, without userinfo or a port.
-Remove embedded credentials and unsupported transport rewrites before spawning; worker transport allows HTTPS only.
+Remove embedded credentials and unsupported transport rewrites before spawning.
 If it can, the worker:
 
 - runs `gh` through a wrapper that supplies the identity's token on every call, with gh pointed at an empty config directory so the owner's stored login cannot answer;
-- fetches and pushes github.com over HTTPS through a git credential helper that supplies the same token, after clearing every inherited github.com helper, with SSH github.com URLs rewritten to HTTPS;
+- fetches and pushes github.com over HTTPS through a git credential helper that supplies the same token, after clearing every inherited github.com helper and HTTP extra header, with SSH github.com URLs rewritten to HTTPS;
 - commits with the identity as author and committer.
 
 An App token is minted through the repository's own installation and scoped to that one repository.

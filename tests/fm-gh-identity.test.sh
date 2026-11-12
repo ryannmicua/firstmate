@@ -510,7 +510,7 @@ test_worker_rejects_embedded_credentials() {
 }
 
 test_effective_remotes_require_identity_transport() {
-  local variant id proj wt fakebin launchlog out status dir envf transport op
+  local variant id proj wt fakebin launchlog out status dir envf transport clone
   for variant in ssh-port https-port other-repo other-host file-rewrite fetch-rewrite; do
     id="transport-$variant"
     make_world "$id"
@@ -554,19 +554,46 @@ test_effective_remotes_require_identity_transport() {
   envf="$TMP_ROOT/allowed-transports/env.sh"
   app prepare-worker "$dir" acme/widget >/dev/null || fail "worker prepare failed"
   app env-file "$dir" "$envf" || fail "worker environment failed"
-  git -C "$proj" config remote.origin.url ssh://git@github.com:22/acme/widget.git
-  git -C "$proj" config remote.origin.pushurl ssh://git@github.com:22/acme/widget.git
   git -C "$proj" -c user.name=Test -c user.email=test@example.invalid commit -q --allow-empty -m initial
-  printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "$TMP_ROOT/allowed-transports/ssh"
-  chmod +x "$TMP_ROOT/allowed-transports/ssh"
-  for op in fetch push; do
-    out=$(env -i GIT_SSH_COMMAND="$TMP_ROOT/allowed-transports/ssh" HOME="$TMP_ROOT/allowed-transports" PATH="$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
-      bash -c '. "$1" || exit 9; if [ "$3" = push ]; then git -C "$2" push origin HEAD:refs/heads/probe; else git -C "$2" fetch origin; fi' _ "$envf" "$proj" "$op" 2>&1)
-    status=$?
-    [ "$status" -ne 0 ] || fail "worker $op allowed SSH bypass"
-    assert_contains "$out" "transport 'ssh' not allowed" "worker $op did not enforce HTTPS transport"
+  clone="$TMP_ROOT/allowed-transports/clone"
+  out=$(env -i HOME="$TMP_ROOT/allowed-transports" PATH="$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    bash -c '. "$1" || exit 9; git clone -q "$2" "$3" && git -C "$3" rev-parse HEAD' _ "$envf" "$proj" "$clone" 2>&1)
+  status=$?
+  expect_code 0 "$status" "worker environment blocked a local clone: $out"
+  [ "$out" = "$(git -C "$proj" rev-parse HEAD)" ] || fail "local clone did not copy the repository"
+  pass "effective GitHub remotes require same-repository HTTPS while workers can clone local repositories"
+}
+
+test_worker_clears_inherited_github_headers() {
+  local dir envf repo global out url
+  make_world inherited-headers
+  dir="$HOME_DIR/state/headers.gh-identity"
+  envf="$TMP_ROOT/inherited-headers/env.sh"
+  repo="$TMP_ROOT/inherited-headers/repo"
+  global="$TMP_ROOT/inherited-headers/global"
+  git init -q "$repo"
+  printf '[http]\n\textraHeader = Authorization: Basic InventedGenericOwnerHeader\n[http "https://github.com/"]\n\textraHeader = Authorization: Basic InventedHostOwnerHeader\n[http "https://example.invalid/"]\n\textraHeader = X-Test: other-host\n' > "$global"
+  git -C "$repo" config http.https://github.com/acme/widget.git.extraHeader 'Authorization: Basic InventedRepoOwnerHeader'
+  git -C "$repo" config http.https://github.com:443/acme/widget.git/info/refs.extraHeader 'Authorization: Basic InventedPortOwnerHeader'
+  app prepare-worker "$dir" acme/widget >/dev/null || fail "worker prepare failed"
+  (cd "$repo" && GIT_CONFIG_GLOBAL="$global" GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/acme/widget.git/info/refs.extraHeader \
+    GIT_CONFIG_VALUE_0='Authorization: Basic InventedEnvironmentOwnerHeader' \
+    app env-file "$dir" "$envf") || fail "worker environment failed"
+  for url in https://github.com/other/repo https://github.com/acme/widget.git https://github.com/acme/widget.git/info/refs; do
+    out=$(env -i HOME="$TMP_ROOT/inherited-headers" PATH="$PATH" GIT_CONFIG_GLOBAL="$global" GIT_CONFIG_NOSYSTEM=1 \
+      GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/acme/widget.git/info/refs.extraHeader \
+      GIT_CONFIG_VALUE_0='Authorization: Basic InventedEnvironmentOwnerHeader' \
+      bash -c '. "$1" || exit 9; git -C "$2" config --get-urlmatch http.extraHeader "$3"' _ "$envf" "$repo" "$url" 2>&1)
+    [ -z "$out" ] || fail "GitHub headers were not cleared"
   done
-  pass "effective remotes require same-repository HTTPS; workers refuse SSH port bypasses"
+  out=$(env -i HOME="$TMP_ROOT/inherited-headers" PATH="$PATH" GIT_CONFIG_GLOBAL="$global" GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/acme/widget.git/info/refs.extraHeader \
+    GIT_CONFIG_VALUE_0='Authorization: Basic InventedEnvironmentOwnerHeader' \
+    bash -c '. "$1" || exit 9; git -C "$2" config --get-urlmatch http.extraHeader https://example.invalid/acme/widget.git' _ "$envf" "$repo")
+  [ "$out" = 'X-Test: other-host' ] || fail "non-GitHub header configuration was changed"
+  assert_no_grep 'Invented' "$envf" "inherited header values leaked into the generated environment"
+  pass "worker GitHub HTTP configuration clears generic, scoped, file, and inherited environment headers"
 }
 
 test_prepare_worker_resolves_identity_and_installation
@@ -586,3 +613,5 @@ test_spawn_refuses_embedded_remote_credentials
 test_worker_rejects_embedded_credentials
 
 test_effective_remotes_require_identity_transport
+
+test_worker_clears_inherited_github_headers

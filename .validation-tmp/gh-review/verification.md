@@ -44,3 +44,13 @@ Actual worker fetch and push refuse SSH transport after a remote is changed to t
 The spawn fixture routes network operations to a local bare repository without changing URL resolution, including remote-tracking refs and default-branch discovery.
 The incremental-discovery regression checks persisted owner notes, HTTP acknowledgement, and call ordering before a second-page HTTP 500; read notifications are skipped.
 Discovery includes read records so acknowledgements do not shrink the list during pagination, while only unread supported notifications consume the handling allowance.
+
+## Pagination and inherited HTTP authentication
+
+Verified 2026-11-12 with the two focused commands above: fourteen identity cases and nine inbox cases passed.
+Notification fixtures now use the supported 50-record discovery page size, including a full first page followed by an owner mention and a later-page failure after saved progress.
+Per-thread comment, review, and event pagination continues to use 100-record pages.
+Git's public URL-match configuration interface resolves empty extraHeader lists for github.com when generic, host, repository-path, default-port, and inherited environment headers are present.
+The environment generator reads matching header key names only and does not copy their values into its output; unrelated-host configuration remains effective.
+The worker-wide protocol allowlist has been removed, superseding the earlier worker SSH-refusal evidence in this record.
+The origin-validation checks still reject unsupported effective GitHub fetch and push URLs; a real local clone under the worker environment now succeeds and reproduces the source HEAD.
