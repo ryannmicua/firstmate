@@ -58,16 +58,19 @@ EOF
   jq -s '.' "$BODIES/c501" "$BODIES/c502" > "$BODIES/comments5"
   printf '[]' > "$BODIES/list-empty"
   : > "$ROUTES"
-  route GET '/notifications?all=true&participating=true&per_page=50&page=1' 200 notifications
+  route GET '/notifications?all=true&participating=true&per_page=50&since=*&page=1' 200 notifications
   route GET /repos/acme/widget/issues/5 200 issue5
   route GET /repos/acme/widget/pulls/7 200 pr7
   route GET /repos/acme/widget/issues/comments/501 200 c501
   route GET /repos/acme/widget/issues/comments/502 200 c502
   route GET '/repos/acme/widget/issues/7/events?per_page=100&page=1' 200 events7
   route GET '/repos/acme/widget/issues/5/comments?per_page=100&page=1' 200 comments5
+  route GET '/repos/acme/widget/issues/5/events?per_page=100&page=1' 200 list-empty
+  route GET '/repos/acme/widget/issues/7/comments?per_page=100&page=1' 200 list-empty
+  route GET '/repos/acme/widget/pulls/7/comments?per_page=100&page=1' 200 list-empty
+  route GET '/repos/acme/widget/pulls/7/reviews?per_page=100&page=1' 200 list-empty
   route POST '/repos/acme/widget/issues/comments/*/reactions' 201 empty
   route POST '/repos/acme/widget/issues/*/reactions' 201 empty
-  route PATCH '/notifications/threads/*' 205 empty
   fm_test_fake_github_api "$FAKEBIN" "$LOG" "$ROUTES"
 }
 
@@ -114,10 +117,6 @@ test_poll_turns_mentions_and_assignments_into_notes() {
   assert_no_grep 'POST /repos/acme/widget/issues/comments/502/reactions' "$LOG/calls" "the stranger's comment got a reaction"
   assert_grep 'POST /repos/acme/widget/issues/7/reactions' "$LOG/calls" "the owner's assignment got no reaction"
   assert_grep '{"content":"eyes"}' "$LOG/bodies" "the reaction is not eyes"
-  for id in 1 2 3; do
-    assert_grep "PATCH /notifications/threads/$id" "$LOG/calls" "thread $id was not marked read"
-  done
-  assert_no_grep "PATCH /notifications/threads/4" "$LOG/calls" "unrelated notification was consumed"
   assert_no_grep "$FAKE_TOKEN" "$LOG/argv" "the bot token rode on curl's command line"
   assert_grep "token $FAKE_TOKEN" "$LOG/auth" "the bot token was not sent as the Authorization header"
   for f in $(note_files); do
@@ -128,20 +127,19 @@ test_poll_turns_mentions_and_assignments_into_notes() {
   out=$(run_check check)
   [ -z "$out" ] || fail "a repeat poll should print nothing, got: $out"
   [ "$(note_files | wc -l | tr -d ' ')" = 3 ] || fail "a repeat poll created duplicate notes"
-  pass "mentions and assignments become owner-marked or not-from-owner notes, reacted, marked read, and de-duplicated"
+  pass "mentions and assignments become owner-marked or not-from-owner notes, reacted and de-duplicated"
 }
 
-test_unsaved_note_leaves_thread_unread() {
+test_unsaved_note_keeps_cursor() {
   make_world unsaved
   # A read-only inbox directory makes every note save fail.
   mkdir -p "$HOME_DIR/state/inbox"
   chmod 0500 "$HOME_DIR/state/inbox"
   run_check poll >/dev/null
   chmod 0700 "$HOME_DIR/state/inbox"
-  assert_no_grep 'PATCH /notifications/threads/1' "$LOG/calls" "a thread whose note failed was marked read"
   assert_no_grep 'reactions' "$LOG/calls" "a comment whose note failed was reacted to"
-  assert_no_grep 'PATCH /notifications/threads/4' "$LOG/calls" "an unrelated thread was marked read"
-  pass "a note that cannot be saved leaves its thread unread for the next poll"
+  [ -z "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check" 2>/dev/null)" ] || fail "unsaved notes advanced the cursor"
+  pass "a note that cannot be saved keeps the poll cursor unchanged"
 }
 
 test_problems_report_once() {
@@ -155,7 +153,7 @@ test_problems_report_once() {
   [ ! -s "$LOG/calls" ] || fail "a refused token file still called GitHub"
   chmod 0600 "$HOME_DIR/config/github-bot.token"
   : > "$ROUTES"
-  route GET '/notifications?all=true&participating=true&per_page=50&page=1' 401 empty
+  route GET '/notifications?all=true&participating=true&per_page=50&since=*&page=1' 401 empty
   out=$(run_check check)
   assert_contains "$out" "GitHub refused the bot token (HTTP 401)" "a refused token was not reported"
   pass "configuration and token problems are reported once per change"
@@ -187,38 +185,35 @@ test_complete_retrieval_and_retry() {
   jq -s '.' "$BODIES/c501" > "$BODIES/page2"
   jq '. + {html_url:"https://github.com/acme/widget/pull/5#review-2",body:"@example-bot review instruction"}' "$BODIES/c502" | jq -s '.' > "$BODIES/reviews"
   : > "$ROUTES"
-  route GET '/notifications?all=true&participating=true&per_page=50&page=1' 200 notifications
+  route GET '/notifications?all=true&participating=true&per_page=50&since=*&page=1' 200 notifications
   route GET /repos/acme/widget/pulls/5 200 subject
   route GET /repos/acme/widget/issues/comments/501 200 c501
   route GET '/repos/acme/widget/issues/5/comments?per_page=100&page=1' 200 page1
   route GET '/repos/acme/widget/issues/5/comments?per_page=100&page=2' 200 page2
   route GET '/repos/acme/widget/pulls/5/comments?per_page=100&page=1' 500 empty
   route GET '/repos/acme/widget/pulls/5/reviews?per_page=100&page=1' 200 list-empty
+  route GET '/repos/acme/widget/issues/5/events?per_page=100&page=1' 200 list-empty
   out=$(run_check poll)
   [ -n "$out" ] || fail "partial retrieval did not report a problem"
   [ -z "$(note_files)" ] || fail "partial retrieval created notes"
-  assert_no_grep PATCH "$LOG/calls" "partial retrieval acknowledged the notification"
   sed -i 's/500/200/; s@/empty$@/reviews@' "$ROUTES"
   run_check poll >/dev/null
   [ -n "$(note_with 'subject instruction')" ] || fail "subject mention lost"
   [ -n "$(note_with 'please fix the flaky tests')" ] || fail "second-page mention lost"
   [ -n "$(note_with 'review instruction')" ] || fail "review mention lost"
-  assert_grep 'PATCH /notifications/threads/1' "$LOG/calls" "complete retrieval not acknowledged"
   : > "$LOG/calls"
   printf '{}' > "$BODIES/subject"
   printf '{}' > "$BODIES/c501"
   printf '[]' > "$BODIES/page1"
   printf '[]' > "$BODIES/reviews"
   run_check poll >/dev/null
-  assert_no_grep PATCH "$LOG/calls" "unlocated mention was acknowledged"
   [ "$(note_files | wc -l | tr -d ' ')" = 3 ] || fail "unlocated mention created a placeholder"
   for reason in team_mention subscribed ci_activity; do
     jq --arg r "$reason" '.[0].reason=$r' "$BODIES/notifications" > "$BODIES/next"
     mv "$BODIES/next" "$BODIES/notifications"
     run_check poll >/dev/null
   done
-  assert_no_grep PATCH "$LOG/calls" "unsupported notification was acknowledged"
-  pass "complete paginated mention retrieval precedes notes and acknowledgement; missing mentions and unsupported reasons stay unread"
+  pass "complete paginated mention retrieval precedes notes; absent mentions create no placeholders"
 }
 
 test_latest_event_authority_and_retry() {
@@ -229,24 +224,21 @@ test_latest_event_authority_and_retry() {
     [ "$reason" = assign ] || event=review_requested
     jq --arg r "$reason" '.[2:3] | .[0].reason=$r' "$BODIES/notifications" > "$BODIES/only"
     mv "$BODIES/only" "$BODIES/notifications"
-    jq -n --arg e "$event" '[range(100) | {id:.,event:$e,actor:{login:"Owner-One"},assignee:{login:"example-bot"},requested_reviewer:{login:"example-bot"}}]' > "$BODIES/events7"
+    jq -n --arg e "$event" '[range(100) | {id:.,event:$e,actor:{login:"Owner-One"},assignee:{login:"other-bot"},requested_reviewer:{login:"other-bot"}}]' > "$BODIES/events7"
     jq -n --arg e "$event" '[{id:101,event:$e,actor:{login:"stranger"},assignee:{login:"example-bot"},requested_reviewer:{login:"example-bot"}}]' > "$BODIES/later"
     route GET '/repos/acme/widget/issues/7/events?per_page=100&page=2' 500 empty
     out=$(run_check poll)
     [ -n "$out" ] || fail "failed event page did not report"
-    assert_no_grep PATCH "$LOG/calls" "partial event history was acknowledged"
     [ -z "$(note_files)" ] || fail "partial event history produced authority"
     sed -i 's/500/200/; s@/empty$@/later@' "$ROUTES"
     run_check poll >/dev/null
     [ -n "$(note_with 'by stranger (NOT FROM THE OWNER)')" ] || fail "newest non-owner event was not used for $reason"
-    assert_grep 'PATCH /notifications/threads/3' "$LOG/calls" "saved event was not acknowledged"
     : > "$LOG/calls"
     printf '[]' > "$BODIES/events7"
     run_check poll >/dev/null
-    assert_no_grep PATCH "$LOG/calls" "unlocated event was acknowledged"
     [ "$(note_files | wc -l | tr -d ' ')" = 1 ] || fail "unlocated event created a placeholder"
   done
-  pass "assignments and review requests use the newest event across pages and retry incomplete or absent events"
+  pass "assignment and review-request events are collected across pages and incomplete retrieval is retried"
 }
 
 test_notification_discovery_skips_unsupported_pages() {
@@ -257,12 +249,12 @@ test_notification_discovery_skips_unsupported_pages() {
   mv "$BODIES/mixed" "$BODIES/notifications"
   jq '.[0].id="6"' "$BODIES/notifications2" > "$BODIES/next"
   mv "$BODIES/next" "$BODIES/notifications2"
-  route GET '/notifications?all=true&participating=true&per_page=50&page=2' 200 notifications2
+  route GET '/notifications?all=true&participating=true&per_page=50&since=*&page=2' 200 notifications2
   run_check poll >/dev/null || fail "paginated discovery failed"
-  assert_grep 'PATCH /notifications/threads/1' "$LOG/calls" "unsupported entries consumed the handling allowance"
-  assert_grep 'PATCH /notifications/threads/6' "$LOG/calls" "unsupported entries hid a later page"
-  assert_no_grep 'PATCH /notifications/threads/10' "$LOG/calls" "unsupported notification was consumed"
-  pass "unsupported unread notifications neither consume handling allowance nor hide later pages"
+  [ -n "$(note_with 'please fix the flaky tests')" ] || fail "owner mention was not captured"
+  assert_grep 'since=' "$LOG/calls" "discovery lacked its time window"
+  assert_grep 'page=2' "$LOG/calls" "unsupported entries hid the next page"
+  pass "unsupported notifications do not hide later discovery pages"
 }
 
 test_submitted_review_summaries_are_complete() {
@@ -280,39 +272,120 @@ test_submitted_review_summaries_are_complete() {
   out=$(run_check poll)
   [ -n "$out" ] || fail "failed summary page did not report"
   [ -z "$(note_files)" ] || fail "partial summaries created notes"
-  assert_no_grep PATCH "$LOG/calls" "partial summaries were acknowledged"
   sed -i 's/500/200/; s@/empty$@/summary2@' "$ROUTES"
   run_check poll >/dev/null || fail "complete summaries failed"
   [ -n "$(note_with 'owner summary instruction')" ] || fail "later-page owner summary lost"
   [ -z "$(note_with 'pending instruction')" ] || fail "unsubmitted review was captured"
-  assert_grep 'PATCH /notifications/threads/1' "$LOG/calls" "complete summaries were not acknowledged"
   pass "submitted review summaries across all pages join the complete retrieval boundary"
 }
 
 test_later_notification_page_failure_keeps_progress() {
-  local out status patch_line page_line
+  local out status reaction_line page_line before
   make_world page-failure
+  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2026-11-10T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
   jq '.[0:1] + [range(49) | {id:(2000+.|tostring),reason:"subscribed",unread:true}]' "$BODIES/notifications" > "$BODIES/page1"
   mv "$BODIES/page1" "$BODIES/notifications"
-  route GET '/notifications?all=true&participating=true&per_page=50&page=2' 500 empty
+  route GET '/notifications?all=true&participating=true&per_page=50&since=*&page=2' 500 empty
   out=$(run_check poll); status=$?
   expect_code 1 "$status" "later page failure must report a problem"
   assert_contains "$out" 'notification page 2' "later-page failure lacks page context"
   [ -n "$(note_with 'please fix the flaky tests')" ] || fail "later page failure blocked first-page owner note"
-  assert_grep 'PATCH /notifications/threads/1' "$LOG/calls" "complete first-page thread was not acknowledged"
-  patch_line=$(sed -n '/PATCH \/notifications\/threads\/1/=' "$LOG/calls" | head -n 1)
+  reaction_line=$(sed -n '/POST \/repos\/acme\/widget\/issues\/comments\/501\/reactions/=' "$LOG/calls" | head -n 1)
   page_line=$(sed -n '/GET \/notifications?.*page=2/=' "$LOG/calls" | head -n 1)
-  [ "$patch_line" -lt "$page_line" ] || fail "thread acknowledgement waited for later discovery"
-  jq '.[0].unread=false' "$BODIES/notifications" > "$BODIES/read"
+  [ "$reaction_line" -lt "$page_line" ] || fail "saving first-page items waited for later discovery"
+  [ "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")" = 2026-11-10T00:00:00Z ] || fail "failed poll advanced its cursor"
+  before=$(note_files | wc -l | tr -d ' ')
+  jq '.[0].unread=false | .[0].last_read_at="2099-01-01T00:00:00Z"' "$BODIES/notifications" > "$BODIES/read"
   mv "$BODIES/read" "$BODIES/notifications"
-  : > "$LOG/calls"
-  run_check poll >/dev/null
-  assert_no_grep PATCH "$LOG/calls" "read notifications were handled again"
-  pass "first-page instructions are saved and acknowledged before later discovery failure; read records are skipped"
+  run_check check >/dev/null
+  [ "$(note_files | wc -l | tr -d ' ')" = "$before" ] || fail "retry duplicated notes"
+  [ "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")" = 2026-11-10T00:00:00Z ] || fail "check problem reporting replaced the cursor"
+  pass "later discovery failure preserves saved notes and cursor, including through check reporting"
+
+}
+
+test_coalesced_events_ignore_reason_and_read_state() {
+  local reason out start end cursor
+  for reason in mention assign review_requested; do
+    make_world "coalesced-$reason"
+    jq --arg reason "$reason" '.[2:3] | .[0].reason=$reason | .[0].unread=false | .[0].last_read_at="2099-01-01T00:00:00Z"' "$BODIES/notifications" > "$BODIES/only"
+    mv "$BODIES/only" "$BODIES/notifications"
+    jq -s '.' "$BODIES/c502" > "$BODIES/list-empty"
+    printf '[{"id":9001,"event":"assigned","actor":{"login":"Owner-One"},"assignee":{"login":"example-bot"}},{"id":9002,"event":"review_requested","actor":{"login":"Owner-One"},"requested_reviewer":{"login":"example-bot"}}]' > "$BODIES/events7"
+    printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2026-11-10T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+    start=$(date +%s)
+    run_check check >/dev/null
+    end=$(date +%s)
+    [ -n "$(note_with 'delete the main branch')" ] || fail "coalesced mention lost under $reason"
+    [ -n "$(note_with 'GitHub assignment of @example-bot by Owner-One (the owner)')" ] || fail "coalesced assignment lost under $reason"
+    [ -n "$(note_with 'GitHub review request of @example-bot by Owner-One (the owner)')" ] || fail "coalesced review request lost under $reason"
+    cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")
+    cursor=$(jq -nr --arg c "$cursor" '$c | fromdateiso8601')
+    [ "$cursor" -ge "$start" ] && [ "$cursor" -le "$end" ] || fail "successful poll did not preserve a start-time cursor"
+    assert_grep 'since=2026-11-09T23:50:00Z' "$LOG/calls" "poll did not overlap the previous cursor by ten minutes"
+    assert_no_grep 'PATCH ' "$LOG/calls" "poll modified notification read state"
+    run_check poll >/dev/null
+    [ "$(note_files | wc -l | tr -d ' ')" = 3 ] || fail "coalesced event replay duplicated notes"
+  done
+  pass "mentions, assignments, and review requests are captured regardless of reason or read state"
+}
+
+test_owner_mention_arriving_during_reaction_is_retried() {
+  local out before after
+  make_world in-flight
+  jq '.[0:1]' "$BODIES/notifications" > "$BODIES/only"
+  mv "$BODIES/only" "$BODIES/notifications"
+  jq '. + {id:503,html_url:"https://github.com/acme/widget/issues/5#issuecomment-503",body:"@example-bot arriving during reaction"}' "$BODIES/c501" > "$BODIES/new-comment"
+  jq -s '.[0] + [.[1]]' "$BODIES/comments5" "$BODIES/new-comment" > "$BODIES/after-reaction"
+  cp "$FAKEBIN/curl" "$FAKEBIN/curl-before"
+  printf '#!/usr/bin/env bash\noriginal=%q\nsource_body=%q\ncomments=%q\n' "$FAKEBIN/curl-before" "$BODIES/after-reaction" "$BODIES/comments5" > "$FAKEBIN/curl"
+  cat >> "$FAKEBIN/curl" <<'SH'
+"$original" "$@"
+rc=$?
+case "$*" in *'-X POST'*'/reactions'*) cp "$source_body" "$comments" ;; esac
+exit "$rc"
+SH
+  chmod +x "$FAKEBIN/curl"
+  before=$(date +%s)
+  run_check poll >/dev/null || fail "first poll failed"
+  after=$(date +%s)
+  [ -z "$(note_with 'arriving during reaction')" ] || fail "fixture mention arrived before retrieval completed"
+  out=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")
+  out=$(jq -nr --arg c "$out" '$c | fromdateiso8601')
+  [ "$out" -ge "$before" ] && [ "$out" -le "$after" ] || fail "initial poll did not commit its start time"
+  out=$(sed -n 's/.*since=\([^&]*\).*/\1/p' "$LOG/calls" | head -n 1)
+  out=$(jq -nr --arg c "$out" '$c | fromdateiso8601')
+  [ "$out" -ge "$((before - 86400))" ] && [ "$out" -le "$((after - 86400))" ] || fail "initial window was not bounded to one day"
+  jq '.[0].unread=false | .[0].last_read_at="2099-01-01T00:00:00Z"' "$BODIES/notifications" > "$BODIES/read"
+  mv "$BODIES/read" "$BODIES/notifications"
+  run_check poll >/dev/null || fail "overlapping retry failed"
+  [ -n "$(note_with 'arriving during reaction')" ] || fail "in-flight owner mention was lost"
+  assert_no_grep 'PATCH ' "$LOG/calls" "poll acknowledged an in-flight snapshot"
+  pass "bounded overlapping polls capture owner mentions arriving during reactions without changing read state"
+}
+
+test_poll_budget_keeps_cursor() {
+  local out
+  make_world budget-cursor
+  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2026-11-10T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+  jq '.[0:1] + [range(49) | {id:(3000+.|tostring),reason:"subscribed"}]' "$BODIES/notifications" > "$BODIES/page1"
+  mv "$BODIES/page1" "$BODIES/notifications"
+  cp "$FAKEBIN/curl" "$FAKEBIN/curl-before"
+  printf '#!/usr/bin/env bash\noriginal=%q\n' "$FAKEBIN/curl-before" > "$FAKEBIN/curl"
+  cat >> "$FAKEBIN/curl" <<'SH'
+case "$*" in *'/notifications?'*'page=2') sleep 10 ;; esac
+exec "$original" "$@"
+SH
+  chmod +x "$FAKEBIN/curl"
+  out=$(FM_GH_BOT_CHECK_BUDGET=5 run_check check)
+  assert_contains "$out" 'poll did not finish within the 5s budget' "budget did not interrupt discovery"
+  [ -n "$(note_with 'please fix the flaky tests')" ] || fail "budget interruption lost saved progress"
+  [ "$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")" = 2026-11-10T00:00:00Z ] || fail "budget interruption advanced the cursor"
+  pass "budget interruption preserves the poll cursor and saved notes"
 }
 
 test_poll_turns_mentions_and_assignments_into_notes
-test_unsaved_note_leaves_thread_unread
+test_unsaved_note_keeps_cursor
 test_problems_report_once
 test_arm_and_disarm
 
@@ -323,3 +396,8 @@ test_notification_discovery_skips_unsupported_pages
 test_submitted_review_summaries_are_complete
 
 test_later_notification_page_failure_keeps_progress
+
+test_coalesced_events_ignore_reason_and_read_state
+test_owner_mention_arriving_during_reaction_is_retried
+
+test_poll_budget_keeps_cursor

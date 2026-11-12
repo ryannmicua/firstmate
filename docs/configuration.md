@@ -2026,13 +2026,16 @@ The token must be a classic personal access token of the bot account with the `n
 Arm the poll with `bin/fm-gh-bot-check.sh arm` and remove it with `bin/fm-gh-bot-check.sh disarm`.
 GitHub cannot reach this machine, so the watcher polls on its normal check interval (`FM_CHECK_INTERVAL`, five minutes by default).
 
-Each poll reads the bot's unread notifications.
+Each poll reads participating notifications updated within an overlapping time window, regardless of read state.
+The window begins ten minutes before the last successful poll's start time, or one day before the first poll.
+Only a complete successful poll advances that cursor in `state/.github-bot-check`; retrieval or note-save failures and budget interruptions retain it for retry.
 An @-mention in an issue or pull request body, an issue comment, a pull request review comment, or a submitted review summary, an assignment, or a review request becomes one captain inbox note with the repository, the issue or pull request title and URL, the comment URL, and the text.
 A note from the owner says it is an instruction for firstmate.
 Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
-After the note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up, and the notification is marked read.
-A notification whose mention or assigning event cannot be located, whose retrieval is incomplete, or whose note cannot be saved stays unread for the next poll, and a repeated poll never creates a second note for the same mention or assignment.
-Other notification kinds, including team mentions, stay unread.
+For every mention, assignment, or review-request thread, the poll retrieves all mentions and assignment/review-request events naming the bot, regardless of the notification's reason.
+After a note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up.
+The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried.
+Other notification reasons, including team mentions, are skipped.
 The check prints a line only when its problem changes, such as a missing or refused token; `bin/fm-gh-bot-check.sh --help` owns the details.
 
 ### Placing the tokens and App key

@@ -11,21 +11,18 @@
 #   fm-gh-bot-check.sh --help
 #
 # GitHub cannot reach this machine, so the listening side polls. Each poll
-# reads the bot account's unread participating notifications and handles:
-#   mention           every comment, review comment, or issue/PR body in the
-#                     thread that @-mentions the bot and is newer than the
-#                     thread's last read time (the latest comment always counts)
-#   assign            the newest "assigned" event naming the bot
-#   review_requested  the newest "review_requested" event naming the bot
-# Each one becomes one `fm-inbox.sh note --request-id ghbot-<hash>` carrying
-# the repository, the issue or PR URL and title, the comment URL, and the text,
-# so a repeated poll replays the same note instead of adding another. Only the
-# configured owner's mentions and assignments are marked as instructions; every
-# other author's is marked NOT FROM THE OWNER and only surfaced. After the note
-# is saved, the owner's comment (or the issue/PR for an assignment) gets an
-# "eyes" reaction so the owner sees it was picked up, and the notification
-# thread is marked read. Other notification reasons stay unread.
-# A thread whose note could not be saved stays unread for the next poll.
+# reads participating notifications updated within an overlapping time window.
+# For mention, assign, and review_requested threads it collects all mentions
+# and assignment/review-request events naming the bot, regardless of reason.
+# Each item becomes one `fm-inbox.sh note --request-id ghbot-<hash>` carrying
+# the repository, issue or PR URL and title, comment URL, and text.
+# Only the configured owner's items are instructions; other authors' items
+# are marked NOT FROM THE OWNER and only surfaced. Saved owner items get an
+# "eyes" reaction. Notification read state is never changed or used as a filter.
+# state/.github-bot-check records polled_at only after a complete successful
+# poll, using its start time. Discovery overlaps that cursor by ten minutes;
+# without a cursor the initial window is the preceding day. Failures and
+# budget interruption retain the cursor; durable inbox request ids deduplicate.
 # The inbox note's own wake reaches firstmate; this check prints nothing on a
 # clean poll and one line when its problem report changes.
 #
@@ -40,7 +37,7 @@
 #
 # FM_GH_BOT_CHECK_BUDGET (default 20, valid 5..25) bounds one poll, cut down to
 # fit inside the watcher's FM_CHECK_TIMEOUT. A poll cut off mid-way is safe:
-# saved notes replay by request id and unhandled threads stay unread.
+# saved notes replay by request id and the cursor remains unchanged.
 set -u
 export LC_ALL=C
 
@@ -57,7 +54,6 @@ INBOX_BIN="$SCRIPT_DIR/fm-inbox.sh"
 REGISTER_BIN="$SCRIPT_DIR/fm-check-register.sh"
 MAX_LINE=240
 MAX_TEXT=4000
-MAX_THREADS=20
 
 # shellcheck source=bin/fm-gh-api-lib.sh
 . "$SCRIPT_DIR/fm-gh-api-lib.sh"
@@ -157,7 +153,7 @@ mentions_bot() {
 }
 
 # save_note <request-id> <body>: 0 when the inbox note is saved and announced
-# (or already was); nonzero leaves the thread unread for the next poll.
+# (or already was); nonzero prevents the poll cursor from advancing.
 save_note() {
   local rid=$1 body=$2 rc=0
   printf '%s\n' "$body" | FM_HOME="$FM_HOME" "$INBOX_BIN" note --request-id "$rid" - >/dev/null 2>&1 || rc=$?
@@ -196,14 +192,13 @@ issue_api_url() {
   printf '%s' "$1" | sed 's#/pulls/\([0-9][0-9]*\)$#/issues/\1#'
 }
 
-# handle_mention <thread-json>: 0 when every located mention is saved.
-handle_mention() {
-  local thread=$1 repo subject_url latest_url last_read title issue_url items item ok=0
-  local author body html url rid kind count=0
+# handle_thread <thread-json>: retrieve all content before saving its items.
+handle_thread() {
+  local thread=$1 repo subject_url latest_url title issue_url items item events event actor label ok=0
+  local author body html url rid kind
   repo=$(jq -r '.repository.full_name // empty' <<<"$thread")
   subject_url=$(jq -r '.subject.url // empty' <<<"$thread")
   latest_url=$(jq -r '.subject.latest_comment_url // empty' <<<"$thread")
-  last_read=$(jq -r '.last_read_at // empty' <<<"$thread")
   title=$(jq -r '.subject.title // ""' <<<"$thread")
   if [ -z "$subject_url" ] || ! api GET "$subject_url" || [ "$FM_GH_API_STATUS" != 200 ]; then
     problem "could not retrieve GitHub mention subject for $repo"
@@ -219,23 +214,25 @@ handle_mention() {
     items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc '.[0] + [.[1]]') || return 1
   fi
   url="$(issue_api_url "$subject_url")/comments?per_page=100"
-  [ -z "$last_read" ] || url="$url&since=$last_read"
   api_list "$url" || return 1
   items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc 'add') || return 1
   if [ "$(jq -r '.subject.type' <<<"$thread")" = PullRequest ]; then
     url="$subject_url/comments?per_page=100"
-    [ -z "$last_read" ] || url="$url&since=$last_read"
     api_list "$url" || return 1
     items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc 'add') || return 1
     api_list "$subject_url/reviews?per_page=100" || return 1
     items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc '.[0] + (.[1] | map(select(.submitted_at != null)))') || return 1
   fi
   items=$(jq -c 'unique_by(.html_url) | map(select(.html_url != null and (.body // "") != ""))' <<<"$items") || return 1
+  api_list "$(issue_api_url "$subject_url")/events?per_page=100" || return 1
+  events=$(jq -c --arg b "$(lower "$BOT_LOGIN")" '
+    [.[] | select(.event == "assigned" or .event == "review_requested")
+      | select(((.assignee.login // .requested_reviewer.login // "") | ascii_downcase) == $b)]
+    | sort_by(.created_at, .id)' <<<"$FM_GH_API_BODY") || return 1
   while IFS= read -r item; do
     [ -n "$item" ] || continue
     body=$(jq -r '.body // ""' <<<"$item")
     mentions_bot "$body" || continue
-    count=$((count + 1))
     author=$(jq -r '.user.login // "unknown"' <<<"$item")
     html=$(jq -r '.html_url' <<<"$item")
     url=$(jq -r '.url // empty' <<<"$item")
@@ -252,57 +249,35 @@ handle_mention() {
       esac
     fi
   done < <(jq -c '.[]' <<<"$items" 2>/dev/null)
-  if [ "$count" -eq 0 ]; then
-    problem "could not locate a GitHub mention for $repo"
-    return 1
-  fi
+  while IFS= read -r item; do
+    event=$(jq -r '.event' <<<"$item")
+    actor=$(jq -r '.actor.login // "unknown"' <<<"$item")
+    case "$event" in assigned) label=assignment ;; review_requested) label="review request" ;; esac
+    rid="ghbot-$(sha_hex "$event:$(jq -r '.id' <<<"$item")")"
+    if ! save_note "$rid" "$(note_body "$label" "$actor" "$repo" "$title" "$issue_url" '' '')"; then
+      ok=1
+      continue
+    fi
+    if [ "$(lower "$actor")" = "$(lower "$OWNER_LOGIN")" ]; then
+      react "$(issue_api_url "$subject_url")/reactions" || :
+    fi
+  done < <(jq -c '.[]' <<<"$events")
   return "$ok"
 }
 
-# handle_assignment <thread-json> <event-name> <kind-label>
-handle_assignment() {
-  local thread=$1 event=$2 label=$3 repo subject_url title issue_url events found actor rid
-  repo=$(jq -r '.repository.full_name // empty' <<<"$thread")
-  subject_url=$(jq -r '.subject.url // empty' <<<"$thread")
-  title=$(jq -r '.subject.title // ""' <<<"$thread")
-  if [ -z "$subject_url" ] || ! api GET "$subject_url" || [ "$FM_GH_API_STATUS" != 200 ]; then
-    problem "could not retrieve GitHub assignment subject for $repo"
-    return 1
-  fi
-  issue_url=$(jq -r '.html_url // empty' <<<"$FM_GH_API_BODY")
-  api_list "$(issue_api_url "$subject_url")/events?per_page=100" || return 1
-  events=$FM_GH_API_BODY
-  found=$(jq -c --arg e "$event" --arg b "$(lower "$BOT_LOGIN")" '
-    [ .[] | select(.event == $e)
-      | select(((.assignee.login // .requested_reviewer.login // "") | ascii_downcase) == $b) ]
-    | sort_by(.created_at, .id) | last // empty' <<<"$events") || return 1
-  if [ -z "$found" ]; then
-    problem "could not locate a GitHub $event event for $repo"
-    return 1
-  fi
-  actor=$(jq -r '.actor.login // "unknown"' <<<"$found")
-  rid="ghbot-$(sha_hex "$event:$(jq -r '.id' <<<"$found")")"
-  save_note "$rid" "$(note_body "$label" "$actor" "$repo" "$title" "$issue_url" '' '')" || return 1
-  if [ "$(lower "$actor")" = "$(lower "$OWNER_LOGIN")" ]; then
-    react "$(issue_api_url "$subject_url")/reactions" || :
-  fi
-  return 0
-}
-
-mark_read() {  # <thread-id>
-  api PATCH "/notifications/threads/$1" && case "$FM_GH_API_STATUS" in 200|205|304) return 0 ;; esac
-  problem "could not mark a GitHub notification read (HTTP $FM_GH_API_STATUS)"
-  return 1
-}
-
 action_poll() {
-  local threads thread id reason rc n=0 page=1 size
+  local threads thread reason page=1 size started cursor since
   if ! load_config; then
     printf '%s\n' "${PROBLEMS[0]}"
     return 1
   fi
+  started=$(jq -nr 'now | floor | todateiso8601') || return 1
+  cursor=$(record_cursor)
+  since=$(jq -nr --arg cursor "$cursor" --arg started "$started" '
+    (if $cursor == "" then ($started | fromdateiso8601) - 86400
+     else ($cursor | fromdateiso8601) - 600 end) | todateiso8601') || return 1
   while :; do
-    if ! api GET "/notifications?all=true&participating=true&per_page=50&page=$page" || [ "$FM_GH_API_STATUS" != 200 ]; then
+    if ! api GET "/notifications?all=true&participating=true&per_page=50&since=$since&page=$page" || [ "$FM_GH_API_STATUS" != 200 ]; then
       case "$FM_GH_API_STATUS" in
         401|403) problem "GitHub refused the bot token (HTTP $FM_GH_API_STATUS); it needs the notifications and repo scopes" ;;
         *) problem "could not read GitHub bot notification page $page (HTTP $FM_GH_API_STATUS)" ;;
@@ -316,28 +291,26 @@ action_poll() {
     }
     while IFS= read -r thread; do
       [ -n "$thread" ] || continue
-      id=$(jq -r '.id // empty' <<<"$thread")
-      case "$id" in ''|*[!0-9]*) continue ;; esac
       reason=$(jq -r '.reason // empty' <<<"$thread")
       case "$reason" in mention|assign|review_requested) ;; *) continue ;; esac
-      n=$((n + 1))
-      [ "$n" -le "$MAX_THREADS" ] || break
-      rc=0
-      case "$reason" in
-        mention) handle_mention "$thread" || rc=$? ;;
-        assign) handle_assignment "$thread" assigned "assignment" || rc=$? ;;
-        review_requested) handle_assignment "$thread" review_requested "review request" || rc=$? ;;
-      esac
-      [ "$rc" -ne 0 ] || mark_read "$id" || :
-    done < <(jq -c '.[] | select(.unread != false)' <<<"$threads")
-    [ "$n" -lt "$MAX_THREADS" ] && [ "$size" -eq 50 ] || break
+      if ! handle_thread "$thread"; then
+        problem "could not completely capture a GitHub notification"
+      fi
+    done < <(jq -c '.[]' <<<"$threads")
+    [ "$size" -eq 50 ] || break
     page=$((page + 1))
   done
   if [ "${#PROBLEMS[@]}" -gt 0 ]; then
     printf '%s\n' "${PROBLEMS[0]}"
     return 1
   fi
-  return 0
+  mkdir -p "$STATE" || return 1
+  record_write "$(record_read)" "$started"
+}
+
+record_cursor() {
+  [ -f "$RECORD" ] && [ ! -L "$RECORD" ] || return 0
+  sed -n 's/^polled_at=//p' "$RECORD" 2>/dev/null
 }
 
 record_read() {
@@ -346,9 +319,9 @@ record_read() {
 }
 
 record_write() {
-  local tmp
+  local tmp cursor=${2:-$(record_cursor)}
   tmp=$(umask 077; mktemp "$RECORD.XXXXXX" 2>/dev/null) || return 1
-  if ! printf 'fm-gh-bot-check-v1\nreported=%s\n' "$1" > "$tmp" || ! mv -f -- "$tmp" "$RECORD"; then
+  if ! printf 'fm-gh-bot-check-v1\nreported=%s\npolled_at=%s\n' "$1" "$cursor" > "$tmp" || ! mv -f -- "$tmp" "$RECORD"; then
     rm -f -- "$tmp"
     return 1
   fi

@@ -54,3 +54,13 @@ Git's public URL-match configuration interface resolves empty extraHeader lists 
 The environment generator reads matching header key names only and does not copy their values into its output; unrelated-host configuration remains effective.
 The worker-wide protocol allowlist has been removed, superseding the earlier worker SSH-refusal evidence in this record.
 The origin-validation checks still reject unsupported effective GitHub fetch and push URLs; a real local clone under the worker environment now succeeds and reproduces the source HEAD.
+
+## Overlapping intake without notification acknowledgement
+
+Verified 2026-11-12 with `TMPDIR="$PWD/.validation-tmp/gh-review" bash tests/fm-gh-bot-check.test.sh`: all twelve focused inbox cases passed.
+The poll no longer marks threads read or uses notification read state or last_read_at to filter content.
+Each supported thread retrieves mentions and all assignment/review-request events before saving notes; all event types are captured under each supported notification reason.
+The state record now stores polled_at as the successful poll's start time, preserving it when the bounded check updates its problem report.
+Fixtures verify the initial one-day window, ten-minute overlap, event-id deduplication, an owner mention arriving during an eyes reaction, later discovery failure, note-save failure, and an actual five-second budget interruption.
+The callback-arrival test changes the fake comment response during the reaction HTTP call, then presents the notification as already read; the following poll captures the new owner mention without duplicating prior notes.
+The earlier acknowledgement and unread-filter evidence in this record is superseded by these overlapping-window checks.
