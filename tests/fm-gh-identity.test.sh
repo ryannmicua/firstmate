@@ -347,6 +347,7 @@ test_app_permissions_and_cache_binding() {
   app prepare-worker "$dir" acme/widget >/dev/null || fail "initial prepare failed"
   realbin="$TMP_ROOT/cache-binding/realbin"
   mkdir -p "$realbin"
+  # shellcheck disable=SC2016 # The fake script expands its own environment.
   printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$GH_TOKEN"' > "$realbin/gh"
   chmod +x "$realbin/gh"
   out=$(PATH="$FAKEBIN:$realbin:$PATH" app gh "$dir" api user)
@@ -397,6 +398,7 @@ test_paseo_agent_refuses_configured_identity() {
       paseolog="$TMP_ROOT/$id/paseo"
       : > "$launchlog"
       : > "$paseolog"
+      # shellcheck disable=SC2016 # The fake script expands its own arguments and environment.
       printf '%s\n' '#!/usr/bin/env bash' \
         'printf "%s\n" "$*" >> "$FM_TEST_IDENTITY_PASEO_LOG"' \
         'case "$*" in "daemon status") exit 0 ;; *) printf "[]\n" ;; esac' > "$fakebin/paseo"
@@ -500,9 +502,11 @@ test_worker_rejects_embedded_credentials() {
   git init -q "$repo"
   git -C "$repo" -c user.name=Test -c user.email=test@example.invalid commit -q --allow-empty -m initial
   git -C "$repo" remote add origin "https://owner:$secret@github.com/acme/widget.git"
+  # shellcheck disable=SC2016 # The fake script expands its own environment.
   printf '%s\n' '#!/usr/bin/env bash' ': > "$FM_TEST_TRANSPORT_CALLED"' 'exit 1' > "$execdir/git-remote-https"
   chmod +x "$execdir/git-remote-https"
   for op in fetch push; do
+    # shellcheck disable=SC2016 # The child shell expands its own arguments.
     out=$(env -i HOME="$TMP_ROOT/embedded-worker" PATH="$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
       GIT_EXEC_PATH="$execdir" FM_TEST_TRANSPORT_CALLED="$execdir/called" \
       bash -c '. "$1" || exit 9; if [ "$3" = push ]; then git -C "$2" push origin HEAD:refs/heads/probe; else git -C "$2" fetch origin; fi' _ "$envf" "$repo" "$op" 2>&1)
@@ -562,6 +566,7 @@ test_effective_remotes_require_identity_transport() {
   app env-file "$dir" "$envf" || fail "worker environment failed"
   git -C "$proj" -c user.name=Test -c user.email=test@example.invalid commit -q --allow-empty -m initial
   clone="$TMP_ROOT/allowed-transports/clone"
+  # shellcheck disable=SC2016 # The child shell expands its own arguments.
   out=$(env -i HOME="$TMP_ROOT/allowed-transports" PATH="$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
     bash -c '. "$1" || exit 9; git clone -q "$2" "$3" && git -C "$3" rev-parse HEAD' _ "$envf" "$proj" "$clone" 2>&1)
   status=$?
@@ -587,12 +592,14 @@ test_worker_clears_inherited_github_headers() {
     GIT_CONFIG_VALUE_0='Authorization: Basic InventedEnvironmentOwnerHeader' \
     app env-file "$dir" "$envf") || fail "worker environment failed"
   for url in https://github.com/other/repo https://github.com/acme/widget.git https://github.com/acme/widget.git/info/refs; do
+    # shellcheck disable=SC2016 # The child shell expands its own arguments.
     out=$(env -i HOME="$TMP_ROOT/inherited-headers" PATH="$PATH" GIT_CONFIG_GLOBAL="$global" GIT_CONFIG_NOSYSTEM=1 \
       GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/acme/widget.git/info/refs.extraHeader \
       GIT_CONFIG_VALUE_0='Authorization: Basic InventedEnvironmentOwnerHeader' \
       bash -c '. "$1" || exit 9; git -C "$2" config --get-urlmatch http.extraHeader "$3"' _ "$envf" "$repo" "$url" 2>&1)
     [ -z "$out" ] || fail "GitHub headers were not cleared"
   done
+  # shellcheck disable=SC2016 # The child shell expands its own arguments.
   out=$(env -i HOME="$TMP_ROOT/inherited-headers" PATH="$PATH" GIT_CONFIG_GLOBAL="$global" GIT_CONFIG_NOSYSTEM=1 \
     GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/acme/widget.git/info/refs.extraHeader \
     GIT_CONFIG_VALUE_0='Authorization: Basic InventedEnvironmentOwnerHeader' \
