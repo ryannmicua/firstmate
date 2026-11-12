@@ -410,7 +410,7 @@ test_pr_based_dod_draft_check_uses_gh_axi() {
 # and the public-repository summary rule; local-only has no PR, and a gerrit
 # review has no PR body to shape.
 # The generated instruction contract follows the fixed-layout requirement and
-# the owner's decision to define the footer as a stack-place and author line.
+# the accepted PR-practice shape, which includes a one-line footer.
 test_pr_based_dod_carries_the_pr_shape() {
   local mode out heading
   for mode in direct-PR no-mistakes; do
