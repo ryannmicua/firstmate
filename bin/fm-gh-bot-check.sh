@@ -361,10 +361,11 @@ record_set() {  # <key> <value>
 }
 
 poll_running() {
-  local pid
-  pid=$(readlink "$POLL_LOCK" 2>/dev/null) || return 1
-  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-  kill -0 "$pid" 2>/dev/null
+  POLL_PID=$(readlink "$POLL_LOCK" 2>/dev/null) || return 1
+  case "$POLL_PID" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "$POLL_PID" 2>/dev/null &&
+    [ "$(ps -o pgid= -p "$POLL_PID" 2>/dev/null | tr -d ' ')" = "$POLL_PID" ] &&
+    ps -o args= -p "$POLL_PID" 2>/dev/null | grep -q 'fm-gh-bot-check\.sh poll-job'
 }
 
 action_poll_job() {
@@ -450,10 +451,8 @@ action_arm() {
 
 stop_poll_job() {
   local pid i=0
-  pid=$(readlink "$POLL_LOCK" 2>/dev/null) || return 0
-  case "$pid" in ''|*[!0-9]*) rm -f -- "$POLL_LOCK"; return 0 ;; esac
-  if kill -0 "$pid" 2>/dev/null && [ "$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')" = "$pid" ] &&
-    ps -o args= -p "$pid" 2>/dev/null | grep -q 'fm-gh-bot-check\.sh poll-job'; then
+  if poll_running; then
+    pid=$POLL_PID
     kill -TERM -- "-$pid" 2>/dev/null || true
     while kill -0 -- "-$pid" 2>/dev/null; do
       [ "$i" -ne 200 ] || kill -KILL -- "-$pid" 2>/dev/null || true

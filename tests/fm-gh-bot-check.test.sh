@@ -622,6 +622,21 @@ test_deleted_latest_comment_does_not_block_poll() {
   pass "a notification whose latest comment was deleted does not block intake"
 }
 
+test_lock_naming_unrelated_process_is_stale() {
+  local other
+  make_world stale-lock
+  sleep 60 &
+  other=$!
+  ln -s "$other" "$HOME_DIR/state/.github-bot-poll.lock"
+  run_check check >/dev/null
+  [ -n "$(note_with 'please fix the flaky tests')" ] || fail "a lock naming an unrelated live process suppressed polling"
+  run_check disarm >/dev/null || fail "disarm failed with a stale lock"
+  kill -0 "$other" 2>/dev/null || fail "disarm signalled a process it does not own"
+  kill "$other" 2>/dev/null
+  wait "$other" 2>/dev/null
+  pass "a poll lock whose pid belongs to an unrelated live process is replaced and never signalled"
+}
+
 test_disarm_stops_running_poll_job() {
   local start pid
   make_world disarm-job
@@ -673,4 +688,5 @@ test_owner_edits_need_owner_provenance
 test_note_text_comes_from_verified_snapshot
 test_commit_mentions_do_not_block_later_threads
 test_deleted_latest_comment_does_not_block_poll
+test_lock_naming_unrelated_process_is_stale
 test_disarm_stops_running_poll_job
