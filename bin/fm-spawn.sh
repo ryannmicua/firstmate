@@ -2128,6 +2128,11 @@ if [ "$RELAUNCH" -eq 0 ]; then
   fi
   fm_backend_validate_spawn "$BACKEND" || exit 1
   fm_backend_source "$BACKEND" || exit 1
+  if [ "$BACKEND" = paseo-agent ] && [ "$KIND" != secondmate ] &&
+    { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+    echo "error: backend=paseo-agent does not apply config/github-identity; use a backend that applies the identity or remove config/github-identity" >&2
+    exit 1
+  fi
   if [ "$BACKEND" = orca ] && [ "$KIND" = secondmate ]; then
     echo "error: backend=orca does not support --secondmate spawns yet" >&2
     exit 1
@@ -2223,6 +2228,11 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_TARGET=$FM_BACKEND_VALIDATED_TARGET
   fm_backend_validate_spawn "$BACKEND" || exit 1
   fm_backend_source "$BACKEND" || exit 1
+  if [ "$BACKEND" = paseo-agent ] && [ "$KIND" != secondmate ] &&
+    { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+    echo "error: backend=paseo-agent does not apply config/github-identity; use a backend that applies the identity or remove config/github-identity" >&2
+    exit 1
+  fi
   # A relaunch must PROVE the previous agent is gone before it launches another
   # one into the same endpoint, and only tmux, herdr, and rex have a recovery-grade
   # classifier that can (bin/fm-control-lib.sh owns that capability table);

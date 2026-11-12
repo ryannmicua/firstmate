@@ -2003,6 +2003,7 @@ If the identity is configured but cannot be used, such as an unreadable secret, 
 
 Current limits:
 
+- `paseo-agent` does not yet support the configured GitHub identity; ship and scout spawns and relaunches refuse with that backend until identity support is added.
 - The no-mistakes pipeline pushes and opens its pull request from its own shared daemon, which uses this machine's own sign-in, so under that delivery path the commits carry the configured identity but the push and the pull request are the owner's; the direct pull request path uses the identity end to end.
 - Only `gh` found on `PATH` and git over github.com use the identity; a tool that calls the GitHub API with credentials of its own is outside this wiring.
 - A worker never falls back to the owner's sign-in inside a launched session: a repository the identity cannot reach fails rather than switching accounts.
@@ -2024,7 +2025,7 @@ Arm the poll with `bin/fm-gh-bot-check.sh arm` and remove it with `bin/fm-gh-bot
 GitHub cannot reach this machine, so the watcher polls on its normal check interval (`FM_CHECK_INTERVAL`, five minutes by default).
 
 Each poll reads the bot's unread notifications.
-An @-mention in an issue or pull request body, an issue comment, or a pull request review comment, an assignment, or a review request becomes one captain inbox note with the repository, the issue or pull request title and URL, the comment URL, and the text.
+An @-mention in an issue or pull request body, an issue comment, a pull request review comment, or a submitted review summary, an assignment, or a review request becomes one captain inbox note with the repository, the issue or pull request title and URL, the comment URL, and the text.
 A note from the owner says it is an instruction for firstmate.
 Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
 After the note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up, and the notification is marked read.

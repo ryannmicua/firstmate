@@ -58,7 +58,7 @@ EOF
   jq -s '.' "$BODIES/c501" "$BODIES/c502" > "$BODIES/comments5"
   printf '[]' > "$BODIES/list-empty"
   : > "$ROUTES"
-  route GET '/notifications?participating=true&per_page=50' 200 notifications
+  route GET '/notifications?participating=true&per_page=100&page=1' 200 notifications
   route GET /repos/acme/widget/issues/5 200 issue5
   route GET /repos/acme/widget/pulls/7 200 pr7
   route GET /repos/acme/widget/issues/comments/501 200 c501
@@ -155,7 +155,7 @@ test_problems_report_once() {
   [ ! -s "$LOG/calls" ] || fail "a refused token file still called GitHub"
   chmod 0600 "$HOME_DIR/config/github-bot.token"
   : > "$ROUTES"
-  route GET '/notifications?participating=true&per_page=50' 401 empty
+  route GET '/notifications?participating=true&per_page=100&page=1' 401 empty
   out=$(run_check check)
   assert_contains "$out" "GitHub refused the bot token (HTTP 401)" "a refused token was not reported"
   pass "configuration and token problems are reported once per change"
@@ -187,12 +187,13 @@ test_complete_retrieval_and_retry() {
   jq -s '.' "$BODIES/c501" > "$BODIES/page2"
   jq '. + {html_url:"https://github.com/acme/widget/pull/5#review-2",body:"@example-bot review instruction"}' "$BODIES/c502" | jq -s '.' > "$BODIES/reviews"
   : > "$ROUTES"
-  route GET '/notifications?participating=true&per_page=50' 200 notifications
+  route GET '/notifications?participating=true&per_page=100&page=1' 200 notifications
   route GET /repos/acme/widget/pulls/5 200 subject
   route GET /repos/acme/widget/issues/comments/501 200 c501
   route GET '/repos/acme/widget/issues/5/comments?per_page=100&page=1' 200 page1
   route GET '/repos/acme/widget/issues/5/comments?per_page=100&page=2' 200 page2
   route GET '/repos/acme/widget/pulls/5/comments?per_page=100&page=1' 500 empty
+  route GET '/repos/acme/widget/pulls/5/reviews?per_page=100&page=1' 200 list-empty
   out=$(run_check poll)
   [ -n "$out" ] || fail "partial retrieval did not report a problem"
   [ -z "$(note_files)" ] || fail "partial retrieval created notes"
@@ -248,6 +249,46 @@ test_latest_event_authority_and_retry() {
   pass "assignments and review requests use the newest event across pages and retry incomplete or absent events"
 }
 
+test_notification_discovery_skips_unsupported_pages() {
+  make_world discovery
+  jq '.[0:1]' "$BODIES/notifications" > "$BODIES/notifications2"
+  jq -n '[range(100) | {id:(1000+.|tostring),reason:"subscribed"}]' > "$BODIES/notifications"
+  jq -s '.[0][0:20] + .[1] + .[0][21:]' "$BODIES/notifications" "$BODIES/notifications2" > "$BODIES/mixed"
+  mv "$BODIES/mixed" "$BODIES/notifications"
+  jq '.[0].id="6"' "$BODIES/notifications2" > "$BODIES/next"
+  mv "$BODIES/next" "$BODIES/notifications2"
+  route GET '/notifications?participating=true&per_page=100&page=2' 200 notifications2
+  run_check poll >/dev/null || fail "paginated discovery failed"
+  assert_grep 'PATCH /notifications/threads/1' "$LOG/calls" "unsupported entries consumed the handling allowance"
+  assert_grep 'PATCH /notifications/threads/6' "$LOG/calls" "unsupported entries hid a later page"
+  assert_no_grep 'PATCH /notifications/threads/10' "$LOG/calls" "unsupported notification was consumed"
+  pass "unsupported unread notifications neither consume handling allowance nor hide later pages"
+}
+
+test_submitted_review_summaries_are_complete() {
+  local out
+  make_world summaries
+  jq '.[0:1] | .[0].subject.type="PullRequest" | .[0].subject.url |= sub("issues/5$";"pulls/5")' "$BODIES/notifications" > "$BODIES/only"
+  mv "$BODIES/only" "$BODIES/notifications"
+  printf '{"body":"ordinary later comment"}' > "$BODIES/c501"
+  jq -n '[range(100) | {body:("ordinary review " * 150),submitted_at:"2026-11-01T00:00:00Z"}]' > "$BODIES/summary1"
+  jq -n '[{body:"@example-bot owner summary instruction",submitted_at:"2026-11-01T01:00:00Z",user:{login:"Owner-One"},html_url:"https://github.com/acme/widget/pull/5#pullrequestreview-101"},{body:"@example-bot pending instruction",submitted_at:null,user:{login:"Owner-One"},html_url:"https://github.com/acme/widget/pull/5#pullrequestreview-102"}]' > "$BODIES/summary2"
+  route GET /repos/acme/widget/pulls/5 200 issue5
+  route GET '/repos/acme/widget/pulls/5/comments?per_page=100&page=1' 200 list-empty
+  route GET '/repos/acme/widget/pulls/5/reviews?per_page=100&page=1' 200 summary1
+  route GET '/repos/acme/widget/pulls/5/reviews?per_page=100&page=2' 500 empty
+  out=$(run_check poll)
+  [ -n "$out" ] || fail "failed summary page did not report"
+  [ -z "$(note_files)" ] || fail "partial summaries created notes"
+  assert_no_grep PATCH "$LOG/calls" "partial summaries were acknowledged"
+  sed -i 's/500/200/; s@/empty$@/summary2@' "$ROUTES"
+  run_check poll >/dev/null || fail "complete summaries failed"
+  [ -n "$(note_with 'owner summary instruction')" ] || fail "later-page owner summary lost"
+  [ -z "$(note_with 'pending instruction')" ] || fail "unsubmitted review was captured"
+  assert_grep 'PATCH /notifications/threads/1' "$LOG/calls" "complete summaries were not acknowledged"
+  pass "submitted review summaries across all pages join the complete retrieval boundary"
+}
+
 test_poll_turns_mentions_and_assignments_into_notes
 test_unsaved_note_leaves_thread_unread
 test_problems_report_once
@@ -255,3 +296,6 @@ test_arm_and_disarm
 
 test_complete_retrieval_and_retry
 test_latest_event_authority_and_retry
+
+test_notification_discovery_skips_unsupported_pages
+test_submitted_review_summaries_are_complete

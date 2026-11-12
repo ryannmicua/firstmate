@@ -136,7 +136,7 @@ api_list() {
       problem "invalid GitHub list for $target"
       return 1
     }
-    all=$(jq -cn --argjson a "$all" --argjson b "$batch" '$a + $b') || return 1
+    all=$(printf '%s\n%s\n' "$all" "$batch" | jq -sc 'add') || return 1
     [ "$size" -eq 100 ] || break
     page=$((page + 1))
   done
@@ -216,17 +216,19 @@ handle_mention() {
       problem "could not retrieve latest GitHub comment for $repo"
       return 1
     fi
-    items=$(jq -c --argjson a "$items" '$a + [.]' <<<"$FM_GH_API_BODY") || return 1
+    items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc '.[0] + [.[1]]') || return 1
   fi
   url="$(issue_api_url "$subject_url")/comments?per_page=100"
   [ -z "$last_read" ] || url="$url&since=$last_read"
   api_list "$url" || return 1
-  items=$(jq -c --argjson a "$items" '$a + .' <<<"$FM_GH_API_BODY") || return 1
+  items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc 'add') || return 1
   if [ "$(jq -r '.subject.type' <<<"$thread")" = PullRequest ]; then
     url="$subject_url/comments?per_page=100"
     [ -z "$last_read" ] || url="$url&since=$last_read"
     api_list "$url" || return 1
-    items=$(jq -c --argjson a "$items" '$a + .' <<<"$FM_GH_API_BODY") || return 1
+    items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc 'add') || return 1
+    api_list "$subject_url/reviews?per_page=100" || return 1
+    items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc '.[0] + (.[1] | map(select(.submitted_at != null)))') || return 1
   fi
   items=$(jq -c 'unique_by(.html_url) | map(select(.html_url != null and (.body // "") != ""))' <<<"$items") || return 1
   while IFS= read -r item; do
@@ -299,29 +301,27 @@ action_poll() {
     printf '%s\n' "${PROBLEMS[0]}"
     return 1
   fi
-  if ! api GET "/notifications?participating=true&per_page=50"; then
-    printf 'could not reach GitHub to read the bot notifications\n'
+  if ! api_list "/notifications?participating=true&per_page=100"; then
+    case "$FM_GH_API_STATUS" in
+      401|403) printf 'GitHub refused the bot token (HTTP %s); it needs the notifications and repo scopes\n' "$FM_GH_API_STATUS" ;;
+      *) printf 'could not read all GitHub bot notifications (HTTP %s)\n' "$FM_GH_API_STATUS" ;;
+    esac
     return 1
   fi
-  case "$FM_GH_API_STATUS" in
-    200) ;;
-    401|403) printf 'GitHub refused the bot token (HTTP %s); it needs the notifications and repo scopes\n' "$FM_GH_API_STATUS"; return 1 ;;
-    *) printf 'GitHub answered HTTP %s reading the bot notifications\n' "$FM_GH_API_STATUS"; return 1 ;;
-  esac
   threads=$FM_GH_API_BODY
   while IFS= read -r thread; do
     [ -n "$thread" ] || continue
-    n=$((n + 1))
-    [ "$n" -le "$MAX_THREADS" ] || break
     id=$(jq -r '.id // empty' <<<"$thread")
     case "$id" in ''|*[!0-9]*) continue ;; esac
     reason=$(jq -r '.reason // empty' <<<"$thread")
+    case "$reason" in mention|assign|review_requested) ;; *) continue ;; esac
+    n=$((n + 1))
+    [ "$n" -le "$MAX_THREADS" ] || break
     rc=0
     case "$reason" in
       mention) handle_mention "$thread" || rc=$? ;;
       assign) handle_assignment "$thread" assigned "assignment" || rc=$? ;;
       review_requested) handle_assignment "$thread" review_requested "review request" || rc=$? ;;
-      *) continue ;;
     esac
     [ "$rc" -ne 0 ] || mark_read "$id" || :
   done < <(jq -c 'if type == "array" then .[] else empty end' <<<"$threads" 2>/dev/null)

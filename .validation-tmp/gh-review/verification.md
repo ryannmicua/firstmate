@@ -17,3 +17,11 @@ The independent oracles are configured-identity isolation, owner-only instructio
 Regressions rejected include an old App token after configuration changes, read-only worker preparation, lost subject or later-page mentions, stale owner attribution, and acknowledgement after partial retrieval.
 No real GitHub account, credential, or network mutation is needed.
 The test harness removes its fixtures on exit; this evidence directory may remain private.
+
+## Additional review coverage
+
+Verified 2026-11-12 with the same two commands above: ten identity cases and eight inbox cases passed.
+The new spawn case checks fresh ship/scout spawns and relaunches with configured identities against a fake paseo-agent runtime, asserting refusal, no runtime calls, and unchanged branches and worktrees.
+Notification discovery checks a supported record after twenty unsupported records and another on the next page, while unsupported records remain unread.
+Submitted review summaries check a later-page owner mention after an ordinary later comment, failure before any notes or acknowledgement on an unavailable page, exclusion of pending reviews, and aggregation of a response larger than a typical single-argument limit.
+The initial discovery fixture omitted jq's null-input option; the corrected fixture and the entire inbox script passed on rerun.

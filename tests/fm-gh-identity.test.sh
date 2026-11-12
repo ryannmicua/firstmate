@@ -359,6 +359,55 @@ test_app_permissions_and_cache_binding() {
   pass "App caches follow App identity, read-only installations refuse, and missing credentials fail closed"
 }
 
+test_paseo_agent_refuses_configured_identity() {
+  local kind action id proj wt fakebin out status before after launchlog paseolog
+  for kind in ship scout; do
+    for action in fresh relaunch; do
+      id="identity-$kind-$action"
+      make_world "$id"
+      proj="$TMP_ROOT/$id/project"
+      wt="$TMP_ROOT/$id/worktree"
+      fakebin=$(fm_test_make_spawn_fakebin "$TMP_ROOT/$id/fake" codex)
+      launchlog="$TMP_ROOT/$id/launch"
+      paseolog="$TMP_ROOT/$id/paseo"
+      : > "$launchlog"
+      : > "$paseolog"
+      printf '%s\n' '#!/usr/bin/env bash' \
+        'printf "%s\n" "$*" >> "$FM_TEST_IDENTITY_PASEO_LOG"' \
+        'case "$*" in "daemon status") exit 0 ;; *) printf "[]\n" ;; esac' > "$fakebin/paseo"
+      chmod +x "$fakebin/paseo"
+      fm_test_spawn_home "$HOME_DIR" codex
+      fm_git_worktree "$proj" "$wt" "branch-$id"
+      fm_test_spawn_brief "$HOME_DIR" "$id"
+      before=$(git -C "$proj" worktree list --porcelain; git -C "$proj" show-ref)
+      if [ "$action" = relaunch ]; then
+        printf '%s\n' "kind=$kind" 'backend=paseo-agent' "endpoint_task_id=$id" \
+          'window=agent-existing' 'paseo_agent_id=agent-existing' 'paseo_workspace_id=wks-existing' \
+          "worktree=$wt" "project=$proj" > "$HOME_DIR/state/$id.meta"
+        out=$(FM_TEST_IDENTITY_PASEO_LOG="$paseolog" FM_FAKE_LAUNCH_LOG="$launchlog" \
+          fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" --relaunch "$id")
+      elif [ "$kind" = scout ]; then
+        out=$(FM_TEST_IDENTITY_PASEO_LOG="$paseolog" FM_FAKE_LAUNCH_LOG="$launchlog" \
+          fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" --scout "$id" "$proj" --backend paseo-agent --harness codex)
+      else
+        out=$(FM_TEST_IDENTITY_PASEO_LOG="$paseolog" FM_FAKE_LAUNCH_LOG="$launchlog" \
+          fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" "$id" "$proj" \
+          --mode direct-PR --yolo off --backend paseo-agent --harness codex)
+      fi
+      status=$?
+      expect_code 1 "$status" "configured identity must refuse $kind $action: $out"
+      assert_contains "$out" 'backend=paseo-agent does not apply config/github-identity' "refusal lacks the backend and identity cause"
+      assert_contains "$out" 'use a backend that applies the identity or remove config/github-identity' "refusal lacks remediation"
+      [ ! -s "$launchlog" ] || fail "refused spawn launched a shell worker"
+      [ ! -s "$paseolog" ] || fail "refused spawn reached the Paseo runtime"
+      after=$(git -C "$proj" worktree list --porcelain; git -C "$proj" show-ref)
+      [ "$before" = "$after" ] || fail "refused spawn mutated worktrees or branches"
+      [ -z "$(git -C "$wt" status --porcelain --untracked-files=all)" ] || fail "refused spawn changed the worktree"
+    done
+  done
+  pass "paseo-agent refuses configured identities before runtime or worktree changes for ships, scouts, and relaunches"
+}
+
 test_prepare_worker_resolves_identity_and_installation
 test_prepare_worker_reports_not_installed
 test_refuses_shared_private_key
@@ -369,3 +418,5 @@ test_spawn_wires_app_identity
 test_token_identity_prepares_and_answers
 
 test_app_permissions_and_cache_binding
+
+test_paseo_agent_refuses_configured_identity
