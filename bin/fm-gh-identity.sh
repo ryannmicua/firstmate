@@ -171,7 +171,7 @@ slug_key() {
 # Returns 3 when GitHub reports the App is not installed for it.
 installation_id() {
   local slug=$1 fresh=${2:-0} file jwt id
-  file="$CACHE/installations/$(slug_key "$slug")"
+  file="$CACHE/installations/$APP_ID-$(slug_key "$slug")"
   if [ "$fresh" = 0 ] && [ -f "$file" ]; then
     id=$(cat "$file" 2>/dev/null)
     case "$id" in ''|*[!0-9]*) ;; *) printf '%s' "$id"; return 0 ;; esac
@@ -186,6 +186,10 @@ installation_id() {
     404) rm -f -- "$file"; return 3 ;;
     *) printf 'fm-gh-identity: GitHub answered %s looking up the App installation for %s\n' "$FM_GH_API_STATUS" "$slug" >&2; return 1 ;;
   esac
+  if ! jq -e '.permissions.contents == "write"' <<<"$FM_GH_API_BODY" >/dev/null 2>&1; then
+    rm -f -- "$file"
+    return 3
+  fi
   id=$(printf '%s' "$FM_GH_API_BODY" | jq -r '.id // empty' 2>/dev/null)
   case "$id" in ''|*[!0-9]*) printf 'fm-gh-identity: unexpected installation lookup answer for %s\n' "$slug" >&2; return 1 ;; esac
   write_private "$file" "$id" || true
@@ -197,7 +201,7 @@ installation_id() {
 mint_token() {
   local slug=$1 id file now expires token jwt repo body attempt rc
   now=$(date +%s)
-  file="$CACHE/tokens/$(slug_key "$slug")"
+  file="$CACHE/tokens/$APP_ID-$(slug_key "$slug")"
   if fm_gh_private_file_ok "$file"; then
     expires=$(sed -n 's/^expires=//p' "$file" 2>/dev/null)
     token=$(sed -n 's/^token=//p' "$file" 2>/dev/null)
@@ -436,17 +440,18 @@ action_git_credential() {
     esac
   done
   [ "$protocol" = https ] && [ "$host" = github.com ] || exit 0
-  read_profile "$dir" || exit 0
+  read_profile "$dir" || { printf 'quit=1\n'; exit 1; }
   slug=${path%.git}
   slug=${slug%/}
   [ -n "$slug" ] || slug=$PROFILE_REPO
-  fm_gh_slug_ok "$slug" || exit 0
-  load_config || exit 0
-  cache_dir || { printf "fm-gh-identity: cannot use the private cache under %s\n" "$CACHE" >&2; exit 0; }
+  fm_gh_slug_ok "$slug" || { printf 'quit=1\n'; die "invalid GitHub repository: $slug"; }
+  load_config || { printf 'quit=1\n'; exit 1; }
+  cache_dir || { printf "fm-gh-identity: cannot use the private cache under %s\n" "$CACHE" >&2; printf 'quit=1\n'; exit 1; }
   token=$(worker_token "$slug") || rc=$?
   if [ "$rc" -ne 0 ]; then
     [ "$rc" -ne 3 ] || printf 'fm-gh-identity: the GitHub App is not installed for %s, so this worker cannot authenticate to it\n' "$slug" >&2
-    exit 0
+    printf 'quit=1\n'
+    die "cannot authenticate to $slug with config/github-identity; grant access/install the App, or remove config/github-identity"
   fi
   printf 'username=x-access-token\npassword=%s\n' "$token"
 }
@@ -476,7 +481,7 @@ action_gh() {
   cache_dir || die "cannot create the private cache under $CACHE"
   token=$(worker_token "$PROFILE_REPO") || rc=$?
   if [ "$rc" -eq 3 ]; then
-    die "the GitHub App is not installed for $PROFILE_REPO"
+    die "the GitHub App cannot write to $PROFILE_REPO; grant access/install the App, or remove config/github-identity"
   fi
   [ "$rc" -eq 0 ] || exit 1
   GH_TOKEN=$token GH_CONFIG_DIR="$dir/gh-config" exec "$gh_bin" "$@"

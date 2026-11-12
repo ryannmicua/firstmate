@@ -35,7 +35,7 @@ make_world() {
   printf '%s\n' '# test App' 'kind=app' 'app_id=4242' > "$HOME_DIR/config/github-identity"
   printf '%s' '{"id":4242,"slug":"fm-test-app"}' > "$BODIES/app"
   printf '%s' '{"id":99001,"login":"fm-test-app[bot]"}' > "$BODIES/bot"
-  printf '%s' '{"id":777}' > "$BODIES/install"
+  printf '%s' '{"id":777,"permissions":{"contents":"write"}}' > "$BODIES/install"
   printf '{"token":"%s","expires_at":"2099-01-01T00:00:00Z"}' "$FAKE_TOKEN" > "$BODIES/token"
   : > "$ROUTES"
   route GET /app 200 app
@@ -169,8 +169,8 @@ test_token_refresh_and_gh_wrapper() {
   assert_contains "$out" token-ok "the gh wrapper did not hand the real gh the App token"
   assert_contains "$out" "config=$dir/gh-config args=pr list" "the gh wrapper changed gh's arguments or config"
   # A cached token with under ten minutes left is replaced, not reused.
-  printf 'expires=%s\ntoken=%s\n' "$(( $(date +%s) + 300 ))" ghs_NearlyExpired > "$HOME_DIR/state/gh-identity/tokens/acme__widget"
-  chmod 0600 "$HOME_DIR/state/gh-identity/tokens/acme__widget"
+  printf 'expires=%s\ntoken=%s\n' "$(( $(date +%s) + 300 ))" ghs_NearlyExpired > "$HOME_DIR/state/gh-identity/tokens/4242-acme__widget"
+  chmod 0600 "$HOME_DIR/state/gh-identity/tokens/4242-acme__widget"
   out=$(env FM_GH_API_URL=https://api.test.invalid PATH="$dir/bin:$FAKEBIN:$realbin:$PATH" gh api user 2>&1)
   assert_contains "$out" token-ok "a nearly expired token was not refreshed"
   calls=$(count_calls "POST /app/installations/777/access_tokens")
@@ -222,8 +222,6 @@ test_spawn_wires_app_identity() {
   assert_contains "$result" "fm-test-app[bot] <99001+fm-test-app[bot]@users.noreply.github.com>" "the worker does not commit as the App"
   assert_contains "$result" "$id.gh-identity/bin/gh" "the worker's gh is not the identity wrapper"
 
-  # Without the App installed for the repository, the worker keeps the
-  # machine's own sign-in and the spawn says so.
   id=gh-identity-z2
   fm_test_spawn_brief "$home" "$id"
   printf '%s\t%s\t%s\t%s\n' GET /repos/acme/widget/installation 404 "$BODIES/app" > "$ROUTES.new"
@@ -235,10 +233,24 @@ test_spawn_wires_app_identity() {
     fm_test_run_spawn "$home" "$wt-2" "$fakebin" "$id" "$proj" \
     --harness 'echo worker-ran' --mode direct-PR --yolo off)
   status=$?
-  expect_code 0 "$status" "spawn for an uninstalled repository should still succeed: $out"
+  expect_code 1 "$status" "spawn for an uninstalled repository must refuse: $out"
   assert_contains "$out" "cannot write to acme/widget" "spawn did not report the missing installation"
-  assert_not_contains "$(cat "$launchlog")" "fm-gh-identity.sh" "an uninstalled repository still got the identity env"
-  pass "spawn runs a configured worker as the App and falls back with a notice when it is not installed"
+  [ ! -s "$launchlog" ] || fail "a refused identity still launched a worker"
+  assert_contains "$out" "grant access/install the App" "refusal lacks remediation"
+  id=gh-identity-z3
+  fm_test_spawn_brief "$home" "$id"
+  git -C "$proj" remote set-url origin "$proj.origin.git"
+  git -C "$proj" worktree add --quiet -b wt-gh-identity-3 "$wt-3"
+  : > "$launchlog"
+  out=$(FM_FAKE_LAUNCH_LOG="$launchlog" FM_GH_API_URL=https://api.test.invalid \
+    fm_test_run_spawn "$home" "$wt-3" "$fakebin" "$id" "$proj" \
+    --harness 'echo worker-ran' --mode direct-PR --yolo off)
+  status=$?
+  expect_code 1 "$status" "spawn without a github.com origin must refuse: $out"
+  assert_contains "$out" "$wt-3" "origin refusal lacks the repository"
+  assert_contains "$out" "remove config/github-identity" "origin refusal lacks remediation"
+  [ ! -s "$launchlog" ] || fail "a non-GitHub origin launched a worker"
+  pass "spawn runs a configured worker as the App and refuses when it is not installed"
 }
 
 # make_token_world <name>: a home whose identity is a user token.
@@ -288,7 +300,7 @@ test_token_identity_prepares_and_answers() {
   assert_contains "$out" "$USER_TOKEN" "git credential did not answer with the user token"
   assert_contains "$out" token-ok "the gh wrapper did not hand gh the user token"
   assert_no_grep "$USER_TOKEN" "$LOG/argv" "the user token rode on curl's command line"
-  assert_absent "$HOME_DIR/state/gh-identity/tokens/acme__widget" "a user token was copied into the cache"
+  assert_absent "$HOME_DIR/state/gh-identity/tokens/4242-acme__widget" "a user token was copied into the cache"
   # Replacing the token file rotates the token without another spawn.
   (umask 077 && printf '%s\n' ghp_RotatedToken0002 > "$HOME_DIR/config/github-identity.token")
   # shellcheck disable=SC2016 # The child shell expands its own arguments.
@@ -303,6 +315,50 @@ test_token_identity_prepares_and_answers() {
   pass "a user-token identity prepares writable repositories only, answers git and gh with its token, and rotates with the file"
 }
 
+test_app_permissions_and_cache_binding() {
+  local dir out status realbin
+  make_world cache-binding
+  dir="$HOME_DIR/state/cache.gh-identity"
+  app prepare-worker "$dir" acme/widget >/dev/null || fail "initial prepare failed"
+  realbin="$TMP_ROOT/cache-binding/realbin"
+  mkdir -p "$realbin"
+  printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$GH_TOKEN"' > "$realbin/gh"
+  chmod +x "$realbin/gh"
+  out=$(PATH="$FAKEBIN:$realbin:$PATH" app gh "$dir" api user)
+  [ "$out" = "$FAKE_TOKEN" ] || fail "initial token missing"
+  printf '%s\n' 'kind=app' 'app_id=4343' > "$HOME_DIR/config/github-identity"
+  printf '%s' '{"id":888,"permissions":{"contents":"write"}}' > "$BODIES/install"
+  printf '%s' '{"token":"ghs_SecondAppToken","expires_at":"2099-01-01T00:00:00Z"}' > "$BODIES/token"
+  route POST /app/installations/888/access_tokens 201 token
+  out=$(PATH="$FAKEBIN:$realbin:$PATH" app gh "$dir" api user)
+  [ "$out" = ghs_SecondAppToken ] || fail "switching Apps reused the previous token: $out"
+  assert_grep 'POST /app/installations/888/access_tokens' "$LOG/calls" "switching Apps reused the previous installation"
+  out=$(printf 'protocol=https\nhost=github.com\npath=acme/widget.git\n\n' | app git-credential "$dir" get)
+  assert_contains "$out" 'password=ghs_SecondAppToken' "git reused the previous App token"
+  printf '%s' '{"id":888,"permissions":{"contents":"read"}}' > "$BODIES/install"
+  out=$(app status acme/widget 2>&1); status=$?
+  expect_code 3 "$status" "a read-only App must not report can-write: $out"
+  out=$(app prepare-worker "$HOME_DIR/state/readonly" acme/widget 2>&1); status=$?
+  expect_code 3 "$status" "a read-only App must not prepare a worker: $out"
+  assert_absent "$HOME_DIR/state/readonly" "read-only App created a profile"
+  rm -f "$HOME_DIR/config/github-identity"
+  out=$(printf 'protocol=https\nhost=github.com\npath=acme/widget.git\n\n' | app git-credential "$dir" get 2>&1); status=$?
+  expect_code 1 "$status" "missing identity must fail the helper: $out"
+  assert_contains "$out" 'quit=1' "helper failure did not stop credential fallback"
+  out=$(printf 'protocol=https\nhost=github.com\npath=acme/widget.git\n\n' |
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 \
+    git -c credential.helper= \
+      -c "credential.helper=!$APP git-credential $dir" \
+      -c 'credential.helper=!f() { echo username=owner; echo password=owner-secret; }; f' \
+      credential fill 2>&1); status=$?
+  [ "$status" -ne 0 ] || fail "git fell through to the owner helper"
+  assert_not_contains "$out" 'password=owner-secret' "owner helper answered after identity failure"
+  out=$(PATH="$FAKEBIN:$realbin:$PATH" app gh "$dir" api user 2>&1); status=$?
+  expect_code 1 "$status" "missing identity must refuse gh: $out"
+  assert_not_contains "$out" ghs_SecondAppToken "failed wrapper still invoked gh"
+  pass "App caches follow App identity, read-only installations refuse, and missing credentials fail closed"
+}
+
 test_prepare_worker_resolves_identity_and_installation
 test_prepare_worker_reports_not_installed
 test_refuses_shared_private_key
@@ -311,3 +367,5 @@ test_token_refresh_and_gh_wrapper
 test_slug_of
 test_spawn_wires_app_identity
 test_token_identity_prepares_and_answers
+
+test_app_permissions_and_cache_binding

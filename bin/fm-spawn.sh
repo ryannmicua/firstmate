@@ -6322,20 +6322,23 @@ fi
 # App or a user account such as a machine user. A ship or scout whose origin
 # is on github.com and writable by that identity runs its gh and git pushes
 # with the identity's token and commits as it; the launch sources the
-# pane-time env file below. An origin off github.com or a repository the
-# identity cannot write to keeps this machine's own sign-in, with a notice.
+# pane-time env file below.
 # bin/fm-gh-identity.sh owns tokens, caching, and the env contract.
 GH_IDENTITY_DIR=
 if { [ "$KIND" = ship ] || [ "$KIND" = scout ]; } && { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
   gh_identity_slug=$("$FM_ROOT/bin/fm-gh-identity.sh" slug-of "$WT" 2>/dev/null) || gh_identity_slug=
   if [ -z "$gh_identity_slug" ]; then
-    echo "note: $ID's origin is not on github.com, so it keeps this machine's own GitHub sign-in rather than the configured GitHub identity" >&2
+    echo "error: repository $WT has no github.com origin; configure a github.com origin or remove config/github-identity" >&2
+    exit 1
   else
     gh_identity_status=0
     FM_HOME="$FM_HOME" "$FM_ROOT/bin/fm-gh-identity.sh" prepare-worker "$STATE_REAL/$ID.gh-identity" "$gh_identity_slug" >/dev/null || gh_identity_status=$?
     case "$gh_identity_status" in
       0) GH_IDENTITY_DIR="$STATE_REAL/$ID.gh-identity" ;;
-      3) echo "note: the configured GitHub identity cannot write to $gh_identity_slug, so $ID keeps this machine's own GitHub sign-in" >&2 ;;
+      3)
+        echo "error: the configured GitHub identity cannot write to $gh_identity_slug; grant access/install the App, or remove config/github-identity" >&2
+        exit 1
+        ;;
       *)
         echo "error: config/github-identity is present but the GitHub identity for $gh_identity_slug could not be prepared (see above); fix it or remove config/github-identity" >&2
         exit 1

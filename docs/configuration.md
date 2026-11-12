@@ -1986,7 +1986,7 @@ The token or key file must be a regular file owned by this user with mode 600; a
 A `kind=token` account commits as its own login with its `users.noreply.github.com` address, and its token is read on every use, so replacing the file rotates it.
 A `kind=app` App commits as its `<app-slug>[bot]` user; give it the repository permissions its workers need, typically Contents, Pull requests, and Issues (read and write) plus Metadata (read).
 
-When `config/github-identity` exists, every ship and scout spawn whose configured `origin` is on github.com checks that the identity can write to that repository: write access for a token, an installation covering the repository for an App.
+When `config/github-identity` exists, every ship and scout spawn whose configured `origin` is on github.com checks that the identity can write to that repository: write access for a token, an installation covering the repository with Contents write permission for an App.
 If it can, the worker:
 
 - runs `gh` through a wrapper that supplies the identity's token on every call, with gh pointed at an empty config directory so the owner's stored login cannot answer;
@@ -1997,7 +1997,7 @@ An App token is minted through the repository's own installation and scoped to t
 App tokens are cached owner-only under `state/gh-identity/` and minted again when less than ten minutes remain, so a long-running worker keeps working past the one-hour token lifetime.
 Because each repository is matched to its own installation, one App installed on several accounts, such as an organization and the owner's personal account, needs no installation ID in the configuration.
 
-If the identity cannot write to the repository, or `origin` is not on github.com, the spawn prints a notice and that worker keeps this machine's own sign-in.
+If the identity cannot write to the repository, or `origin` is not on github.com, the spawn refuses and names the repository; grant access or install the App, configure a github.com origin, or remove `config/github-identity`.
 If the identity is configured but cannot be used, such as an unreadable secret, a wrong App ID, a refused token, or GitHub out of reach, the spawn refuses and names the problem; fix it or remove `config/github-identity`.
 `bin/fm-gh-identity.sh status <owner/repo>` reports whether the identity can write to a repository and which commit identity workers would use, and never prints a token.
 
@@ -2024,12 +2024,12 @@ Arm the poll with `bin/fm-gh-bot-check.sh arm` and remove it with `bin/fm-gh-bot
 GitHub cannot reach this machine, so the watcher polls on its normal check interval (`FM_CHECK_INTERVAL`, five minutes by default).
 
 Each poll reads the bot's unread notifications.
-An @-mention in an issue or pull request body, an issue comment, or the latest review comment, an assignment, or a review request becomes one captain inbox note with the repository, the issue or pull request title and URL, the comment URL, and the text.
+An @-mention in an issue or pull request body, an issue comment, or a pull request review comment, an assignment, or a review request becomes one captain inbox note with the repository, the issue or pull request title and URL, the comment URL, and the text.
 A note from the owner says it is an instruction for firstmate.
 Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
 After the note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up, and the notification is marked read.
-A notification whose note cannot be saved stays unread for the next poll, and a repeated poll never creates a second note for the same mention or assignment.
-Other notification kinds are marked read without a note.
+A notification whose mention or assigning event cannot be located, whose retrieval is incomplete, or whose note cannot be saved stays unread for the next poll, and a repeated poll never creates a second note for the same mention or assignment.
+Other notification kinds, including team mentions, stay unread.
 The check prints a line only when its problem changes, such as a missing or refused token; `bin/fm-gh-bot-check.sh --help` owns the details.
 
 ### Placing the tokens and App key

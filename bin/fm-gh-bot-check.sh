@@ -24,8 +24,8 @@
 # other author's is marked NOT FROM THE OWNER and only surfaced. After the note
 # is saved, the owner's comment (or the issue/PR for an assignment) gets an
 # "eyes" reaction so the owner sees it was picked up, and the notification
-# thread is marked read. Other notification reasons are marked read without a
-# note. A thread whose note could not be saved stays unread for the next poll.
+# thread is marked read. Other notification reasons stay unread.
+# A thread whose note could not be saved stays unread for the next poll.
 # The inbox note's own wake reaches firstmate; this check prints nothing on a
 # clean poll and one line when its problem report changes.
 #
@@ -124,6 +124,25 @@ api() {  # <method> <path-or-url> [json-body]
   fm_gh_api "$1" "$2" token "$TOKEN" "${3:-}"
 }
 
+api_list() {
+  local target=$1 page=1 batch size all='[]'
+  while :; do
+    if ! api GET "$target&page=$page" || [ "$FM_GH_API_STATUS" != 200 ]; then
+      problem "could not retrieve all GitHub items for $target"
+      return 1
+    fi
+    batch=$FM_GH_API_BODY
+    size=$(jq -er 'if type == "array" then length else error("expected array") end' <<<"$batch") || {
+      problem "invalid GitHub list for $target"
+      return 1
+    }
+    all=$(jq -cn --argjson a "$all" --argjson b "$batch" '$a + $b') || return 1
+    [ "$size" -eq 100 ] || break
+    page=$((page + 1))
+  done
+  FM_GH_API_BODY=$all
+}
+
 sha_hex() {
   if command -v sha256sum >/dev/null 2>&1; then
     printf '%s' "$1" | sha256sum | cut -c1-32
@@ -186,21 +205,30 @@ handle_mention() {
   latest_url=$(jq -r '.subject.latest_comment_url // empty' <<<"$thread")
   last_read=$(jq -r '.last_read_at // empty' <<<"$thread")
   title=$(jq -r '.subject.title // ""' <<<"$thread")
-  issue_url=
-  if [ -n "$subject_url" ] && api GET "$subject_url" && [ "$FM_GH_API_STATUS" = 200 ]; then
-    issue_url=$(jq -r '.html_url // empty' <<<"$FM_GH_API_BODY")
+  if [ -z "$subject_url" ] || ! api GET "$subject_url" || [ "$FM_GH_API_STATUS" != 200 ]; then
+    problem "could not retrieve GitHub mention subject for $repo"
+    return 1
   fi
-  items='[]'
-  if [ -n "$latest_url" ] && api GET "$latest_url" && [ "$FM_GH_API_STATUS" = 200 ]; then
-    items=$(jq -c --argjson a "$items" '$a + [.]' <<<"$FM_GH_API_BODY" 2>/dev/null) || items='[]'
-  fi
-  if [ -n "$last_read" ] && [ -n "$subject_url" ]; then
-    if api GET "$(issue_api_url "$subject_url")/comments?per_page=100&since=$last_read" \
-      && [ "$FM_GH_API_STATUS" = 200 ]; then
-      items=$(jq -c --argjson a "$items" '$a + (if type == "array" then . else [] end)' <<<"$FM_GH_API_BODY" 2>/dev/null) || :
+  issue_url=$(jq -r '.html_url // empty' <<<"$FM_GH_API_BODY")
+  items=$(jq -ce '[.]' <<<"$FM_GH_API_BODY") || return 1
+  if [ -n "$latest_url" ]; then
+    if ! api GET "$latest_url" || [ "$FM_GH_API_STATUS" != 200 ]; then
+      problem "could not retrieve latest GitHub comment for $repo"
+      return 1
     fi
+    items=$(jq -c --argjson a "$items" '$a + [.]' <<<"$FM_GH_API_BODY") || return 1
   fi
-  items=$(jq -c 'unique_by(.html_url) | map(select(.html_url != null and (.body // "") != ""))' <<<"$items" 2>/dev/null) || items='[]'
+  url="$(issue_api_url "$subject_url")/comments?per_page=100"
+  [ -z "$last_read" ] || url="$url&since=$last_read"
+  api_list "$url" || return 1
+  items=$(jq -c --argjson a "$items" '$a + .' <<<"$FM_GH_API_BODY") || return 1
+  if [ "$(jq -r '.subject.type' <<<"$thread")" = PullRequest ]; then
+    url="$subject_url/comments?per_page=100"
+    [ -z "$last_read" ] || url="$url&since=$last_read"
+    api_list "$url" || return 1
+    items=$(jq -c --argjson a "$items" '$a + .' <<<"$FM_GH_API_BODY") || return 1
+  fi
+  items=$(jq -c 'unique_by(.html_url) | map(select(.html_url != null and (.body // "") != ""))' <<<"$items") || return 1
   while IFS= read -r item; do
     [ -n "$item" ] || continue
     body=$(jq -r '.body // ""' <<<"$item")
@@ -223,10 +251,8 @@ handle_mention() {
     fi
   done < <(jq -c '.[]' <<<"$items" 2>/dev/null)
   if [ "$count" -eq 0 ]; then
-    # GitHub said the bot was mentioned, but the mention is gone or out of
-    # reach (edited, deleted, or beyond one page). Surface it unverified.
-    rid="ghbot-$(sha_hex "unlocated:$(jq -r '.id' <<<"$thread"):$(jq -r '.updated_at' <<<"$thread")")"
-    save_note "$rid" "$(note_body "mention (the mentioning text could not be located)" "an unverified account" "$repo" "$title" "${issue_url:-$subject_url}" '' '')" || ok=1
+    problem "could not locate a GitHub mention for $repo"
+    return 1
   fi
   return "$ok"
 }
@@ -237,23 +263,20 @@ handle_assignment() {
   repo=$(jq -r '.repository.full_name // empty' <<<"$thread")
   subject_url=$(jq -r '.subject.url // empty' <<<"$thread")
   title=$(jq -r '.subject.title // ""' <<<"$thread")
-  issue_url=$subject_url
-  if [ -n "$subject_url" ] && api GET "$subject_url" && [ "$FM_GH_API_STATUS" = 200 ]; then
-    issue_url=$(jq -r '.html_url // empty' <<<"$FM_GH_API_BODY")
+  if [ -z "$subject_url" ] || ! api GET "$subject_url" || [ "$FM_GH_API_STATUS" != 200 ]; then
+    problem "could not retrieve GitHub assignment subject for $repo"
+    return 1
   fi
-  found=
-  if [ -n "$subject_url" ] && api GET "$(issue_api_url "$subject_url")/events?per_page=100" \
-    && [ "$FM_GH_API_STATUS" = 200 ]; then
-    events=$FM_GH_API_BODY
-    found=$(jq -c --arg e "$event" --arg b "$(lower "$BOT_LOGIN")" '
-      [ .[]? | select(.event == $e)
-        | select(((.assignee.login // .requested_reviewer.login // "") | ascii_downcase) == $b) ]
-      | last // empty' <<<"$events" 2>/dev/null)
-  fi
+  issue_url=$(jq -r '.html_url // empty' <<<"$FM_GH_API_BODY")
+  api_list "$(issue_api_url "$subject_url")/events?per_page=100" || return 1
+  events=$FM_GH_API_BODY
+  found=$(jq -c --arg e "$event" --arg b "$(lower "$BOT_LOGIN")" '
+    [ .[] | select(.event == $e)
+      | select(((.assignee.login // .requested_reviewer.login // "") | ascii_downcase) == $b) ]
+    | sort_by(.created_at, .id) | last // empty' <<<"$events") || return 1
   if [ -z "$found" ]; then
-    rid="ghbot-$(sha_hex "unlocated-$event:$(jq -r '.id' <<<"$thread"):$(jq -r '.updated_at' <<<"$thread")")"
-    save_note "$rid" "$(note_body "$label" "an unverified account" "$repo" "$title" "$issue_url" '' '')"
-    return
+    problem "could not locate a GitHub $event event for $repo"
+    return 1
   fi
   actor=$(jq -r '.actor.login // "unknown"' <<<"$found")
   rid="ghbot-$(sha_hex "$event:$(jq -r '.id' <<<"$found")")"
@@ -295,10 +318,10 @@ action_poll() {
     reason=$(jq -r '.reason // empty' <<<"$thread")
     rc=0
     case "$reason" in
-      mention|team_mention) handle_mention "$thread" || rc=$? ;;
+      mention) handle_mention "$thread" || rc=$? ;;
       assign) handle_assignment "$thread" assigned "assignment" || rc=$? ;;
       review_requested) handle_assignment "$thread" review_requested "review request" || rc=$? ;;
-      *) ;;
+      *) continue ;;
     esac
     [ "$rc" -ne 0 ] || mark_read "$id" || :
   done < <(jq -c 'if type == "array" then .[] else empty end' <<<"$threads" 2>/dev/null)
