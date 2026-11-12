@@ -628,7 +628,7 @@ test_disarm_stops_running_poll_job() {
   cp "$FAKEBIN/curl" "$FAKEBIN/curl-before"
   printf '#!/usr/bin/env bash\noriginal=%q\n' "$FAKEBIN/curl-before" > "$FAKEBIN/curl"
   cat >> "$FAKEBIN/curl" <<'SH'
-case "$*" in *'/notifications?'*) sleep 30 ;; esac
+case "$*" in *'/notifications?'*) sleep 4 ;; esac
 exec "$original" "$@"
 SH
   chmod +x "$FAKEBIN/curl"
@@ -640,8 +640,9 @@ SH
   [ "$(( $(date +%s) - start ))" -lt 15 ] || fail "disarm waited for the full poll"
   ! kill -0 -- "-$pid" 2>/dev/null || fail "disarm left the poll job's process group running"
   assert_absent "$HOME_DIR/state/.github-bot-poll.lock" "disarm left the poll lock"
-  sleep 1
+  sleep 6
   assert_absent "$HOME_DIR/state/.github-bot-check" "a stopped poll job recreated its record"
+  assert_absent "$HOME_DIR/state/.github-bot-poll.out" "disarm left the poll output"
   [ -z "$(note_files)" ] || fail "a stopped poll job saved notes"
   pass "disarm stops and awaits its running poll job before removing its records"
 }

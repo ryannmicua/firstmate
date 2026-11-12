@@ -59,6 +59,7 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 RECORD="$STATE/.github-bot-check"
 POLL_LOCK="$STATE/.github-bot-poll.lock"
+POLL_OUT="$STATE/.github-bot-poll.out"
 CHECK_ID=github-bot
 CHECK_SHIM="$STATE/$CHECK_ID.check.sh"
 CHECK_TRUST="$STATE/$CHECK_ID.check-trust"
@@ -69,8 +70,6 @@ MAX_TEXT=4000
 
 # shellcheck source=bin/fm-gh-api-lib.sh
 . "$SCRIPT_DIR/fm-gh-api-lib.sh"
-# shellcheck source=bin/fm-timeout-lib.sh
-. "$SCRIPT_DIR/fm-timeout-lib.sh"
 # shellcheck source=bin/fm-line-cap-lib.sh
 . "$SCRIPT_DIR/fm-line-cap-lib.sh"
 
@@ -388,7 +387,7 @@ poll_running() {
 }
 
 action_poll_job() {
-  local timeout out rc=0 line=
+  local timeout child deadline timed_out=0 rc=0 line=
   timeout=${FM_GH_BOT_POLL_TIMEOUT:-600}
   case "$timeout" in ''|*[!0-9]*|0) timeout=600 ;; esac
   mkdir -p "$STATE" || return 1
@@ -398,13 +397,25 @@ action_poll_job() {
     ln -s "$$" "$POLL_LOCK" 2>/dev/null || return 0
   fi
   trap '[ "$(readlink "$POLL_LOCK" 2>/dev/null)" != "$$" ] || rm -f -- "$POLL_LOCK"' EXIT
-  out=$(fm_exec_timed "$timeout" 5 "$SELF" poll 2>/dev/null) || rc=$?
-  if fm_timed_out "$rc"; then
+  "$SELF" poll >"$POLL_OUT" 2>/dev/null &
+  child=$!
+  deadline=$((SECONDS + timeout))
+  while kill -0 "$child" 2>/dev/null; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      kill -TERM "$child" 2>/dev/null || true
+      timed_out=1
+      break
+    fi
+    sleep 0.2
+  done
+  wait "$child" || rc=$?
+  if [ "$timed_out" -eq 1 ]; then
     line="poll did not finish within ${timeout}s; it retries on the next check"
   elif [ "$rc" -ne 0 ]; then
-    line=$(printf '%s\n' "$out" | sed -n '1p')
+    line=$(sed -n '1p' "$POLL_OUT" 2>/dev/null)
     [ -n "$line" ] || line="poll failed (exit $rc)"
   fi
+  rm -f -- "$POLL_OUT"
   record_set problem "$line"
 }
 
@@ -470,7 +481,7 @@ stop_poll_job() {
       i=$((i + 1))
     done
   fi
-  rm -f -- "$POLL_LOCK"
+  rm -f -- "$POLL_LOCK" "$POLL_OUT"
 }
 
 action_disarm() {
