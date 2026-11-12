@@ -12,7 +12,8 @@
 #     characters, so it cannot break out of that config line.
 #   - Response bodies land in a private (0600) temporary file that is removed
 #     before the call returns; callers receive the body in FM_GH_API_BODY.
-#   - Nothing here logs, echoes, or writes a credential anywhere.
+#   - Request credentials are never logged or echoed. Token-bearing API
+#     responses use the same private temporary response file described above.
 #
 # Private files: a key or token file must be a regular file (not a symlink)
 # owned by this user with no group or other permission bits, or it refuses.

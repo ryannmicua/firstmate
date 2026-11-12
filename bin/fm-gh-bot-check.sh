@@ -13,19 +13,9 @@
 #                                shim, its trust binding, and record
 #   fm-gh-bot-check.sh --help
 #
-# GitHub cannot reach this machine, so the listening side polls. Each poll
-# reads participating notifications updated within an overlapping time window.
-# For mention, assign, and review_requested threads on issues and pull
-# requests it collects all mentions and assignment/review-request events naming
-# the bot, regardless of reason; commit threads contribute commit-comment
-# mentions only, and other subject types are skipped. Owner authority and the
-# saved text both come from one GraphQL snapshot of author, editor, and body.
-# Each item becomes one `fm-inbox.sh note --request-id ghbot-<hash>` carrying
-# the repository, issue or PR URL and title, comment URL, and text.
-# Only the configured owner's items are instructions; other authors' items,
-# and owner items edited after creation unless GitHub reports the owner as the
-# last editor, are marked NOT FROM THE OWNER and only surfaced. Saved owner
-# items get an "eyes" reaction. Notification read state is never changed or used as a filter.
+# Operator setup, captured item types, owner-authority rules, and reactions
+# are owned by docs/configuration.md "GitHub identities".
+#
 # state/.github-bot-check stores the since cursor. Threads run oldest first
 # across pages and checkpoint after completion, never past ten minutes before
 # the poll start; equal timestamps checkpoint together. A completed poll also
@@ -33,15 +23,6 @@
 # Interruption preserves completed progress; inbox request ids deduplicate.
 # The inbox note's own wake reaches firstmate; this check prints nothing on a
 # clean poll and one line when the recorded problem report changes.
-#
-# Configuration (local, gitignored; docs/configuration.md "GitHub identities"
-# owns the operator setup):
-#   config/github-bot         key=value lines: login=<bot login> and
-#                             owner=<owner login> (required), token_file=<abs
-#                             path> (optional; default config/github-bot.token)
-#   config/github-bot.token   the bot's classic token (notifications and repo
-#                             scopes); owner-only file required
-# The token never leaves curl's stdin config (bin/fm-gh-api-lib.sh).
 #
 # The check never runs the poll inside the watcher's check timeout. It starts
 # poll-job detached in its own process group; state/.github-bot-poll.lock keeps

@@ -1982,7 +1982,8 @@ Neither file is inherited into secondmate homes, so a secondmate's workers use a
 | `app_id` | With `kind=app`: the App's numeric ID (required for that kind). |
 | `private_key` | With `kind=app`: absolute path of the App's private key; default `config/github-identity.pem`. |
 
-The token or key file must be a regular file owned by this user with mode 600; a secret anyone else can read, a symlink, an unknown key, or an unknown kind refuses.
+The token or key file must be a readable regular file owned by this user with no group or other permissions; use mode 600.
+A symlink, an unknown key, or an unknown kind refuses.
 A `kind=token` account commits as its own login with its `users.noreply.github.com` address, and its token is read on every use, so replacing the file rotates it.
 A `kind=app` App commits as its `<app-slug>[bot]` user; give it the repository permissions its workers need, typically Contents, Pull requests, and Issues (read and write) plus Metadata (read).
 
@@ -2033,14 +2034,15 @@ The job has its own timeout (`FM_GH_BOT_POLL_TIMEOUT`, 600 seconds by default) a
 
 Each poll reads participating notifications updated within an overlapping time window, regardless of read state.
 The first window covers the preceding day; later polls resume the since cursor in `state/.github-bot-check`.
-After discovery, threads run oldest-updated first across pages, checkpointing the cursor as each timestamp completes, but never past ten minutes before the poll start; threads with the same update time checkpoint together.
-A completed poll also advances the cursor to ten minutes before its start when that moves it forward.
-Retrieval or note-save failure stops processing before that timestamp is checkpointed, while a timeout preserves already completed progress.
-An @-mention in an issue or pull request body, an issue comment, a pull request review comment, a submitted review summary, or a commit comment, an assignment, or a review request becomes one captain inbox note with the repository, the issue or pull request title and URL, the comment URL, and the text.
+The [`fm-gh-bot-check.sh` header](../bin/fm-gh-bot-check.sh) owns cursor checkpointing and retry mechanics.
+An @-mention in an issue or pull request body, an issue comment, a pull request review comment, a submitted review summary, or a commit comment becomes one captain inbox note with the repository, the subject title and URL, the mention URL, and up to 4,000 characters of text.
+An assignment or review request becomes one note identifying the actor, repository, and issue or pull request title and URL.
 A note from the owner says it is an instruction for firstmate.
-An owner item counts as the owner's only when one GraphQL response reports the owner as its author and either no edit or the owner as its last editor; the note carries the body from that same response, and any other owner item is headed NOT FROM THE OWNER.
+Owner-authored mention text counts as the owner's only when one GraphQL response reports the owner as its author and either no edit or the owner as its last editor; the note carries the body from that same response, and unverifiable owner text is headed NOT FROM THE OWNER.
+Assignments and review requests count as the owner's when their event actor is the configured owner.
 Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
-For every mention, assignment, or review-request thread, the poll retrieves all mentions and assignment/review-request events naming the bot, regardless of the notification's reason.
+For issue and pull request threads whose notification reason is mention, assignment, or review request, the poll retrieves all mentions and assignment/review-request events naming the bot, regardless of which of those reasons triggered the notification.
+Commit threads contribute commit-comment mentions only; other subject types are skipped.
 After a new note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up.
 Replayed notes and items already carrying the bot's own eyes reaction skip another reaction POST.
 The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried.

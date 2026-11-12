@@ -30,28 +30,8 @@
 #       worker's repository. The <dir>/bin/gh wrapper calls this.
 #   fm-gh-identity.sh --help
 #
-# Configuration (local, gitignored; docs/configuration.md "GitHub identities"
-# owns the operator setup). config/github-identity holds key=value lines
-# (# comments allowed) and selects one kind:
-#   kind=token   a user account, such as a machine user, writes. Keys:
-#                token_file=<absolute path> (optional; default
-#                config/github-identity.token), an owner-only file holding
-#                that account's token. It is read on every use, so replacing
-#                the file rotates the token. Commits use the account's login
-#                and its users.noreply.github.com address.
-#   kind=app     a GitHub App writes. Keys: app_id=<number> (required) and
-#                private_key=<absolute path> (optional; default
-#                config/github-identity.pem), an owner-only key file. Tokens
-#                are minted per repository through that repository's own
-#                installation (GET /repos/<owner>/<repo>/installation), so one
-#                App installed on several accounts or organizations needs no
-#                installation id; each token is scoped to that one repository,
-#                cached owner-only under state/gh-identity/tokens, and minted
-#                again when less than ten minutes remain, so a long-running
-#                worker keeps working past the one-hour token lifetime.
-#                Commits use the App's <slug>[bot] user.
-# With no config/github-identity the home has no worker identity and nothing
-# here runs.
+# Operator setup, configuration schema, identity and token lifecycle, and
+# supported limits are owned by docs/configuration.md "GitHub identities".
 #
 # Exit codes: 0 success, 1 failure, 2 usage, 3 cannot write there or not GitHub.
 set -u
