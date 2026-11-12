@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Machine-user identity: real Git push/fetch and gh API use synthetic bot while owner remains usable",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "GitHub App identity: signed JWT, repository-scoped cache refresh and denied-installation refusal on localhost",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Identity guards reject insecure secrets, denied access, embedded remote credentials and owner netrc",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Local notification API produces owner instructions and non-actionable outsider/edited notes across issue, PR and commit sources",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Paged discovery retries HTTP failure without cursor loss; repeated notifications do not duplicate notes or reactions",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Arm/check/disarm replaces unrelated stale PID and stops delayed owned poll without touching unrelated process",
+    "result": "pass",
+    "live": true
+  }
+]

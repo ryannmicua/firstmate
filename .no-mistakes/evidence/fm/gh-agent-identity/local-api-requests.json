@@ -2,61 +2,97 @@
   {
     "method": "GET",
     "path": "/user",
-    "credential": "token ghp_SyntheticBot1",
-    "body": {}
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "GET",
     "path": "/repos/acme/widget",
-    "credential": "token ghp_SyntheticBot1",
-    "body": {}
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "GET",
     "path": "/user",
-    "credential": "token ghp_SyntheticBot1",
-    "body": {}
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "GET",
     "path": "/repos/acme/widget",
-    "credential": "token ghp_SyntheticBot1",
-    "body": {}
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/acme/widget.git/info/refs?service=git-receive-pack",
+    "actor": "anonymous",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/acme/widget.git/info/refs?service=git-receive-pack",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/acme/widget.git/git-receive-pack",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/acme/widget.git/info/refs?service=git-upload-pack",
+    "actor": "anonymous",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/acme/widget.git/info/refs?service=git-upload-pack",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "GET",
     "path": "/user",
-    "credential": "",
-    "body": {}
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/user",
+    "actor": "owner",
+    "body": null
   },
   {
     "method": "GET",
     "path": "/app",
-    "credential": "app-jwt",
-    "body": {}
+    "actor": "app-jwt",
+    "body": null
   },
   {
     "method": "GET",
     "path": "~",
-    "credential": "app-jwt",
-    "body": {}
+    "actor": "app-jwt",
+    "body": null
   },
   {
     "method": "GET",
     "path": "/repos/acme/widget/installation",
-    "credential": "app-jwt",
-    "body": {}
+    "actor": "app-jwt",
+    "body": null
   },
   {
     "method": "GET",
-    "path": "/repos/acme/widget/installation",
-    "credential": "app-jwt",
-    "body": {}
+    "path": "/acme/widget.git/info/refs?service=git-receive-pack",
+    "actor": "anonymous",
+    "body": null
   },
   {
     "method": "POST",
-    "path": "/app/installations/777/access_tokens",
-    "credential": "app-jwt",
+    "path": "/app/installations/77/access_tokens",
+    "actor": "app-jwt",
     "body": {
       "repositories": [
         "widget"
@@ -64,9 +100,27 @@
     }
   },
   {
+    "method": "GET",
+    "path": "/acme/widget.git/info/refs?service=git-receive-pack",
+    "actor": "app-bot",
+    "body": null
+  },
+  {
     "method": "POST",
-    "path": "/app/installations/777/access_tokens",
-    "credential": "app-jwt",
+    "path": "/acme/widget.git/git-receive-pack",
+    "actor": "app-bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/user",
+    "actor": "app-bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/app/installations/77/access_tokens",
+    "actor": "app-jwt",
     "body": {
       "repositories": [
         "widget"
@@ -76,283 +130,415 @@
   {
     "method": "GET",
     "path": "/user",
-    "credential": "token ghp_SyntheticBot2",
-    "body": {}
+    "actor": "app-bot",
+    "body": null
   },
   {
     "method": "GET",
-    "path": "/repos/acme/readonly",
-    "credential": "token ghp_SyntheticBot2",
-    "body": {}
+    "path": "/repos/acme/denied/installation",
+    "actor": "app-jwt",
+    "body": null
   },
   {
     "method": "GET",
-    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-11T04:38:42Z&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/user",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "GET",
-    "path": "/repos/acme/widget/issues/5",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/repos/acme/denied",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "GET",
-    "path": "/repos/acme/widget/issues/5/comments?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-11T09:41:40Z&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-11T09:41:40Z&page=2",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/commits/abc123",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/commits/abc123/comments?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "POST",
     "path": "/graphql",
-    "credential": "token ghp_SyntheticInbox",
+    "actor": "bot",
     "body": {
       "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
       "variables": {
         "ids": [
-          "IC_1",
-          "IC_3",
-          "IC_4",
-          "IC_5"
+          "N301"
         ]
       }
     }
   },
   {
     "method": "GET",
-    "path": "/repos/acme/widget/issues/5/events?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/comments/1/reactions?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/repos/acme/widget/commit/comments/301/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "POST",
-    "path": "/repos/acme/widget/issues/comments/1/reactions",
-    "credential": "token ghp_SyntheticInbox",
+    "path": "/repos/acme/widget/commit/comments/301/reactions",
+    "actor": "bot",
     "body": {
       "content": "eyes"
     }
   },
   {
     "method": "GET",
-    "path": "/repos/acme/widget/issues/comments/4/reactions?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "POST",
-    "path": "/repos/acme/widget/issues/comments/4/reactions",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {
-      "content": "eyes"
-    }
+    "path": "/repos/acme/widget/issues/1",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "GET",
-    "path": "/repos/acme/widget/issues/5/reactions?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "POST",
-    "path": "/repos/acme/widget/issues/5/reactions",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {
-      "content": "eyes"
-    }
-  },
-  {
-    "method": "GET",
-    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T04:28:42Z&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/5",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/5/comments?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/repos/acme/widget/issues/1/comments?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "POST",
     "path": "/graphql",
-    "credential": "token ghp_SyntheticInbox",
+    "actor": "bot",
     "body": {
       "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
       "variables": {
         "ids": [
-          "IC_1",
-          "IC_3",
-          "IC_4",
-          "IC_5"
+          "N100",
+          "N101",
+          "N103",
+          "N104",
+          "N105",
+          "N106"
         ]
       }
     }
   },
   {
     "method": "GET",
-    "path": "/repos/acme/widget/issues/5/events?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/repos/acme/widget/issues/1/events?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "GET",
-    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T04:28:43Z&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T04:28:43Z&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/5",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/5/comments?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/repos/acme/widget/issues/comments/100/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "POST",
-    "path": "/graphql",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {
-      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
-      "variables": {
-        "ids": [
-          "IC_1",
-          "IC_3",
-          "IC_4",
-          "IC_5"
-        ]
-      }
-    }
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/5/events?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/commits/abc",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/commits/abc/comments?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "POST",
-    "path": "/graphql",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {
-      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
-      "variables": {
-        "ids": [
-          "IC_11"
-        ]
-      }
-    }
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/comments/11/reactions?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "POST",
-    "path": "/repos/acme/widget/comments/11/reactions",
-    "credential": "token ghp_SyntheticInbox",
+    "path": "/repos/acme/widget/issues/comments/100/reactions",
+    "actor": "bot",
     "body": {
       "content": "eyes"
     }
   },
   {
     "method": "GET",
-    "path": "/repos/acme/widget/pulls/7",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/7/comments?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/pulls/7/comments?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/pulls/7/reviews?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/repos/acme/widget/issues/comments/101/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
   },
   {
     "method": "POST",
-    "path": "/graphql",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {
-      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
-      "variables": {
-        "ids": [
-          "IC_12"
-        ]
-      }
-    }
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/7/events?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "GET",
-    "path": "/repos/acme/widget/issues/comments/12/reactions?per_page=100&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
-  },
-  {
-    "method": "POST",
-    "path": "/repos/acme/widget/issues/comments/12/reactions",
-    "credential": "token ghp_SyntheticInbox",
+    "path": "/repos/acme/widget/issues/comments/101/reactions",
+    "actor": "bot",
     "body": {
       "content": "eyes"
     }
   },
   {
     "method": "GET",
-    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T04:28:44Z&page=1",
-    "credential": "token ghp_SyntheticInbox",
-    "body": {}
+    "path": "/repos/acme/widget/issues/comments/104/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/repos/acme/widget/issues/comments/104/reactions",
+    "actor": "bot",
+    "body": {
+      "content": "eyes"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/comments/105/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/repos/acme/widget/issues/comments/105/reactions",
+    "actor": "bot",
+    "body": {
+      "content": "eyes"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/1/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/repos/acme/widget/issues/1/reactions",
+    "actor": "bot",
+    "body": {
+      "content": "eyes"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/pulls/2",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/2/comments?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/pulls/2/comments?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/pulls/2/reviews?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "actor": "bot",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N201",
+          "N202"
+        ]
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/2/events?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/pull/comments/201/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/repos/acme/widget/pull/comments/201/reactions",
+    "actor": "bot",
+    "body": {
+      "content": "eyes"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/pull/comments/202/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/repos/acme/widget/pull/comments/202/reactions",
+    "actor": "bot",
+    "body": {
+      "content": "eyes"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/2/reactions?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/repos/acme/widget/issues/2/reactions",
+    "actor": "bot",
+    "body": {
+      "content": "eyes"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-11T09:41:45Z&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-11T09:41:45Z&page=2",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/commits/abc123",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/commits/abc123/comments?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "actor": "bot",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N301"
+        ]
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/1/comments?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "actor": "bot",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N100",
+          "N101",
+          "N103",
+          "N104",
+          "N105",
+          "N106"
+        ]
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/1/events?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/pulls/2",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/2/comments?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/pulls/2/comments?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/pulls/2/reviews?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "actor": "bot",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N201",
+          "N202"
+        ]
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/acme/widget/issues/2/events?per_page=100&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T09:31:40Z&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T09:31:40Z&page=2",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T09:31:40Z&page=1",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T09:31:40Z&page=2",
+    "actor": "bot",
+    "body": null
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2026-11-12T09:31:48Z&page=1",
+    "actor": "bot",
+    "body": null
   }
 ]

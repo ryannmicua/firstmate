@@ -1,0 +1,15 @@
+ok - prepare-worker resolves the bot identity and installation with a valid App JWT, credentials off argv
+ok - prepare-worker exits 3 when the App is not installed for the repository
+ok - a shared private key or unknown config key refuses before any GitHub call
+ok - env-file routes git through the App token, clears inherited helpers, sets the bot identity, and caches the token
+ok - the gh wrapper runs the real gh with a fresh App token and refreshes a nearly expired one
+ok - slug-of reads github.com origins and rejects other hosts
+ok - spawn runs a configured worker as the App and refuses when it is not installed
+ok - a user-token identity prepares writable repositories only, answers git and gh with its token, and rotates with the file
+ok - App caches follow App identity, read-only installations refuse, and missing credentials fail closed
+ok - paseo-agent refuses configured identities before runtime or worktree changes for ships, scouts, and relaunches
+ok - spawn refuses raw and rewritten fetch and push credentials without disclosing them
+ok - worker helper and fetch/push transport reject embedded credentials without disclosure
+ok - effective GitHub remotes require same-repository HTTPS while workers can clone local repositories
+ok - worker GitHub HTTP configuration clears generic, scoped, file, and inherited environment headers
+ok - GitHub and default netrc entries refuse spawn and pane setup without revealing credentials
