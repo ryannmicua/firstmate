@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-original=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M76SRAYFNN4HYKJKEQJVSMDM/.validation-tmp/gh-review/fm-gh-bot-check.MTLCbn/in-flight/fakebin/curl-before
-source_body=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M76SRAYFNN4HYKJKEQJVSMDM/.validation-tmp/gh-review/fm-gh-bot-check.MTLCbn/in-flight/bodies/after-reaction
-comments=/home/rgm/.no-mistakes/worktrees/ff5e17b6f5de/01M76SRAYFNN4HYKJKEQJVSMDM/.validation-tmp/gh-review/fm-gh-bot-check.MTLCbn/in-flight/bodies/comments5
-"$original" "$@"
-rc=$?
-case "$*" in *'-X POST'*'/reactions'*) cp "$source_body" "$comments" ;; esac
-exit "$rc"

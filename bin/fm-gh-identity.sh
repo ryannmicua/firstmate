@@ -533,7 +533,7 @@ action_git_credential() {
       protocol=*) protocol=${line#protocol=} ;;
       host=*) host=${line#host=} ;;
       path=*) path=${line#path=} ;;
-      username=*|password=*) supplied=1 ;;
+      password=*) supplied=1 ;;
     esac
   done
   [ "$protocol" = https ] && [ "$host" = github.com ] || exit 0

@@ -2027,21 +2027,24 @@ Current limits:
 The token must be a classic personal access token of the bot account with the `notifications` and `repo` scopes, because GitHub's notifications API does not accept fine-grained tokens, and its file must be owner-only.
 Arm the poll with `bin/fm-gh-bot-check.sh arm` and remove it with `bin/fm-gh-bot-check.sh disarm`.
 GitHub cannot reach this machine, so the watcher polls on its normal check interval (`FM_CHECK_INTERVAL`, five minutes by default).
+The check itself returns immediately: it starts the poll as a detached background job, and does nothing while a previous poll job still holds `state/.github-bot-poll.lock`.
+The job has its own timeout (`FM_GH_BOT_POLL_TIMEOUT`, 600 seconds by default) and records any problem for the next check to print; a poll that cannot finish within that timeout retries on the next check.
 
 Each poll reads participating notifications updated within an overlapping time window, regardless of read state.
 The first window covers the preceding day; later polls resume the since cursor in `state/.github-bot-check`.
 After discovery, threads run oldest-updated first across pages, checkpointing the cursor as each timestamp completes, but never past ten minutes before the poll start; threads with the same update time checkpoint together.
 A completed poll also advances the cursor to ten minutes before its start when that moves it forward.
-Retrieval or note-save failure stops processing before that timestamp is checkpointed, while a budget interruption preserves already completed progress.
+Retrieval or note-save failure stops processing before that timestamp is checkpointed, while a timeout preserves already completed progress.
 An @-mention in an issue or pull request body, an issue comment, a pull request review comment, or a submitted review summary, an assignment, or a review request becomes one captain inbox note with the repository, the issue or pull request title and URL, the comment URL, and the text.
 A note from the owner says it is an instruction for firstmate.
+An owner item edited after creation counts as the owner's only when GitHub's GraphQL API reports the owner as its last editor; otherwise its note is headed NOT FROM THE OWNER.
 Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
 For every mention, assignment, or review-request thread, the poll retrieves all mentions and assignment/review-request events naming the bot, regardless of the notification's reason.
 After a new note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up.
 Replayed notes and items already carrying the bot's own eyes reaction skip another reaction POST.
 The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried.
 Other notification reasons, including team mentions, are skipped.
-The check prints a line only when its problem changes, such as a missing or refused token; `bin/fm-gh-bot-check.sh --help` owns the details.
+The check prints a line only when the last poll's problem changes, such as a missing or refused token; `bin/fm-gh-bot-check.sh --help` owns the details.
 
 ### Placing the tokens and App key
 

@@ -326,6 +326,12 @@ test_token_identity_prepares_and_answers() {
   out=$(env -i HOME="$TMP_ROOT/token" PATH="$FAKEBIN:$PATH" GIT_CONFIG_NOSYSTEM=1 bash -c '. "$1" || exit 9
       printf "protocol=https\nhost=github.com\npath=acme/widget.git\n\n" | git credential fill | sed -n "s/^password=//p"' _ "$envf" 2>&1)
   assert_contains "$out" ghp_RotatedToken0002 "a replaced token file was not picked up"
+  # shellcheck disable=SC2016 # The child shell expands its own arguments.
+  out=$(env -i HOME="$TMP_ROOT/token" PATH="$FAKEBIN:$PATH" GIT_CONFIG_NOSYSTEM=1 bash -c '. "$1" || exit 9
+      printf "protocol=https\nhost=github.com\npath=acme/widget.git\n\n" |
+        git -c credential.https://github.com.username=owner credential fill' _ "$envf" 2>&1)
+  assert_contains "$out" password=ghp_RotatedToken0002 "a configured Git username blocked the identity token"
+  assert_not_contains "$out" quit=1 "a configured Git username was treated as embedded credentials"
   chmod 0644 "$HOME_DIR/config/github-identity.token"
   out=$(app prepare-worker "$dir" acme/widget 2>&1)
   status=$?
@@ -624,7 +630,7 @@ test_netrc_owner_credentials_refuse_spawn() {
       out=$(NETRC="$file" FM_FAKE_LAUNCH_LOG="$launchlog" fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" "$id" "$proj" \
         --harness 'echo worker-ran' --mode direct-PR --yolo off)
     else
-      out=$(NETRC= FM_FAKE_LAUNCH_LOG="$launchlog" fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" "$id" "$proj" \
+      out=$(NETRC='' FM_FAKE_LAUNCH_LOG="$launchlog" fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" "$id" "$proj" \
         --harness 'echo worker-ran' --mode direct-PR --yolo off)
     fi
     status=$?

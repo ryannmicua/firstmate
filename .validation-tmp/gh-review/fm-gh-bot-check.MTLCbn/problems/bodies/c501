@@ -1,1 +1,0 @@
-{"id":501,"url":"https://api.test.invalid/repos/acme/widget/issues/comments/501","html_url":"https://github.com/acme/widget/issues/5#issuecomment-501","user":{"login":"owner-one"},"body":"@example-bot please fix the flaky tests"}
