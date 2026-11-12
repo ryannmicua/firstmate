@@ -416,7 +416,7 @@ test_pr_based_dod_carries_the_pr_shape() {
   for mode in direct-PR no-mistakes; do
     out="$TMP_ROOT/shape-$mode.md"
     fm_dod_block "$mode" dod-shape-task > "$out"
-    for heading in '**Merge:**' '## Why' '## What changed' '## Screens' '## Verified' '## Risk and recovery'; do
+    for heading in '**Merge:**' '## Why' '## What changed' '## Screens' '## Verified' '## Risk and recovery' 'one-line footer'; do
       assert_grep "$heading" "$out" "$mode: DoD lacks the PR heading $heading"
     done
     assert_grep 'Re-read the body against the final diff' "$out" "$mode: DoD lacks the re-read rule"
