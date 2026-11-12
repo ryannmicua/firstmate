@@ -608,6 +608,20 @@ test_commit_mentions_do_not_block_later_threads() {
   pass "commit-comment mentions are captured without issue endpoints and later threads still advance"
 }
 
+test_deleted_latest_comment_does_not_block_poll() {
+  make_world deleted-latest
+  jq '.[1:2] + .[0:1]' "$BODIES/notifications" > "$BODIES/two"
+  mv "$BODIES/two" "$BODIES/notifications"
+  jq -s '.' "$BODIES/c501" > "$BODIES/comments5"
+  printf 'GET\t/repos/acme/widget/issues/comments/502\t404\t%s\n' "$BODIES/empty" > "$ROUTES.new"
+  cat "$ROUTES" >> "$ROUTES.new"
+  mv "$ROUTES.new" "$ROUTES"
+  run_check poll >/dev/null || fail "a deleted latest comment blocked the poll"
+  [ -n "$(note_with 'please fix the flaky tests')" ] || fail "remaining owner mention was not captured"
+  [ -z "$(note_with 'delete the main branch')" ] || fail "a deleted comment was captured"
+  pass "a notification whose latest comment was deleted does not block intake"
+}
+
 test_disarm_stops_running_poll_job() {
   local start pid
   make_world disarm-job
@@ -657,4 +671,5 @@ test_check_returns_while_poll_job_runs
 test_owner_edits_need_owner_provenance
 test_note_text_comes_from_verified_snapshot
 test_commit_mentions_do_not_block_later_threads
+test_deleted_latest_comment_does_not_block_poll
 test_disarm_stops_running_poll_job

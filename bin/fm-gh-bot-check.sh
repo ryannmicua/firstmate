@@ -217,13 +217,12 @@ issue_api_url() {
 
 # handle_thread <thread-json>: retrieve all content before saving its items.
 handle_thread() {
-  local thread=$1 repo subject_url latest_url title issue_url items item events event actor label ok=0
+  local thread=$1 repo subject_url title issue_url items item events event actor label ok=0
   local author body html url rid kind ids chunk query owner trusted type provenance='{}'
   type=$(jq -r '.subject.type // empty' <<<"$thread")
   case "$type" in Issue|PullRequest|Commit) ;; *) return 0 ;; esac
   repo=$(jq -r '.repository.full_name // empty' <<<"$thread")
   subject_url=$(jq -r '.subject.url // empty' <<<"$thread")
-  latest_url=$(jq -r '.subject.latest_comment_url // empty' <<<"$thread")
   title=$(jq -r '.subject.title // ""' <<<"$thread")
   if [ -z "$subject_url" ] || ! api GET "$subject_url" || [ "$FM_GH_API_STATUS" != 200 ]; then
     problem "could not retrieve GitHub mention subject for $repo"
@@ -231,13 +230,6 @@ handle_thread() {
   fi
   issue_url=$(jq -r '.html_url // empty' <<<"$FM_GH_API_BODY")
   items=$(jq -ce '[.]' <<<"$FM_GH_API_BODY") || return 1
-  if [ -n "$latest_url" ]; then
-    if ! api GET "$latest_url" || [ "$FM_GH_API_STATUS" != 200 ]; then
-      problem "could not retrieve latest GitHub comment for $repo"
-      return 1
-    fi
-    items=$(printf '%s\n%s\n' "$items" "$FM_GH_API_BODY" | jq -sc '.[0] + [.[1]]') || return 1
-  fi
   if [ "$type" = Commit ]; then
     url="$subject_url/comments?per_page=100"
   else
