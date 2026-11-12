@@ -406,6 +406,31 @@ test_pr_based_dod_draft_check_uses_gh_axi() {
   pass "PR-based DoD draft check uses gh-axi"
 }
 
+# Every PR-based DoD gives the worker the one PR body shape, the re-read rule,
+# and the public-repository summary rule; local-only has no PR, and a gerrit
+# review has no PR body to shape.
+test_pr_based_dod_carries_the_pr_shape() {
+  local mode out heading
+  for mode in direct-PR no-mistakes; do
+    out="$TMP_ROOT/shape-$mode.md"
+    fm_dod_block "$mode" dod-shape-task > "$out"
+    for heading in '**Merge:**' '## Why' '## What changed' '## Screens' '## Verified' '## Risk and recovery'; do
+      assert_grep "$heading" "$out" "$mode: DoD lacks the PR heading $heading"
+    done
+    assert_grep 'Re-read the body against the final diff' "$out" "$mode: DoD lacks the re-read rule"
+    assert_grep 'demo or invented data only' "$out" "$mode: DoD lacks the screenshot data rule"
+    assert_grep 'repository is public' "$out" "$mode: DoD lacks the public-repository rule"
+  done
+  assert_grep '--no-publish-intent' "$TMP_ROOT/shape-no-mistakes.md" "no-mistakes DoD must keep the ask out of a public PR"
+  assert_grep 'edit the PR body into one shape' "$TMP_ROOT/shape-no-mistakes.md" "no-mistakes DoD must have the worker shape the pipeline's PR body"
+  assert_no_grep '--no-publish-intent' "$TMP_ROOT/shape-direct-PR.md" "direct-PR has no pipeline intent to suppress"
+  fm_dod_block local-only dod-shape-task > "$TMP_ROOT/shape-local.md"
+  assert_no_grep '## Why' "$TMP_ROOT/shape-local.md" "local-only publishes no PR, so it carries no PR shape"
+  CONFIG="$TMP_ROOT/no-such-config" fm_dod_block no-mistakes dod-shape-task fm/dod-shape-task gerrit > "$TMP_ROOT/shape-gerrit.md" 2>/dev/null
+  assert_no_grep '## Why' "$TMP_ROOT/shape-gerrit.md" "gerrit has no PR body to shape"
+  pass "PR-based DoD carries the PR shape and the public-repository rule"
+}
+
 # A scout spawned on a named base keeps that base through promotion: the ship
 # instructions start from it and the PR targets it; local-only cannot carry it.
 test_promotion_keeps_the_recorded_base_branch() {
@@ -467,6 +492,7 @@ test_standalone_local_only_needs_project_ref
 test_non_done_lines_are_not_gated
 test_fenced_and_indented_captain_lines_are_not_intent
 test_pr_based_dod_draft_check_uses_gh_axi
+test_pr_based_dod_carries_the_pr_shape
 test_promotion_keeps_the_recorded_base_branch
 
 # The launch role is the generated text a worker receives. It must keep the

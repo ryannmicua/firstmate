@@ -96,6 +96,8 @@
 # reader, so a quoted `Captain:` sample is never authorized intent.
 # Previously stored speaker labels remain readable for compatibility only.
 # Never scrub literal examples or other content the captain actually supplied.
+# On a public repository the PR text summarises the ask instead of quoting it:
+# fm_pr_shape_block owns that rule and the `--no-publish-intent` start flag.
 # The string passed must be self-sufficient - it plus the codebase reconstructs
 # roughly the same specification - so a report, decision, or PR the intent
 # refers to is written into it as substance, never left as a pointer.
@@ -448,6 +450,30 @@ There is no pull request, no \`gh-axi\` call, and no forge CI result to report: 
 EOF
 }
 
+# The PR body shape, written once and rendered into both PR-based blocks so a
+# worker meets it wherever the PR text is authored: the direct-PR worker writes
+# the body itself, while the no-mistakes pipeline opens the PR and the worker
+# then edits the body into this shape (no-mistakes also has a trusted per-repo
+# `pr.template`, which a repository can adopt separately). Generic on purpose:
+# it names no owner, organization, or repository.
+fm_pr_shape_block() {  # <direct-PR|no-mistakes>
+  local when='Write the PR body in one shape' public_rule
+  if [ "$1" = no-mistakes ]; then
+    when='After the pipeline opens the PR, and before the draft read-back below, edit the PR body into one shape; leave any pipeline-generated marker comment or appendix exactly as it is'
+    # shellcheck disable=SC2016  # backticks are literal Markdown for the worker
+    public_rule='When the target repository is public, start the run with `--no-publish-intent` so the pipeline does not paste the ask into the PR, and summarise it in the Why section yourself.'
+  else
+    public_rule='When the target repository is public, summarise the ask instead of quoting it.'
+  fi
+  cat <<EOF
+$when: a \`**Merge:**\` line first (\`Merge when green.\` or who must decide or approve what), then the headings \`## Why\`, \`## What changed\`, \`## Screens\`, \`## Verified\` (exact commands and results on the final head, and what was not verified), and \`## Risk and recovery\`, then a footer line.
+Aim for 300-600 words, one screen or two; evidence beyond that goes in a link or a PR comment, not the body.
+Re-read the body against the final diff before you report done, and again after any review change, so it never claims what the diff does not do.
+Attach screenshots of UI changes to the PR (\`gh pr create --attach\` or the forge's equivalent), showing demo or invented data only; write \`No screen changed.\` when none did, and link the preview when there is one.
+$public_rule The owner's verbatim words stay in the private brief.
+EOF
+}
+
 fm_dod_block() {  # <mode> <task-id> [branch] [<forge>] [<base>] [<consent>]
   local mode=$1 id=$2 forge=${4:-none} base=${5:-} consent=${6:-}
   local branch=${3:-fm/$id} pr_base='' nm_base='' base_q contract_forge='' contract_consent='' forge_cli=gh-axi draft_check adapter
@@ -563,6 +589,9 @@ A draft cannot be merged, so a done report on one leaves the merge unasked.
 Then append \`done [at=<epoch>]: PR {url}\` to the status file and stop.
 That \`done:\` is accepted only when this copy's HEAD - your latest commit - is pushed to your PR branch; the check tests that commit, not merely that a branch moved.
 If you deliberately keep the PR a draft, append \`paused [at=<epoch>]: {why the draft is held}\` instead of done.
+EOF
+      fm_pr_shape_block direct-PR
+      cat <<EOF
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF
       ;;
@@ -591,6 +620,10 @@ That first \`done:\` is the handoff that starts the pipeline, which owns the pus
 ${nm_base}
 EOF
       fm_nm_driving_block "$forge"
+      if [ "$forge" != gerrit ]; then
+        echo
+        fm_pr_shape_block no-mistakes
+      fi
       cat <<EOF
 
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), read the PR back from the forge and confirm it is not a draft $draft_check
