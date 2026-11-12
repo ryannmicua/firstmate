@@ -466,10 +466,10 @@ fm_pr_shape_block() {  # <direct-PR|no-mistakes>
     public_rule='When the target repository is public, summarise the ask instead of quoting it.'
   fi
   cat <<EOF
-$when: a \`**Merge:**\` line first (\`Merge when green.\` or who must decide or approve what), then the headings \`## Why\`, \`## What changed\`, \`## Screens\`, \`## Verified\` (exact commands and results on the final head, and what was not verified), and \`## Risk and recovery\`, then a footer line.
+$when: a \`**Merge:**\` line first (\`Merge when green.\` or who must decide or approve what), then the headings \`## Why\`, \`## What changed\`, \`## Screens\`, \`## Verified\` (exact commands and results on the final head, and what was not verified), and \`## Risk and recovery\`, then a footer line giving the PR's place in a stack when there is one, and the agent that wrote it (tool and model).
 Aim for 300-600 words, one screen or two; evidence beyond that goes in a link or a PR comment, not the body.
 Re-read the body against the final diff before you report done, and again after any review change, so it never claims what the diff does not do.
-Attach screenshots of UI changes to the PR (\`gh pr create --attach\` or the forge's equivalent), showing demo or invented data only; write \`No screen changed.\` when none did, and link the preview when there is one.
+Attach screenshots of UI changes to the PR (\`gh pr create --attach\` or the forge's equivalent), showing invented data only; write \`No screen changed.\` when none did, and link the preview when there is one.
 $public_rule The owner's verbatim words stay in the private brief.
 EOF
 }

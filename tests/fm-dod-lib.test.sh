@@ -418,7 +418,10 @@ test_pr_based_dod_carries_the_pr_shape() {
       assert_grep "$heading" "$out" "$mode: DoD lacks the PR heading $heading"
     done
     assert_grep 'Re-read the body against the final diff' "$out" "$mode: DoD lacks the re-read rule"
-    assert_grep 'demo or invented data only' "$out" "$mode: DoD lacks the screenshot data rule"
+    assert_grep 'showing invented data only' "$out" "$mode: DoD lacks the screenshot data rule"
+    assert_no_grep 'demo or invented' "$out" "$mode: DoD permits demo data without requiring it to be invented"
+    assert_grep "footer line giving the PR's place in a stack when there is one, and the agent that wrote it (tool and model)" "$out" \
+      "$mode: DoD lacks the stack position and author footer contract"
     assert_grep 'repository is public' "$out" "$mode: DoD lacks the public-repository rule"
   done
   assert_grep '--no-publish-intent' "$TMP_ROOT/shape-no-mistakes.md" "no-mistakes DoD must keep the ask out of a public PR"
