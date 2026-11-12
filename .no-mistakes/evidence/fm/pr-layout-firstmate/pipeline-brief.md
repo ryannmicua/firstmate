@@ -13,23 +13,23 @@ If the task will start, stop, delete, restart, profile, or otherwise drive Herdr
 Do not add Herdr lifecycle commands to this unguarded brief by hand.
 
 # Setup
-You are in a disposable git worktree of invented-example, at a detached HEAD on a clean default branch.
+You are in a disposable git worktree of invented-project, at a detached HEAD on a clean default branch.
 
 **Verify isolation before anything else.** Run `pwd -P` and `git rev-parse --show-toplevel`; both must resolve to the disposable task worktree you were launched in, such as a treehouse pool path or an Orca-managed worktree, not the primary checkout firstmate operates from.
 The path check is authoritative: `git rev-parse --git-dir` and `git rev-parse --git-common-dir` can help inspect the repo, but they do not prove you are outside the primary checkout.
 If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append `blocked [at=<epoch>]: launched in primary checkout, not an isolated worktree` to the status file and stop.
 
-1. First action: create your branch: `git checkout -b fm/layout-pipeline --`
+1. First action: create your branch: `git checkout -b fm/pipeline --`
 2. Run `no-mistakes doctor`; if it reports the repo is not initialized here, run `no-mistakes init`.
 
 # Rules
 1. Never push to the default branch. Never merge a PR.
-2. Keep project edits inside this worktree; keep proof and scratch output outside it, under `{run-worktree}/.pr-layout-live-p479i6iw/data/layout-pipeline/` or a temporary directory.
+2. Keep project edits inside this worktree; keep proof and scratch output outside it, under `{run-worktree}/.pr-layout-test-t3jyrs5g/data/pipeline/` or a temporary directory.
    Outside the worktree, write only that task material and the status and steering-inbox records authorized below.
    Leave the worktree clean before reporting done.
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
-   `echo "{state} [at=<epoch>]: {one short line}" >> '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-pipeline.status' && { [ ! -e '{run-worktree}/.pr-layout-live-p479i6iw/config/fleet-ledger' ] || '{run-worktree}/bin/fm-fleet-ledger.sh' appended '{run-worktree}/.pr-layout-live-p479i6iw/config' '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-pipeline.status' >/dev/null 2>&1 || true; }`
+   `echo "{state} [at=<epoch>]: {one short line}" >> '{run-worktree}/.pr-layout-test-t3jyrs5g/state/pipeline.status' && { [ ! -e '{run-worktree}/.pr-layout-test-t3jyrs5g/config/fleet-ledger' ] || '{run-worktree}/bin/fm-fleet-ledger.sh' appended '{run-worktree}/.pr-layout-test-t3jyrs5g/config' '{run-worktree}/.pr-layout-test-t3jyrs5g/state/pipeline.status' >/dev/null 2>&1 || true; }`
    States: working, needs-decision, blocked, paused, done, failed.
    Substitute `<epoch>` with the current Unix time in seconds - run `date +%s` and write the number it printed; a stamp that is not plain digits records no time at all.
    Each append wakes firstmate, so report sparingly: only phase changes a supervisor
@@ -53,8 +53,8 @@ If the top-level path is the primary checkout or not the worktree you were launc
 5. If you hit the same obstacle twice, append `blocked [at=<epoch>]: {why}` and stop; firstmate will help.
 6. If a decision belongs above the implementation worker (product choices, destructive actions),
    append `needs-decision [at=<epoch>]: {summary of options}` and stop. Firstmate will reply with the decision.
-   For a no-mistakes ask-user gate specifically, escalate all ask-user findings as one event plus one snapshot file, using that same shape even when the gate holds only a single ask-user finding: write only the ask-user findings, verbatim and unparaphrased (id, severity, file, line, description, authority), to `{run-worktree}/.pr-layout-live-p479i6iw/data/layout-pipeline/nm-<run>-findings.txt`, then report the gate with
-   `needs-decision [at=<epoch>] [key=nm-<run>-<step>]: ask-user findings=<id1>,<id2>,... file={run-worktree}/.pr-layout-live-p479i6iw/data/layout-pipeline/nm-<run>-findings.txt`
+   For a no-mistakes ask-user gate specifically, escalate all ask-user findings as one event plus one snapshot file, using that same shape even when the gate holds only a single ask-user finding: write only the ask-user findings, verbatim and unparaphrased (id, severity, file, line, description, authority), to `{run-worktree}/.pr-layout-test-t3jyrs5g/data/pipeline/nm-<run>-findings.txt`, then report the gate with
+   `needs-decision [at=<epoch>] [key=nm-<run>-<step>]: ask-user findings=<id1>,<id2>,... file={run-worktree}/.pr-layout-test-t3jyrs5g/data/pipeline/nm-<run>-findings.txt`
    naming every ask-user finding id from that gate. The status line only points at the file; it never restates or summarizes a finding's content.
    A decision or blocker you opened stays open until a `resolved` line carrying its exact key lands; a later `done:` or `working:` line never closes it, even when the answer is what started that work.
    Firstmate's reply normally writes that closing line at answer time; when a blocker or wait clears WITHOUT a firstmate reply, append `resolved [at=<epoch>]: {how it cleared}` yourself (same `[key=<slug>]` if you opened it with one) as you resume.
@@ -85,8 +85,8 @@ If the top-level path is the primary checkout or not the worktree you were launc
    Pass this rule to every sub-agent you launch.
 
 # Firstmate instruction inbox
-Firstmate steers you through durable message files in '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-pipeline.inbox'.
-When a terminal message says an instruction is waiting there - and at any natural checkpoint when you are unsure - list them with `find '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-pipeline.inbox' -maxdepth 1 -name '*.msg' 2>/dev/null | sort -V`, read the complete contents of each record (including its final line even when it is not newline-terminated) and act on each message in numeric order, then acknowledge each handled message by moving it: `mv '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-pipeline.inbox'/NNN.msg '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-pipeline.inbox'/handled/`.
+Firstmate steers you through durable message files in '{run-worktree}/.pr-layout-test-t3jyrs5g/state/pipeline.inbox'.
+When a terminal message says an instruction is waiting there - and at any natural checkpoint when you are unsure - list them with `find '{run-worktree}/.pr-layout-test-t3jyrs5g/state/pipeline.inbox' -maxdepth 1 -name '*.msg' 2>/dev/null | sort -V`, read the complete contents of each record (including its final line even when it is not newline-terminated) and act on each message in numeric order, then acknowledge each handled message by moving it: `mv '{run-worktree}/.pr-layout-test-t3jyrs5g/state/pipeline.inbox'/NNN.msg '{run-worktree}/.pr-layout-test-t3jyrs5g/state/pipeline.inbox'/handled/`.
 Prefer the format-aware `fm_task_inbox_body` reader from `bin/fm-task-inbox-lib.sh` when it is available. If you read manually, a header line `body-terminator=1` means the writer added exactly one synthetic final newline to terminate the record file; that marked newline is not part of the logical message body, so remove only it and preserve any intentional trailing newlines. Legacy records without that marker may end without a newline; read them through the file end.
 The move IS the acknowledgement: without it firstmate rings again and eventually treats you as stuck. An empty or absent inbox needs no action.
 
@@ -101,7 +101,7 @@ A correction edits only the wrong text: do not run `{run-worktree}/bin/fm-ensure
 
 # Definition of done
 Delivery contract: mode=no-mistakes
-Ship branch: fm/layout-pipeline
+Ship branch: fm/pipeline
 The task is complete only when committed on your branch.
 When you believe it is complete, append `done [at=<epoch>]: {summary}` to the status file and stop.
 Firstmate will then instruct you to run /no-mistakes to validate and ship a PR.
@@ -135,7 +135,7 @@ Two firstmate-specific rules layer on top of that guidance:
 - NEVER pass `--yes` (or `-y`) to `no-mistakes axi run` or `no-mistakes axi respond`. It is banned fleet-wide.
   It auto-resolves every gate including ask-user findings with no escalation, and answering your own ask-user finding is a hard rule violation.
 
-After the pipeline opens the PR, and before the draft read-back below, edit the PR body into one shape; leave any pipeline-generated marker comment or appendix exactly as it is: a `**Merge:**` line first (`Merge when green.` or who must decide or approve what), then the headings `## Why`, `## What changed`, `## Screens`, `## Verified` (exact commands and results on the final head, and what was not verified), and `## Risk and recovery`.
+After the pipeline opens the PR, and before the draft read-back below, edit the PR body into one shape; leave any pipeline-generated marker comment or appendix exactly as it is: a `**Merge:**` line first (`Merge when green.` or who must decide or approve what), then the headings `## Why`, `## What changed`, `## Screens`, `## Verified` (exact commands and results on the final head, and what was not verified), and `## Risk and recovery`, then a one-line footer giving the PR's place in a stack when there is one and the agent that wrote it (tool and model).
 Aim for 300-600 words, one screen or two; evidence beyond that goes in a link or a PR comment, not the body.
 Re-read the body against the final diff before you report done, and again after any review change, so it never claims what the diff does not do.
 Attach screenshots of UI changes to the PR (`gh pr create --attach` or the forge's equivalent), showing invented data only; write `No screen changed.` when none did, and link the preview when there is one.

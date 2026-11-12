@@ -1,0 +1,19 @@
+$ bash bin/fm-brief.sh direct invented-project --mode direct-PR
+scaffolded: {run-worktree}/.pr-layout-test-t3jyrs5g/data/direct/brief.md (ship, mode=direct-PR; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+
+$ bash bin/fm-brief.sh pipeline invented-project --mode no-mistakes
+scaffolded: {run-worktree}/.pr-layout-test-t3jyrs5g/data/pipeline/brief.md (ship, mode=no-mistakes; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+
+$ bash bin/fm-brief.sh local invented-project --mode local-only
+scaffolded: {run-worktree}/.pr-layout-test-t3jyrs5g/data/local/brief.md (ship, mode=local-only; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+
+$ bash bin/fm-brief.sh gerrit-direct invented-project --mode direct-PR --forge gerrit
+scaffolded: {run-worktree}/.pr-layout-test-t3jyrs5g/data/gerrit-direct/brief.md (ship, mode=direct-PR forge=gerrit shape=squash; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+
+$ bash bin/fm-brief.sh gerrit-pipeline invented-project --mode no-mistakes --forge gerrit
+scaffolded: {run-worktree}/.pr-layout-test-t3jyrs5g/data/gerrit-pipeline/brief.md (ship, mode=no-mistakes forge=gerrit shape=squash; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0

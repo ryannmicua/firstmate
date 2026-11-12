@@ -13,22 +13,22 @@ If the task will start, stop, delete, restart, profile, or otherwise drive Herdr
 Do not add Herdr lifecycle commands to this unguarded brief by hand.
 
 # Setup
-You are in a disposable git worktree of invented-example, at a detached HEAD on a clean default branch.
+You are in a disposable git worktree of invented-project, at a detached HEAD on a clean default branch.
 
 **Verify isolation before anything else.** Run `pwd -P` and `git rev-parse --show-toplevel`; both must resolve to the disposable task worktree you were launched in, such as a treehouse pool path or an Orca-managed worktree, not the primary checkout firstmate operates from.
 The path check is authoritative: `git rev-parse --git-dir` and `git rev-parse --git-common-dir` can help inspect the repo, but they do not prove you are outside the primary checkout.
 If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append `blocked [at=<epoch>]: launched in primary checkout, not an isolated worktree` to the status file and stop.
 
-1. First action: create your branch: `git checkout -b fm/layout-local --`
+1. First action: create your branch: `git checkout -b fm/local --`
 
 # Rules
-1. Never push to any remote and never open a PR. Work only on your `fm/layout-local` branch; firstmate handles the merge into local `main`.
-2. Keep project edits inside this worktree; keep proof and scratch output outside it, under `{run-worktree}/.pr-layout-live-p479i6iw/data/layout-local/` or a temporary directory.
+1. Never push to any remote and never open a PR. Work only on your `fm/local` branch; firstmate handles the merge into local `main`.
+2. Keep project edits inside this worktree; keep proof and scratch output outside it, under `{run-worktree}/.pr-layout-test-t3jyrs5g/data/local/` or a temporary directory.
    Outside the worktree, write only that task material and the status and steering-inbox records authorized below.
    Leave the worktree clean before reporting done.
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
-   `echo "{state} [at=<epoch>]: {one short line}" >> '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-local.status' && { [ ! -e '{run-worktree}/.pr-layout-live-p479i6iw/config/fleet-ledger' ] || '{run-worktree}/bin/fm-fleet-ledger.sh' appended '{run-worktree}/.pr-layout-live-p479i6iw/config' '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-local.status' >/dev/null 2>&1 || true; }`
+   `echo "{state} [at=<epoch>]: {one short line}" >> '{run-worktree}/.pr-layout-test-t3jyrs5g/state/local.status' && { [ ! -e '{run-worktree}/.pr-layout-test-t3jyrs5g/config/fleet-ledger' ] || '{run-worktree}/bin/fm-fleet-ledger.sh' appended '{run-worktree}/.pr-layout-test-t3jyrs5g/config' '{run-worktree}/.pr-layout-test-t3jyrs5g/state/local.status' >/dev/null 2>&1 || true; }`
    States: working, needs-decision, blocked, paused, done, failed.
    Substitute `<epoch>` with the current Unix time in seconds - run `date +%s` and write the number it printed; a stamp that is not plain digits records no time at all.
    Each append wakes firstmate, so report sparingly: only phase changes a supervisor
@@ -82,8 +82,8 @@ If the top-level path is the primary checkout or not the worktree you were launc
    Pass this rule to every sub-agent you launch.
 
 # Firstmate instruction inbox
-Firstmate steers you through durable message files in '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-local.inbox'.
-When a terminal message says an instruction is waiting there - and at any natural checkpoint when you are unsure - list them with `find '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-local.inbox' -maxdepth 1 -name '*.msg' 2>/dev/null | sort -V`, read the complete contents of each record (including its final line even when it is not newline-terminated) and act on each message in numeric order, then acknowledge each handled message by moving it: `mv '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-local.inbox'/NNN.msg '{run-worktree}/.pr-layout-live-p479i6iw/state/layout-local.inbox'/handled/`.
+Firstmate steers you through durable message files in '{run-worktree}/.pr-layout-test-t3jyrs5g/state/local.inbox'.
+When a terminal message says an instruction is waiting there - and at any natural checkpoint when you are unsure - list them with `find '{run-worktree}/.pr-layout-test-t3jyrs5g/state/local.inbox' -maxdepth 1 -name '*.msg' 2>/dev/null | sort -V`, read the complete contents of each record (including its final line even when it is not newline-terminated) and act on each message in numeric order, then acknowledge each handled message by moving it: `mv '{run-worktree}/.pr-layout-test-t3jyrs5g/state/local.inbox'/NNN.msg '{run-worktree}/.pr-layout-test-t3jyrs5g/state/local.inbox'/handled/`.
 Prefer the format-aware `fm_task_inbox_body` reader from `bin/fm-task-inbox-lib.sh` when it is available. If you read manually, a header line `body-terminator=1` means the writer added exactly one synthetic final newline to terminate the record file; that marked newline is not part of the logical message body, so remove only it and preserve any intentional trailing newlines. Legacy records without that marker may end without a newline; read them through the file end.
 The move IS the acknowledgement: without it firstmate rings again and eventually treats you as stuck. An empty or absent inbox needs no action.
 
@@ -98,10 +98,10 @@ A correction edits only the wrong text: do not run `{run-worktree}/bin/fm-ensure
 
 # Definition of done
 Delivery contract: mode=local-only
-Ship branch: fm/layout-local
+Ship branch: fm/local
 This task ships **local-only**: no remote, no PR, no pipeline.
-The task is complete only when committed on your branch `fm/layout-local`. Do NOT push, do NOT open a PR, do NOT merge.
+The task is complete only when committed on your branch `fm/local`. Do NOT push, do NOT open a PR, do NOT merge.
 A `done:` is accepted when the named head is on this project's shared local branch, not only on a detached copy; the check tests that head, not merely that a branch moved.
 Keep your branch a clean fast-forward onto the current default branch - if `main` has advanced, rebase onto it so the eventual merge stays a fast-forward.
-When it is implemented and committed, append `done [at=<epoch>]: ready in branch fm/layout-local` to the status file and stop.
+When it is implemented and committed, append `done [at=<epoch>]: ready in branch fm/local` to the status file and stop.
 The configured merge authority approves the ready branch, then firstmate merges it into local `main` through the guarded fast-forward path.
