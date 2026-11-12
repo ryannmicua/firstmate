@@ -1,0 +1,23 @@
+Targeted fixture regression on npm @earendil-works/pi-coding-agent 1.5.2; Node v24.21.0
+
+before fix: bash tests/.calm-fixture-validation.sh (only test_queued_operational_rows)
+exit=1
+not ok - Pi Calm queued operational rows: file://{run-worktree}/.test-validation/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js:4009
+        for (const component of this.pendingBashComponents) {
+                                     ^
+
+TypeError: this.pendingBashComponents is not iterable
+    at InteractiveMode.updatePendingMessagesDisplay (file://{run-worktree}/.test-validation/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js:4009:38)
+    at prototype.updatePendingMessagesDisplay (file://{run-worktree}/.test-validation/tmp/fm-calm-pi-extension.E9yXtu/queued-operational-rows/lib/fm-calm-pending-operational-layout.ts:207:44)
+    at file://{run-worktree}/.test-validation/tmp/fm-calm-pi-extension.E9yXtu/queued-operational-rows/[eval1]:113:8
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+Node.js v24.21.0
+
+after fix: bash tests/.calm-fixture-validation.sh (only test_queued_operational_rows)
+exit=0
+ok - Calm hides queued Firstmate rows only on a session that can keep them, keeps hidden ones out of the editor on Escape, delivers them once in order, and leaves unsupported sessions and Calm off stock
+
+Installed Pi 0.87.1 compatibility: bash tests/.calm-fixture-validation.sh (only test_queued_operational_rows)
+exit=0
+skip: installed @earendil-works/pi-coding-agent package not found
