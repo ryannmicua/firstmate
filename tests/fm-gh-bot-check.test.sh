@@ -59,7 +59,9 @@ EOF
   printf '{}' > "$BODIES/empty"
   jq -s '.' "$BODIES/c501" "$BODIES/c502" > "$BODIES/comments5"
   printf '[]' > "$BODIES/list-empty"
-  jq -n '{data:{nodes:(["IC_501","I_5","I_20","I_21","I_22","I_23","I_24"] | map({id:.,lastEditedAt:null,editor:null}))}}' > "$BODIES/graphql"
+  mkdir -p "$BODIES/nodes"
+  node IC_501 c501
+  printf '{"data":{"nodes":[]}}' > "$BODIES/graphql"
   : > "$ROUTES"
   route POST /graphql 200 graphql
   route GET '/notifications?all=true&participating=true&per_page=50&since=*&page=1' 200 notifications
@@ -77,6 +79,33 @@ EOF
   route POST '/repos/acme/widget/issues/comments/*/reactions' 201 empty
   route POST '/repos/acme/widget/issues/*/reactions' 201 empty
   fm_test_fake_github_api "$FAKEBIN" "$LOG" "$ROUTES"
+  mv "$FAKEBIN/curl" "$FAKEBIN/curl-api"
+  printf '#!/usr/bin/env bash\napi=%q\nnodes=%q\ngraphql=%q\noriginal=%q\n' \
+    "$API" "$BODIES/nodes" "$BODIES/graphql" "$FAKEBIN/curl-api" > "$FAKEBIN/curl"
+  cat >> "$FAKEBIN/curl" <<'SH'
+prev= data= last=
+for a in "$@"; do
+  [ "$prev" != --data-binary ] || data=$a
+  prev=$a last=$a
+done
+if [ "$last" = "$api/graphql" ]; then
+  out='[]'
+  for id in $(jq -r '.variables.ids[]' <<<"$data"); do
+    [ -f "$nodes/$id" ] || continue
+    edit='{"lastEditedAt":null,"editor":null}'
+    [ ! -f "$nodes/$id.edit" ] || edit=$(cat "$nodes/$id.edit")
+    out=$(jq -c --arg id "$id" --argjson e "$edit" --argjson acc "$out" \
+      '$acc + [{id: $id, body: .body, author: {login: .user.login}} + $e]' "$(cat "$nodes/$id")")
+  done
+  printf '{"data":{"nodes":%s}}' "$out" > "$graphql"
+fi
+exec "$original" "$@"
+SH
+  chmod +x "$FAKEBIN/curl"
+}
+
+node() {  # <node-id> <body-name>: GraphQL answers this node from that REST body
+  printf '%s\n' "$BODIES/$2" > "$BODIES/nodes/$1"
 }
 
 route() {  # <method> <glob> <status> <body-name>
@@ -196,6 +225,7 @@ test_complete_retrieval_and_retry() {
   jq '.[0:1] | .[0].subject.type = "PullRequest" | .[0].subject.url |= sub("issues/5$"; "pulls/5")' "$BODIES/notifications" > "$BODIES/only"
   mv "$BODIES/only" "$BODIES/notifications"
   jq '. + {body:"@example-bot subject instruction",node_id:"I_5",user:{login:"Owner-One"}}' "$BODIES/issue5" > "$BODIES/subject"
+  node I_5 subject
   jq -n '[range(100) | {id:.,body:"ordinary comment"}]' > "$BODIES/page1"
   jq -s '.' "$BODIES/c501" > "$BODIES/page2"
   jq '. + {html_url:"https://github.com/acme/widget/pull/5#review-2",body:"@example-bot review instruction"}' "$BODIES/c502" | jq -s '.' > "$BODIES/reviews"
@@ -345,7 +375,8 @@ test_owner_mention_arriving_during_reaction_is_retried() {
   make_world in-flight
   jq '.[0:1]' "$BODIES/notifications" > "$BODIES/only"
   mv "$BODIES/only" "$BODIES/notifications"
-  jq '. + {id:503,html_url:"https://github.com/acme/widget/issues/5#issuecomment-503",body:"@example-bot arriving during reaction"}' "$BODIES/c501" > "$BODIES/new-comment"
+  jq '. + {id:503,node_id:"IC_503",html_url:"https://github.com/acme/widget/issues/5#issuecomment-503",body:"@example-bot arriving during reaction"}' "$BODIES/c501" > "$BODIES/new-comment"
+  node IC_503 new-comment
   jq -s '.[0] + [.[1]]' "$BODIES/comments5" "$BODIES/new-comment" > "$BODIES/after-reaction"
   cp "$FAKEBIN/curl" "$FAKEBIN/curl-before"
   printf '#!/usr/bin/env bash\noriginal=%q\nsource_body=%q\ncomments=%q\n' "$FAKEBIN/curl-before" "$BODIES/after-reaction" "$BODIES/comments5" > "$FAKEBIN/curl"
@@ -434,6 +465,7 @@ test_timeout_resumes_completed_threads() {
   jq -n --arg api "$API" '[range(20;25) | {id:(.|tostring),reason:"mention",updated_at:(now - (25-.)*1200 | floor | todateiso8601),repository:{full_name:"acme/widget"},subject:{type:"Issue",title:("Backlog " + (.|tostring)),url:($api+"/repos/acme/widget/issues/"+(.|tostring))}}] | reverse' > "$BODIES/master"
   for i in 20 21 22 23 24; do
     printf '{"html_url":"https://github.com/acme/widget/issues/%s","node_id":"I_%s","user":{"login":"Owner-One"},"body":"@example-bot backlog %s"}' "$i" "$i" "$i" > "$BODIES/issue$i"
+    node "I_$i" "issue$i"
     route GET "/repos/acme/widget/issues/$i" 200 "issue$i"
     route GET "/repos/acme/widget/issues/$i/comments?per_page=100&page=1" 200 list-empty
     route GET "/repos/acme/widget/issues/$i/events?per_page=100&page=1" 200 list-empty
@@ -497,9 +529,9 @@ test_owner_edits_need_owner_provenance() {
     jq '.[0:1]' "$BODIES/notifications" > "$BODIES/only"
     mv "$BODIES/only" "$BODIES/notifications"
     case "$variant" in
-      stranger) jq -n '{data:{nodes:[{id:"IC_501",lastEditedAt:"2026-11-01T00:00:00Z",editor:{login:"stranger"}}]}}' > "$BODIES/graphql" ;;
-      unknown) jq -n '{data:{nodes:[{id:"IC_501",lastEditedAt:"2026-11-01T00:00:00Z",editor:null}]}}' > "$BODIES/graphql" ;;
-      owner) jq -n '{data:{nodes:[{id:"IC_501",lastEditedAt:"2026-11-01T00:00:00Z",editor:{login:"OWNER-ONE"}}]}}' > "$BODIES/graphql" ;;
+      stranger) printf '{"lastEditedAt":"2026-11-01T00:00:00Z","editor":{"login":"stranger"}}' > "$BODIES/nodes/IC_501.edit" ;;
+      unknown) printf '{"lastEditedAt":"2026-11-01T00:00:00Z","editor":null}' > "$BODIES/nodes/IC_501.edit" ;;
+      owner) printf '{"lastEditedAt":"2026-11-01T00:00:00Z","editor":{"login":"OWNER-ONE"}}' > "$BODIES/nodes/IC_501.edit" ;;
     esac
     run_check poll >/dev/null || fail "edit-$variant poll failed"
     note=$(note_with 'please fix the flaky tests')
@@ -525,6 +557,81 @@ test_owner_edits_need_owner_provenance() {
   pass "owner items edited by someone else, or by an unknown editor, lose owner authority"
 }
 
+test_note_text_comes_from_verified_snapshot() {
+  local note
+  make_world snapshot
+  jq '.[0:1]' "$BODIES/notifications" > "$BODIES/only"
+  mv "$BODIES/only" "$BODIES/notifications"
+  jq '.body = "@example-bot owner restored text"' "$BODIES/c501" > "$BODIES/restored"
+  jq '.body = "@example-bot collaborator replacement text"' "$BODIES/c501" > "$BODIES/edited"
+  mv "$BODIES/edited" "$BODIES/c501"
+  jq -s '.' "$BODIES/c501" "$BODIES/c502" > "$BODIES/comments5"
+  node IC_501 restored
+  printf '{"lastEditedAt":"2026-11-01T00:00:00Z","editor":{"login":"owner-one"}}' > "$BODIES/nodes/IC_501.edit"
+  run_check poll >/dev/null || fail "snapshot poll failed"
+  note=$(note_with 'owner restored text')
+  [ -n "$note" ] || fail "the verified snapshot text was not saved"
+  assert_grep 'From the owner: an instruction for firstmate.' "$note" "verified owner snapshot lost authority"
+  [ -z "$(note_with 'collaborator replacement text')" ] || fail "text outside the verified snapshot was saved"
+  pass "a note carries exactly the body whose author and last editor were verified"
+}
+
+test_commit_mentions_do_not_block_later_threads() {
+  local cursor
+  make_world commit
+  jq --arg api "$API" '[
+    (.[0] | .id = "8" | .updated_at = (now - 5400 | floor | todateiso8601)
+      | .subject = {title: "Release prep", type: "Release", url: ($api + "/repos/acme/widget/releases/1"), latest_comment_url: null}),
+    (.[0] | .id = "7" | .updated_at = (now - 7200 | floor | todateiso8601)
+      | .subject = {title: "Fix build", type: "Commit", url: ($api + "/repos/acme/widget/commits/abc123"),
+                    latest_comment_url: ($api + "/repos/acme/widget/comments/601")}),
+    (.[0] | .updated_at = (now - 3600 | floor | todateiso8601))]' "$BODIES/notifications" > "$BODIES/mixed"
+  mv "$BODIES/mixed" "$BODIES/notifications"
+  printf '{"sha":"abc123","html_url":"https://github.com/acme/widget/commit/abc123"}' > "$BODIES/commit"
+  printf '{"id":601,"node_id":"CC_601","url":"%s/repos/acme/widget/comments/601","html_url":"https://github.com/acme/widget/commit/abc123#commitcomment-601","user":{"login":"Owner-One"},"body":"@example-bot check this commit"}' "$API" > "$BODIES/c601"
+  jq -s '.' "$BODIES/c601" > "$BODIES/commit-comments"
+  node CC_601 c601
+  route GET /repos/acme/widget/commits/abc123 200 commit
+  route GET /repos/acme/widget/comments/601 200 c601
+  route GET '/repos/acme/widget/commits/abc123/comments?per_page=100&page=1' 200 commit-comments
+  route POST /repos/acme/widget/comments/601/reactions 201 empty
+  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2000-01-01T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+  run_check poll >/dev/null || fail "commit mention blocked the poll"
+  [ -n "$(note_with 'check this commit')" ] || fail "commit comment mention was not captured"
+  assert_grep 'From the owner: an instruction for firstmate.' "$(note_with 'check this commit')" "owner commit comment lost authority"
+  [ -n "$(note_with 'please fix the flaky tests')" ] || fail "later issue mention was blocked by the commit thread"
+  assert_no_grep 'commits/abc123/events' "$LOG/calls" "commit thread requested issue events"
+  assert_no_grep 'releases/1' "$LOG/calls" "unsupported subject was retrieved"
+  assert_grep 'POST /repos/acme/widget/comments/601/reactions' "$LOG/calls" "owner commit comment got no reaction"
+  cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.github-bot-check")
+  [ "$cursor" != 2000-01-01T00:00:00Z ] || fail "commit thread kept the cursor from advancing"
+  pass "commit-comment mentions are captured without issue endpoints and later threads still advance"
+}
+
+test_disarm_stops_running_poll_job() {
+  local start pid
+  make_world disarm-job
+  cp "$FAKEBIN/curl" "$FAKEBIN/curl-before"
+  printf '#!/usr/bin/env bash\noriginal=%q\n' "$FAKEBIN/curl-before" > "$FAKEBIN/curl"
+  cat >> "$FAKEBIN/curl" <<'SH'
+case "$*" in *'/notifications?'*) sleep 30 ;; esac
+exec "$original" "$@"
+SH
+  chmod +x "$FAKEBIN/curl"
+  env -u FM_STATE_OVERRIDE -u FM_CONFIG_OVERRIDE FM_HOME="$HOME_DIR" FM_GH_API_URL="$API" PATH="$FAKEBIN:$PATH" "$CHECK" check >/dev/null 2>&1
+  pid=$(readlink "$HOME_DIR/state/.github-bot-poll.lock") || fail "check did not start a poll job"
+  kill -0 "$pid" 2>/dev/null || fail "poll job is not running"
+  start=$(date +%s)
+  run_check disarm >/dev/null || fail "disarm failed while a poll was running"
+  [ "$(( $(date +%s) - start ))" -lt 15 ] || fail "disarm waited for the full poll"
+  ! kill -0 -- "-$pid" 2>/dev/null || fail "disarm left the poll job's process group running"
+  assert_absent "$HOME_DIR/state/.github-bot-poll.lock" "disarm left the poll lock"
+  sleep 1
+  assert_absent "$HOME_DIR/state/.github-bot-check" "a stopped poll job recreated its record"
+  [ -z "$(note_files)" ] || fail "a stopped poll job saved notes"
+  pass "disarm stops and awaits its running poll job before removing its records"
+}
+
 test_poll_turns_mentions_and_assignments_into_notes
 test_unsaved_note_keeps_cursor
 test_problems_report_once
@@ -548,3 +655,6 @@ test_existing_bot_eyes_skips_post
 test_timeout_resumes_completed_threads
 test_check_returns_while_poll_job_runs
 test_owner_edits_need_owner_provenance
+test_note_text_comes_from_verified_snapshot
+test_commit_mentions_do_not_block_later_threads
+test_disarm_stops_running_poll_job
