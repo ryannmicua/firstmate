@@ -1,0 +1,4 @@
+$ bash bin/fm-brief.sh layout-direct invented-example --mode direct-PR
+scaffolded: {run-worktree}/.pr-layout-live-p479i6iw/data/layout-direct/brief.md (ship, mode=direct-PR; replace {TASK} and {FIRSTMATE_SPEC})
+
+exit=0

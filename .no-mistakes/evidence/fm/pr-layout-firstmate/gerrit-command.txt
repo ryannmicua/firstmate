@@ -1,0 +1,4 @@
+$ bash bin/fm-brief.sh layout-gerrit invented-example --mode no-mistakes --forge gerrit
+scaffolded: {run-worktree}/.pr-layout-live-p479i6iw/data/layout-gerrit/brief.md (ship, mode=no-mistakes forge=gerrit shape=squash; replace {TASK} and {FIRSTMATE_SPEC})
+
+exit=0

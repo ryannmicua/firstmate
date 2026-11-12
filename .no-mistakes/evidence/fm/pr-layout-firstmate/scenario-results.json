@@ -1,0 +1,30 @@
+[
+  {
+    "case": "direct",
+    "command": "bash bin/fm-brief.sh layout-direct invented-example --mode direct-PR",
+    "exit": 0,
+    "result": "pass",
+    "artifact": "direct-brief.md"
+  },
+  {
+    "case": "pipeline",
+    "command": "bash bin/fm-brief.sh layout-pipeline invented-example --mode no-mistakes",
+    "exit": 0,
+    "result": "pass",
+    "artifact": "pipeline-brief.md"
+  },
+  {
+    "case": "local",
+    "command": "bash bin/fm-brief.sh layout-local invented-example --mode local-only",
+    "exit": 0,
+    "result": "pass",
+    "artifact": "local-brief.md"
+  },
+  {
+    "case": "gerrit",
+    "command": "bash bin/fm-brief.sh layout-gerrit invented-example --mode no-mistakes --forge gerrit",
+    "exit": 0,
+    "result": "pass",
+    "artifact": "gerrit-brief.md"
+  }
+]

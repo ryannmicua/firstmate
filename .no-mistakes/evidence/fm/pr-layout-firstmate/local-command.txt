@@ -1,0 +1,4 @@
+$ bash bin/fm-brief.sh layout-local invented-example --mode local-only
+scaffolded: {run-worktree}/.pr-layout-live-p479i6iw/data/layout-local/brief.md (ship, mode=local-only; replace {TASK} and {FIRSTMATE_SPEC})
+
+exit=0
