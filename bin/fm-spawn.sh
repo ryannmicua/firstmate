@@ -6318,6 +6318,32 @@ elif [ "$KEEP_AI_TRAILERS" = 0 ]; then
   GIT_HOOKS_INSTALLED=1
 fi
 
+# Optional GitHub writing identity (config/github-identity, opt-in): a GitHub
+# App or a user account such as a machine user. A ship or scout whose origin
+# is on github.com and writable by that identity runs its gh and git pushes
+# with the identity's token and commits as it; the launch sources the
+# pane-time env file below. An origin off github.com or a repository the
+# identity cannot write to keeps this machine's own sign-in, with a notice.
+# bin/fm-gh-identity.sh owns tokens, caching, and the env contract.
+GH_IDENTITY_DIR=
+if { [ "$KIND" = ship ] || [ "$KIND" = scout ]; } && { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+  gh_identity_slug=$("$FM_ROOT/bin/fm-gh-identity.sh" slug-of "$WT" 2>/dev/null) || gh_identity_slug=
+  if [ -z "$gh_identity_slug" ]; then
+    echo "note: $ID's origin is not on github.com, so it keeps this machine's own GitHub sign-in rather than the configured GitHub identity" >&2
+  else
+    gh_identity_status=0
+    FM_HOME="$FM_HOME" "$FM_ROOT/bin/fm-gh-identity.sh" prepare-worker "$STATE_REAL/$ID.gh-identity" "$gh_identity_slug" >/dev/null || gh_identity_status=$?
+    case "$gh_identity_status" in
+      0) GH_IDENTITY_DIR="$STATE_REAL/$ID.gh-identity" ;;
+      3) echo "note: the configured GitHub identity cannot write to $gh_identity_slug, so $ID keeps this machine's own GitHub sign-in" >&2 ;;
+      *)
+        echo "error: config/github-identity is present but the GitHub identity for $gh_identity_slug could not be prepared (see above); fix it or remove config/github-identity" >&2
+        exit 1
+        ;;
+    esac
+  fi
+fi
+
 fi
 
 # Delivery posture recorded in meta so fm-teardown's safety check and the
@@ -6782,6 +6808,12 @@ LAUNCH_DIR="/tmp/fm-$ID+$LAUNCH_HOME_TOKEN"
 # command, &&, || and that export list. A bad inherited count returns from the
 # sourced launch file before the worker runs, preserving the interactive pane
 # and its visible error for inspection.
+# The GitHub identity env file (prepared above) uses the same pane-time
+# append, so its entries land after whatever the hooks step added.
+if [ -n "${GH_IDENTITY_DIR:-}" ]; then
+  GH_IDENTITY_ENV_FILE=$(shell_quote "$LAUNCH_DIR/gh-identity.$SPAWN_GEN.sh")
+  LAUNCH="$(shell_quote "$FM_ROOT/bin/fm-gh-identity.sh") env-file $(shell_quote "$GH_IDENTITY_DIR") $GH_IDENTITY_ENV_FILE && . $GH_IDENTITY_ENV_FILE || return 1 2>/dev/null || exit 1; $LAUNCH"
+fi
 if [ "$GIT_HOOKS_INSTALLED" = 1 ]; then
   GIT_CONFIG_ENV_FILE=$(shell_quote "$LAUNCH_DIR/git-config.$SPAWN_GEN.sh")
   LAUNCH="$(shell_quote "$FM_ROOT/bin/fm-git-strip-ai-trailers.sh") env-file $(shell_quote "$GIT_HOOKS_DIR") $GIT_CONFIG_ENV_FILE && . $GIT_CONFIG_ENV_FILE || return 1 2>/dev/null || exit 1; $LAUNCH"

@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+# Behavior tests for bin/fm-gh-identity.sh, the optional GitHub identity
+# workers write as (a GitHub App or a user token), and its fm-spawn.sh wiring.
+#
+# Every GitHub call is answered by the fake curl from tests/fixtures.sh. The
+# App private key is a throwaway RSA key generated per run, and every token is
+# an invented string, so no case touches a real credential or the network.
+set -u
+
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
+
+APP="$ROOT/bin/fm-gh-identity.sh"
+TMP_ROOT=$(fm_test_tmproot fm-gh-identity)
+FAKE_TOKEN=ghs_FakeInstallationToken0001
+USER_TOKEN=ghp_FakeMachineUserToken0001
+OWNER_LOGIN_SECRET=owner-credential-should-never-answer
+
+command -v openssl >/dev/null 2>&1 || { echo "skip: openssl not installed"; exit 0; }
+command -v jq >/dev/null 2>&1 || { echo "skip: jq not installed"; exit 0; }
+
+# make_world <name>: a home with an App config and fake GitHub routes.
+# Sets HOME_DIR, FAKEBIN, LOG, ROUTES, BODIES.
+make_world() {
+  local name=$1
+  HOME_DIR="$TMP_ROOT/$name/home"
+  FAKEBIN=$(fm_fakebin "$TMP_ROOT/$name")
+  LOG="$TMP_ROOT/$name/log"
+  ROUTES="$TMP_ROOT/$name/routes"
+  BODIES="$TMP_ROOT/$name/bodies"
+  mkdir -p "$HOME_DIR/config" "$HOME_DIR/state" "$BODIES"
+  (umask 077 && openssl genrsa -out "$HOME_DIR/config/github-identity.pem" 2048 2>/dev/null) \
+    || fail "could not generate a throwaway key"
+  openssl rsa -in "$HOME_DIR/config/github-identity.pem" -pubout -out "$TMP_ROOT/$name/pub.pem" 2>/dev/null
+  printf '%s\n' '# test App' 'kind=app' 'app_id=4242' > "$HOME_DIR/config/github-identity"
+  printf '%s' '{"id":4242,"slug":"fm-test-app"}' > "$BODIES/app"
+  printf '%s' '{"id":99001,"login":"fm-test-app[bot]"}' > "$BODIES/bot"
+  printf '%s' '{"id":777}' > "$BODIES/install"
+  printf '{"token":"%s","expires_at":"2099-01-01T00:00:00Z"}' "$FAKE_TOKEN" > "$BODIES/token"
+  : > "$ROUTES"
+  route GET /app 200 app
+  route GET '/users/fm-test-app%5Bbot%5D' 200 bot
+  route GET /repos/acme/widget/installation 200 install
+  route POST /app/installations/777/access_tokens 201 token
+  fm_test_fake_github_api "$FAKEBIN" "$LOG" "$ROUTES"
+}
+
+route() {  # <method> <glob> <status> <body-name>
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$BODIES/$4" >> "$ROUTES"
+}
+
+app() {
+  env -u FM_STATE_OVERRIDE -u FM_CONFIG_OVERRIDE FM_HOME="$HOME_DIR" \
+    FM_GH_API_URL=https://api.test.invalid PATH="$FAKEBIN:$PATH" "$APP" "$@"
+}
+
+count_calls() {  # <exact call line>
+  grep -cxF "$1" "$LOG/calls" 2>/dev/null || true
+}
+
+test_prepare_worker_resolves_identity_and_installation() {
+  local dir out status jwt sig
+  make_world prepare
+  dir="$HOME_DIR/state/t1.gh-identity"
+  out=$(app prepare-worker "$dir" acme/widget 2>&1)
+  status=$?
+  expect_code 0 "$status" "prepare-worker should succeed: $out"
+  assert_grep 'name=fm-test-app[bot]' "$dir/profile" "profile lacks the bot name"
+  assert_grep 'email=99001+fm-test-app[bot]@users.noreply.github.com' "$dir/profile" "profile lacks the bot noreply email"
+  assert_grep 'repo=acme/widget' "$dir/profile" "profile lacks the repository"
+  [ -x "$dir/bin/gh" ] || fail "prepare-worker did not write the gh wrapper"
+  # The App JWT is a real RS256 signature over its header and payload.
+  jwt=$(sed -n 's/^Bearer //p' "$LOG/auth" | head -n 1)
+  sig=$(printf '%s' "${jwt##*.}" | tr '_-' '/+')
+  while [ $(( ${#sig} % 4 )) -ne 0 ]; do sig="$sig="; done
+  printf '%s' "$sig" | openssl base64 -d -A > "$TMP_ROOT/prepare/sig.bin"
+  printf '%s' "${jwt%.*}" | openssl dgst -sha256 -verify "$TMP_ROOT/prepare/pub.pem" \
+    -signature "$TMP_ROOT/prepare/sig.bin" >/dev/null 2>&1 || fail "the App JWT does not verify against the App key"
+  assert_no_grep 'Bearer' "$LOG/argv" "a credential rode on curl's command line"
+  assert_no_grep "${jwt%%.*}" "$LOG/argv" "the App JWT rode on curl's command line"
+  pass "prepare-worker resolves the bot identity and installation with a valid App JWT, credentials off argv"
+}
+
+test_prepare_worker_reports_not_installed() {
+  local out status
+  make_world not-installed
+  : > "$ROUTES"
+  route GET /app 200 app
+  route GET '/users/fm-test-app%5Bbot%5D' 200 bot
+  out=$(app prepare-worker "$HOME_DIR/state/t2.gh-identity" acme/other 2>&1)
+  status=$?
+  expect_code 3 "$status" "an uninstalled repository must exit 3: $out"
+  assert_absent "$HOME_DIR/state/t2.gh-identity" "an uninstalled repository still got a worker profile"
+  pass "prepare-worker exits 3 when the App is not installed for the repository"
+}
+
+test_refuses_shared_private_key() {
+  local out status
+  make_world shared-key
+  chmod 0644 "$HOME_DIR/config/github-identity.pem"
+  out=$(app prepare-worker "$HOME_DIR/state/t3.gh-identity" acme/widget 2>&1)
+  status=$?
+  expect_code 1 "$status" "a group-readable key must refuse"
+  assert_contains "$out" "chmod 600" "refusal should say how to fix the key"
+  assert_absent "$LOG/calls" "a refused key still called GitHub"
+  printf '%s\n' 'kind=app' 'app_id=4242' 'colour=blue' > "$HOME_DIR/config/github-identity"
+  chmod 0600 "$HOME_DIR/config/github-identity.pem"
+  out=$(app prepare-worker "$HOME_DIR/state/t3.gh-identity" acme/widget 2>&1)
+  status=$?
+  expect_code 1 "$status" "an unknown config key must refuse"
+  assert_contains "$out" "unknown key colour" "refusal should name the unknown key"
+  pass "a shared private key or unknown config key refuses before any GitHub call"
+}
+
+test_env_file_credentials_identity_and_cache() {
+  local dir envf repo out global calls
+  make_world envfile
+  dir="$HOME_DIR/state/t4.gh-identity"
+  app prepare-worker "$dir" acme/widget >/dev/null 2>&1 || fail "prepare-worker failed"
+  envf="$TMP_ROOT/envfile/env.sh"
+  global="$TMP_ROOT/envfile/gitconfig"
+  printf '[credential]\n\thelper = "!f() { echo password=%s; }; f"\n' "$OWNER_LOGIN_SECRET" > "$global"
+  GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*' \
+    GIT_CONFIG_KEY_1=core.hooksPath GIT_CONFIG_VALUE_1=/nonexistent \
+    PATH="$FAKEBIN:$PATH" app env-file "$dir" "$envf" || fail "env-file failed"
+  repo="$TMP_ROOT/envfile/repo"
+  git init -q "$repo"
+  # shellcheck disable=SC2016 # The child shell expands its own arguments.
+  out=$(env -i HOME="$TMP_ROOT/envfile" PATH="$FAKEBIN:$PATH" GIT_CONFIG_GLOBAL="$global" GIT_CONFIG_NOSYSTEM=1 \
+    FM_GH_API_URL=https://api.test.invalid \
+    GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*' \
+    GIT_CONFIG_KEY_1=core.hooksPath GIT_CONFIG_VALUE_1=/nonexistent \
+    bash -c '. "$1" || exit 9
+      cd "$2" || exit 9
+      git config --get core.hooksPath
+      git ls-remote --get-url git@github.com:acme/widget.git
+      printf "protocol=https\nhost=github.com\npath=acme/widget.git\n\n" | git credential fill | sed -n "s/^password=//p"
+      printf "protocol=https\nhost=github.com\npath=acme/widget.git\n\n" | git credential fill | sed -n "s/^password=//p"
+      git commit -q --allow-empty -m probe && git log -1 --format="%an <%ae>|%cn <%ce>"
+      command -v gh
+      printf "%s\n" "$GH_CONFIG_DIR"' _ "$envf" "$repo" 2>&1)
+  assert_contains "$out" "/nonexistent" "the inherited GIT_CONFIG entries were dropped"
+  assert_contains "$out" "https://github.com/acme/widget.git" "SSH origins are not rewritten to HTTPS"
+  [ "$(printf '%s\n' "$out" | grep -cxF "$FAKE_TOKEN")" = 2 ] || fail "git credential did not answer with the App token: $out"
+  assert_not_contains "$out" "$OWNER_LOGIN_SECRET" "the owner's credential helper still answered"
+  assert_contains "$out" "fm-test-app[bot] <99001+fm-test-app[bot]@users.noreply.github.com>|fm-test-app[bot] <99001+fm-test-app[bot]@users.noreply.github.com>" \
+    "commits are not attributed to the App's bot user"
+  assert_contains "$out" "$dir/bin/gh" "the gh wrapper is not first on PATH"
+  assert_contains "$out" "$dir/gh-config" "gh is not pointed at an empty config directory"
+  calls=$(count_calls "POST /app/installations/777/access_tokens")
+  [ "$calls" = 1 ] || fail "a cached token was minted again ($calls mints)"
+  assert_grep '"repositories":["widget"]' "$LOG/bodies" "the token was not scoped to the one repository"
+  pass "env-file routes git through the App token, clears inherited helpers, sets the bot identity, and caches the token"
+}
+
+test_token_refresh_and_gh_wrapper() {
+  local dir realbin out calls
+  make_world refresh
+  dir="$HOME_DIR/state/t5.gh-identity"
+  app prepare-worker "$dir" acme/widget >/dev/null 2>&1 || fail "prepare-worker failed"
+  realbin="$TMP_ROOT/refresh/realbin"
+  mkdir -p "$realbin"
+  # shellcheck disable=SC2016 # The fake gh expands its own environment.
+  printf '%s\n' '#!/usr/bin/env bash' \
+    "[ \"\$GH_TOKEN\" = '$FAKE_TOKEN' ] && echo token-ok" \
+    'echo "config=$GH_CONFIG_DIR args=$*"' > "$realbin/gh"
+  chmod +x "$realbin/gh"
+  out=$(env FM_GH_API_URL=https://api.test.invalid PATH="$dir/bin:$FAKEBIN:$realbin:$PATH" gh pr list 2>&1)
+  assert_contains "$out" token-ok "the gh wrapper did not hand the real gh the App token"
+  assert_contains "$out" "config=$dir/gh-config args=pr list" "the gh wrapper changed gh's arguments or config"
+  # A cached token with under ten minutes left is replaced, not reused.
+  printf 'expires=%s\ntoken=%s\n' "$(( $(date +%s) + 300 ))" ghs_NearlyExpired > "$HOME_DIR/state/gh-identity/tokens/acme__widget"
+  chmod 0600 "$HOME_DIR/state/gh-identity/tokens/acme__widget"
+  out=$(env FM_GH_API_URL=https://api.test.invalid PATH="$dir/bin:$FAKEBIN:$realbin:$PATH" gh api user 2>&1)
+  assert_contains "$out" token-ok "a nearly expired token was not refreshed"
+  calls=$(count_calls "POST /app/installations/777/access_tokens")
+  [ "$calls" = 2 ] || fail "expected one fresh mint after expiry, saw $calls mints"
+  pass "the gh wrapper runs the real gh with a fresh App token and refreshes a nearly expired one"
+}
+
+test_slug_of() {
+  local repo
+  repo="$TMP_ROOT/slug/repo"
+  mkdir -p "$TMP_ROOT/slug"
+  git init -q "$repo"
+  git -C "$repo" remote add origin git@github.com:example-org/example-app.git
+  [ "$("$APP" slug-of "$repo")" = example-org/example-app ] || fail "scp-form origin not parsed"
+  git -C "$repo" remote set-url origin https://github.com/example-user/thing
+  [ "$("$APP" slug-of "$repo")" = example-user/thing ] || fail "https origin not parsed"
+  git -C "$repo" remote set-url origin https://gitlab.com/example-user/thing.git
+  "$APP" slug-of "$repo" >/dev/null 2>&1 && fail "a non-GitHub origin was accepted"
+  pass "slug-of reads github.com origins and rejects other hosts"
+}
+
+test_spawn_wires_app_identity() {
+  local case_dir home proj wt fakebin launchlog id=gh-identity-z1 out status launch result
+  case_dir="$TMP_ROOT/spawn"
+  make_world spawn
+  home=$HOME_DIR
+  proj="$case_dir/project"
+  wt="$case_dir/wt"
+  launchlog="$case_dir/launch.log"
+  : > "$launchlog"
+  fakebin=$(fm_test_make_spawn_fakebin "$case_dir/fake")
+  cp "$FAKEBIN/curl" "$fakebin/curl"
+  fm_test_spawn_home "$home" codex
+  fm_git_worktree "$proj" "$wt" "wt-gh-identity"
+  # Spawn fetches origin, so the configured GitHub URL is rewritten to the
+  # local bare origin for git transport while slug-of reads the configured URL.
+  git -C "$proj" config url."file://$(cd "$proj.origin.git" && pwd)".insteadOf git@github.com:acme/widget.git
+  git -C "$proj" remote set-url origin git@github.com:acme/widget.git
+  fm_test_spawn_brief "$home" "$id"
+  out=$(FM_FAKE_LAUNCH_LOG="$launchlog" FM_GH_API_URL=https://api.test.invalid \
+    fm_test_run_spawn "$home" "$wt" "$fakebin" "$id" "$proj" \
+    --harness 'git var GIT_AUTHOR_IDENT; command -v gh' --mode direct-PR --yolo off)
+  status=$?
+  expect_code 0 "$status" "spawn with a configured App should succeed: $out"
+  [ -f "$home/state/$id.gh-identity/profile" ] || fail "spawn did not prepare the App worker profile"
+  launch=$(cat "$launchlog")
+  assert_contains "$launch" "fm-gh-identity.sh' env-file" "the launch does not source the identity env file"
+  result=$(env HOME="$case_dir" ENV= BASH_ENV= /bin/bash -c "cd '$wt' && $launch" 2>&1)
+  assert_contains "$result" "fm-test-app[bot] <99001+fm-test-app[bot]@users.noreply.github.com>" "the worker does not commit as the App"
+  assert_contains "$result" "$id.gh-identity/bin/gh" "the worker's gh is not the identity wrapper"
+
+  # Without the App installed for the repository, the worker keeps the
+  # machine's own sign-in and the spawn says so.
+  id=gh-identity-z2
+  fm_test_spawn_brief "$home" "$id"
+  printf '%s\t%s\t%s\t%s\n' GET /repos/acme/widget/installation 404 "$BODIES/app" > "$ROUTES.new"
+  grep -v 'installation' "$ROUTES" >> "$ROUTES.new"
+  mv "$ROUTES.new" "$ROUTES"
+  git -C "$proj" worktree add --quiet -b wt-gh-identity-2 "$wt-2"
+  : > "$launchlog"
+  out=$(FM_FAKE_LAUNCH_LOG="$launchlog" FM_GH_API_URL=https://api.test.invalid \
+    fm_test_run_spawn "$home" "$wt-2" "$fakebin" "$id" "$proj" \
+    --harness 'echo worker-ran' --mode direct-PR --yolo off)
+  status=$?
+  expect_code 0 "$status" "spawn for an uninstalled repository should still succeed: $out"
+  assert_contains "$out" "cannot write to acme/widget" "spawn did not report the missing installation"
+  assert_not_contains "$(cat "$launchlog")" "fm-gh-identity.sh" "an uninstalled repository still got the identity env"
+  pass "spawn runs a configured worker as the App and falls back with a notice when it is not installed"
+}
+
+# make_token_world <name>: a home whose identity is a user token.
+make_token_world() {
+  local name=$1
+  make_world "$name"
+  rm -f "$HOME_DIR/config/github-identity.pem"
+  printf '%s\n' 'kind=token' > "$HOME_DIR/config/github-identity"
+  (umask 077 && printf '%s\n' "$USER_TOKEN" > "$HOME_DIR/config/github-identity.token")
+  printf '%s' '{"login":"machine-bot","id":5150}' > "$BODIES/user"
+  printf '%s' '{"full_name":"acme/widget","permissions":{"admin":false,"push":true,"pull":true}}' > "$BODIES/repo-rw"
+  printf '%s' '{"full_name":"acme/readonly","permissions":{"admin":false,"push":false,"pull":true}}' > "$BODIES/repo-ro"
+  : > "$ROUTES"
+  route GET /user 200 user
+  route GET /repos/acme/widget 200 repo-rw
+  route GET /repos/acme/readonly 200 repo-ro
+}
+
+test_token_identity_prepares_and_answers() {
+  local dir envf out status realbin
+  make_token_world token
+  dir="$HOME_DIR/state/t7.gh-identity"
+  out=$(app prepare-worker "$dir" acme/widget 2>&1)
+  status=$?
+  expect_code 0 "$status" "a writable repository should prepare: $out"
+  assert_grep 'name=machine-bot' "$dir/profile" "profile lacks the token account login"
+  assert_grep 'email=5150+machine-bot@users.noreply.github.com' "$dir/profile" "profile lacks the account noreply email"
+  out=$(app prepare-worker "$HOME_DIR/state/t8.gh-identity" acme/readonly 2>&1)
+  status=$?
+  expect_code 3 "$status" "a read-only repository must exit 3: $out"
+  out=$(app prepare-worker "$HOME_DIR/state/t9.gh-identity" acme/missing 2>&1)
+  status=$?
+  expect_code 3 "$status" "an inaccessible repository must exit 3: $out"
+  envf="$TMP_ROOT/token/env.sh"
+  realbin="$TMP_ROOT/token/realbin"
+  mkdir -p "$realbin"
+  printf '%s\n' '#!/usr/bin/env bash' "[ \"\$GH_TOKEN\" = '$USER_TOKEN' ] && echo token-ok" > "$realbin/gh"
+  chmod +x "$realbin/gh"
+  # The env file captures PATH, so the stand-in gh must precede any real one.
+  env -u GIT_CONFIG_COUNT PATH="$realbin:$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" "$APP" env-file "$dir" "$envf" \
+    || fail "env-file failed"
+  # shellcheck disable=SC2016 # The child shell expands its own arguments.
+  out=$(env -i HOME="$TMP_ROOT/token" PATH="$realbin:$FAKEBIN:$PATH" GIT_CONFIG_NOSYSTEM=1 \
+    FM_GH_API_URL=https://api.test.invalid bash -c '. "$1" || exit 9
+      printf "protocol=https\nhost=github.com\npath=acme/widget.git\n\n" | git credential fill | sed -n "s/^password=//p"
+      gh pr list' _ "$envf" 2>&1)
+  assert_contains "$out" "$USER_TOKEN" "git credential did not answer with the user token"
+  assert_contains "$out" token-ok "the gh wrapper did not hand gh the user token"
+  assert_no_grep "$USER_TOKEN" "$LOG/argv" "the user token rode on curl's command line"
+  assert_absent "$HOME_DIR/state/gh-identity/tokens/acme__widget" "a user token was copied into the cache"
+  # Replacing the token file rotates the token without another spawn.
+  (umask 077 && printf '%s\n' ghp_RotatedToken0002 > "$HOME_DIR/config/github-identity.token")
+  # shellcheck disable=SC2016 # The child shell expands its own arguments.
+  out=$(env -i HOME="$TMP_ROOT/token" PATH="$FAKEBIN:$PATH" GIT_CONFIG_NOSYSTEM=1 bash -c '. "$1" || exit 9
+      printf "protocol=https\nhost=github.com\npath=acme/widget.git\n\n" | git credential fill | sed -n "s/^password=//p"' _ "$envf" 2>&1)
+  assert_contains "$out" ghp_RotatedToken0002 "a replaced token file was not picked up"
+  chmod 0644 "$HOME_DIR/config/github-identity.token"
+  out=$(app prepare-worker "$dir" acme/widget 2>&1)
+  status=$?
+  expect_code 1 "$status" "a shared token file must refuse"
+  assert_contains "$out" "chmod 600" "the refusal should say how to fix the token file"
+  pass "a user-token identity prepares writable repositories only, answers git and gh with its token, and rotates with the file"
+}
+
+test_prepare_worker_resolves_identity_and_installation
+test_prepare_worker_reports_not_installed
+test_refuses_shared_private_key
+test_env_file_credentials_identity_and_cache
+test_token_refresh_and_gh_wrapper
+test_slug_of
+test_spawn_wires_app_identity
+test_token_identity_prepares_and_answers

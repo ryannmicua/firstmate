@@ -3493,7 +3493,7 @@ cleanup_firstmate_home_children() {
       "$sub_state/.$child_id.branch-outcome-index" "$sub_state/.$child_id.captain-repeat"
     chmod u+w "$sub_state/$child_id.git-hooks" 2>/dev/null || true
     rm -rf "$sub_state/$child_id.git-hooks" "$sub_state/$child_id.push-guard" \
-      "$sub_state/$child_id.polytoken-config" \
+      "$sub_state/$child_id.gh-identity" "$sub_state/$child_id.polytoken-config" \
       "$sub_state/$child_id.polytoken-sessions" \
       "$sub_state/$child_id.polytoken-sessions-v1"
   done
@@ -4037,13 +4037,15 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
 # state/<id>.git-hooks is the spawn-owned commit-msg strip directory, left
 # read-only by its installer, and state/<id>.push-guard is a forge=external
 # task's read-only push guard record (bin/fm-git-push-guard.sh).
+# state/<id>.gh-identity is the GitHub identity worker profile and gh
+# wrapper (bin/fm-gh-identity.sh); it holds no token.
 chmod u+w "$STATE/$ID.git-hooks" 2>/dev/null || true
 # A task's polytoken config dir and sessions roots are directory trees (the
 # mirrored worker config and the versioned session tree the launch wrote
 # beside its sessions root), so they are removed recursively with the inbox
 # and the git-hooks dir rather than the flat file list above.
 rm -rf "$STATE/$ID.inbox" "$STATE/$ID.git-hooks" "$STATE/$ID.push-guard" \
-  "$STATE/$ID.polytoken-config" \
+  "$STATE/$ID.gh-identity" "$STATE/$ID.polytoken-config" \
   "$STATE/$ID.polytoken-sessions" "$STATE/$ID.polytoken-sessions-v1"
 # A presentation journal the close path left behind is orphaned once the
 # recorded pane is proven gone (the Herdr gate above) unless it still names a
