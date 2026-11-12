@@ -1987,6 +1987,7 @@ A `kind=token` account commits as its own login with its `users.noreply.github.c
 A `kind=app` App commits as its `<app-slug>[bot]` user; give it the repository permissions its workers need, typically Contents, Pull requests, and Issues (read and write) plus Metadata (read).
 
 When `config/github-identity` exists, every ship and scout spawn whose configured `origin` is on github.com checks that the identity can write to that repository: write access for a token, an installation covering the repository with Contents write permission for an App.
+Origin fetch and push URLs must not contain embedded credentials, including URLs produced by Git rewrite rules; remove credentials from remote URLs before spawning.
 If it can, the worker:
 
 - runs `gh` through a wrapper that supplies the identity's token on every call, with gh pointed at an empty config directory so the owner's stored login cannot answer;

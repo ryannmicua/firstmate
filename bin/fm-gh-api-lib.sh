@@ -94,7 +94,6 @@ fm_gh_slug_from_url() {
   local url=$1 path
   case "$url" in
     https://github.com/*) path=${url#https://github.com/} ;;
-    https://*@github.com/*) path=${url#https://*@github.com/} ;;
     ssh://git@github.com/*) path=${url#ssh://git@github.com/} ;;
     git@github.com:*) path=${url#git@github.com:} ;;
     *) return 1 ;;

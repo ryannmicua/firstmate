@@ -8,6 +8,8 @@
 #   fm-gh-identity.sh slug-of <worktree>
 #       Print owner/repo for <worktree>'s configured github.com origin URL;
 #       exit 3 when the origin is missing or not on github.com.
+#   fm-gh-identity.sh check-remotes <worktree>
+#       Refuse origin URLs with embedded credentials, including Git rewrites.
 #   fm-gh-identity.sh prepare-worker <dir> <owner/repo>
 #       Spawn-time step (bin/fm-spawn.sh). Check the identity can write to
 #       <owner/repo>, resolve its commit identity, and write <dir> (profile
@@ -374,6 +376,31 @@ action_slug_of() {
   printf '%s\n' "$slug"
 }
 
+action_check_remotes() {
+  local wt=$1 urls url authority effective
+  urls=$(git -C "$wt" config --get-all remote.origin.url 2>/dev/null) || urls=
+  effective=$(git -C "$wt" config --get-all remote.origin.pushurl 2>/dev/null) || effective=
+  urls="$urls"$'\n'"$effective"
+  effective=$(git -C "$wt" remote get-url --all origin 2>/dev/null) || die "could not inspect origin fetch URLs; remove embedded credentials from the remote URL"
+  urls="$urls"$'\n'"$effective"
+  effective=$(git -C "$wt" remote get-url --push --all origin 2>/dev/null) || die "could not inspect origin push URLs; remove embedded credentials from the remote URL"
+  urls="$urls"$'\n'"$effective"
+  while IFS= read -r url; do
+    case "$url" in
+      http://*|https://*)
+        authority=${url#*://}
+        authority=${authority%%/*}
+        case "$authority" in *@*) die "remove embedded credentials from the remote URL before using config/github-identity" ;; esac
+        ;;
+      ssh://*)
+        authority=${url#*://}
+        authority=${authority%%/*}
+        case "$authority" in *:*@*) die "remove embedded credentials from the remote URL before using config/github-identity" ;; esac
+        ;;
+    esac
+  done <<<"$urls"
+}
+
 action_prepare_worker() {
   local dir=$1 slug=$2 ident rc=0 home real_gh_note
   fm_gh_slug_ok "$slug" || die "expected owner/repo, got: $slug"
@@ -409,9 +436,9 @@ action_env_file() {
   # The empty helper first clears every inherited helper for github.com, so
   # neither the owner's stored login nor gh's own helper can answer instead.
   keys=(credential.https://github.com.helper credential.https://github.com.helper
-    credential.https://github.com.useHttpPath
+    credential.https://github.com.useHttpPath transfer.credentialsInUrl
     url.https://github.com/.insteadOf url.https://github.com/.insteadOf)
-  values=('' "$helper" true 'git@github.com:' 'ssh://git@github.com/')
+  values=('' "$helper" true die 'git@github.com:' 'ssh://git@github.com/')
   line="export PATH=$(quote_sq "$dir/bin:${PATH:-}") GH_CONFIG_DIR=$(quote_sq "$dir/gh-config")"
   line="$line GIT_TERMINAL_PROMPT='0'"
   line="$line GIT_AUTHOR_NAME=$(quote_sq "$PROFILE_NAME") GIT_AUTHOR_EMAIL=$(quote_sq "$PROFILE_EMAIL")"
@@ -430,16 +457,21 @@ action_env_file() {
 }
 
 action_git_credential() {
-  local dir=$1 op=${2:-} line protocol='' host='' path='' slug token rc=0
+  local dir=$1 op=${2:-} line protocol='' host='' path='' slug token rc=0 supplied=0
   [ "$op" = get ] || { cat >/dev/null; exit 0; }
   while IFS= read -r line && [ -n "$line" ]; do
     case "$line" in
       protocol=*) protocol=${line#protocol=} ;;
       host=*) host=${line#host=} ;;
       path=*) path=${line#path=} ;;
+      username=*|password=*) supplied=1 ;;
     esac
   done
   [ "$protocol" = https ] && [ "$host" = github.com ] || exit 0
+  if [ "$supplied" -eq 1 ]; then
+    printf 'quit=1\n'
+    die "remove embedded credentials from the remote URL before using config/github-identity"
+  fi
   read_profile "$dir" || { printf 'quit=1\n'; exit 1; }
   slug=${path%.git}
   slug=${slug%/}
@@ -489,6 +521,7 @@ action_gh() {
 
 case "${1:-}" in
   status) [ "$#" -eq 2 ] || { usage >&2; exit 2; }; action_status "$2" ;;
+  check-remotes) [ "$#" -eq 2 ] || { usage >&2; exit 2; }; action_check_remotes "$2" ;;
   slug-of) [ "$#" -eq 2 ] || { usage >&2; exit 2; }; action_slug_of "$2" ;;
   prepare-worker) [ "$#" -eq 3 ] || { usage >&2; exit 2; }; action_prepare_worker "$2" "$3" ;;
   env-file) [ "$#" -eq 3 ] || { usage >&2; exit 2; }; action_env_file "$2" "$3" ;;

@@ -3695,6 +3695,12 @@ else
   WT=""
   BRIEF="$DATA/$ID/brief.md"
 fi
+if [ "$KIND" != secondmate ] && { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+  "$FM_ROOT/bin/fm-gh-identity.sh" check-remotes "$PROJ_ABS" || exit 1
+  if [ "$RELAUNCH" -eq 1 ]; then
+    "$FM_ROOT/bin/fm-gh-identity.sh" check-remotes "$RELAUNCH_WT" || exit 1
+  fi
+fi
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ] &&
   git -C "$PROJ_ABS" rev-parse --git-dir >/dev/null 2>&1 &&
   ! git -C "$PROJ_ABS" rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
@@ -6336,6 +6342,7 @@ fi
 # bin/fm-gh-identity.sh owns tokens, caching, and the env contract.
 GH_IDENTITY_DIR=
 if { [ "$KIND" = ship ] || [ "$KIND" = scout ]; } && { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+  "$FM_ROOT/bin/fm-gh-identity.sh" check-remotes "$WT" || exit 1
   gh_identity_slug=$("$FM_ROOT/bin/fm-gh-identity.sh" slug-of "$WT" 2>/dev/null) || gh_identity_slug=
   if [ -z "$gh_identity_slug" ]; then
     echo "error: repository $WT has no github.com origin; configure a github.com origin or remove config/github-identity" >&2

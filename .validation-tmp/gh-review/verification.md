@@ -25,3 +25,12 @@ The new spawn case checks fresh ship/scout spawns and relaunches with configured
 Notification discovery checks a supported record after twenty unsupported records and another on the next page, while unsupported records remain unread.
 Submitted review summaries check a later-page owner mention after an ordinary later comment, failure before any notes or acknowledgement on an unavailable page, exclusion of pending reviews, and aggregation of a response larger than a typical single-argument limit.
 The initial discovery fixture omitted jq's null-input option; the corrected fixture and the entire inbox script passed on rerun.
+
+## Embedded remote credentials
+
+Verified 2026-11-12 with `TMPDIR="$PWD/.validation-tmp/gh-review" bash tests/fm-gh-identity.test.sh`: all twelve cases passed.
+The spawn regression exercises eight credential-bearing remote configurations through fm-spawn, including multiple push URLs and insteadOf/pushInsteadOf rewrites, and checks refusal, no launch, and no invented-token disclosure.
+The worker regression sends supplied credentials directly to the helper and exercises actual git fetch and push with the emitted worker environment.
+Both transport operations refuse plaintext credentials before invoking the fake HTTPS transport.
+The fake transport prevents real network access if the guard regresses.
+The oracle is the configured-identity isolation requirement: embedded owner credentials cannot bypass the bot identity.

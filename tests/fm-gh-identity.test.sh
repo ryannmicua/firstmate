@@ -408,6 +408,88 @@ test_paseo_agent_refuses_configured_identity() {
   pass "paseo-agent refuses configured identities before runtime or worktree changes for ships, scouts, and relaunches"
 }
 
+test_spawn_refuses_embedded_remote_credentials() {
+  local variant id proj wt fakebin launchlog out status secret=InventedOwnerToken991
+  for variant in fetch push additional-push instead-fetch instead-push push-instead username raw-rewritten; do
+    id="embedded-$variant"
+    make_world "$id"
+    proj="$TMP_ROOT/$id/project"
+    wt="$TMP_ROOT/$id/worktree"
+    fakebin=$(fm_test_make_spawn_fakebin "$TMP_ROOT/$id/fake" codex)
+    launchlog="$TMP_ROOT/$id/launch"
+    : > "$launchlog"
+    fm_test_spawn_home "$HOME_DIR" codex
+    fm_git_worktree "$proj" "$wt" "branch-$id"
+    fm_test_spawn_brief "$HOME_DIR" "$id"
+    git -C "$proj" remote set-url origin https://github.com/acme/widget.git
+    case "$variant" in
+      fetch) git -C "$proj" remote set-url origin "https://owner:$secret@github.com/acme/widget.git" ;;
+      push) git -C "$proj" config remote.origin.pushurl "https://owner:$secret@github.com/acme/widget.git" ;;
+      additional-push)
+        git -C "$proj" config --add remote.origin.pushurl https://github.com/acme/widget.git
+        git -C "$proj" config --add remote.origin.pushurl "https://owner:$secret@github.com/acme/widget.git"
+        ;;
+      instead-fetch)
+        git -C "$proj" config "url.https://owner:$secret@github.com/.insteadOf" https://github.com/
+        ;;
+      instead-push)
+        git -C "$proj" config remote.origin.pushurl alias:acme/widget.git
+        git -C "$proj" config "url.https://owner:$secret@github.com/.insteadOf" alias:
+        ;;
+      push-instead)
+        git -C "$proj" config "url.https://owner:$secret@github.com/.pushInsteadOf" https://github.com/
+        ;;
+      username) git -C "$proj" remote set-url origin "https://$secret@github.com/acme/widget.git" ;;
+      raw-rewritten)
+        git -C "$proj" remote set-url origin "https://owner:$secret@github.com/acme/widget.git"
+        git -C "$proj" config "url.https://github.com/.insteadOf" "https://owner:$secret@github.com/"
+        ;;
+    esac
+    out=$(FM_FAKE_LAUNCH_LOG="$launchlog" fm_test_run_spawn "$HOME_DIR" "$wt" "$fakebin" "$id" "$proj" \
+      --harness 'echo worker-ran' --mode direct-PR --yolo off)
+    status=$?
+    expect_code 1 "$status" "credential-bearing $variant URL must refuse"
+    assert_contains "$out" 'remove embedded credentials from the remote URL' "missing credential remediation for $variant"
+    assert_not_contains "$out" "$secret" "spawn leaked embedded credentials for $variant"
+    [ ! -s "$launchlog" ] || fail "credential-bearing $variant launched a worker"
+  done
+  pass "spawn refuses raw and rewritten fetch and push credentials without disclosing them"
+}
+
+test_worker_rejects_embedded_credentials() {
+  local dir envf repo execdir out status op secret=InventedOwnerToken992
+  make_world embedded-worker
+  dir="$HOME_DIR/state/worker.gh-identity"
+  envf="$TMP_ROOT/embedded-worker/env.sh"
+  repo="$TMP_ROOT/embedded-worker/repo"
+  execdir="$TMP_ROOT/embedded-worker/git-exec"
+  mkdir -p "$execdir"
+  app prepare-worker "$dir" acme/widget >/dev/null || fail "worker prepare failed"
+  app env-file "$dir" "$envf" || fail "worker environment failed"
+  out=$(printf 'protocol=https\nhost=github.com\npath=acme/widget.git\nusername=owner\npassword=%s\n\n' "$secret" |
+    app git-credential "$dir" get 2>&1)
+  status=$?
+  expect_code 1 "$status" "helper accepted supplied credentials"
+  assert_contains "$out" 'quit=1' "helper did not stop credential fallback"
+  assert_not_contains "$out" "$secret" "helper leaked supplied credentials"
+  git init -q "$repo"
+  git -C "$repo" -c user.name=Test -c user.email=test@example.invalid commit -q --allow-empty -m initial
+  git -C "$repo" remote add origin "https://owner:$secret@github.com/acme/widget.git"
+  printf '%s\n' '#!/usr/bin/env bash' ': > "$FM_TEST_TRANSPORT_CALLED"' 'exit 1' > "$execdir/git-remote-https"
+  chmod +x "$execdir/git-remote-https"
+  for op in fetch push; do
+    out=$(env -i HOME="$TMP_ROOT/embedded-worker" PATH="$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+      GIT_EXEC_PATH="$execdir" FM_TEST_TRANSPORT_CALLED="$execdir/called" \
+      bash -c '. "$1" || exit 9; if [ "$3" = push ]; then git -C "$2" push origin HEAD:refs/heads/probe; else git -C "$2" fetch origin; fi' _ "$envf" "$repo" "$op" 2>&1)
+    status=$?
+    [ "$status" -ne 0 ] || fail "worker $op accepted embedded credentials"
+    assert_contains "$out" 'uses plaintext credentials' "worker $op did not reject at the transport boundary"
+    assert_not_contains "$out" "$secret" "worker $op exposed embedded credentials"
+    assert_absent "$execdir/called" "worker $op passed credentials to the transport"
+  done
+  pass "worker helper and fetch/push transport reject embedded credentials without disclosure"
+}
+
 test_prepare_worker_resolves_identity_and_installation
 test_prepare_worker_reports_not_installed
 test_refuses_shared_private_key
@@ -420,3 +502,6 @@ test_token_identity_prepares_and_answers
 test_app_permissions_and_cache_binding
 
 test_paseo_agent_refuses_configured_identity
+
+test_spawn_refuses_embedded_remote_credentials
+test_worker_rejects_embedded_credentials
