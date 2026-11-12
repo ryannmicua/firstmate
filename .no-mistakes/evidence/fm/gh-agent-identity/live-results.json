@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Machine-user worker uses synthetic bot credentials and commit identity while isolated owner credentials remain usable",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "GitHub App worker mints repository-scoped tokens, reuses cache, and refreshes expired tokens through localhost API",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Authentication guards reject read-only access, public token files, embedded remote credentials, and owner netrc",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Local notification poll saves owner mentions and assignments as instructions and marks stranger or collaborator-edited text do-not-act",
+    "result": "pass",
+    "live": true
+  },
+  {
+    "name": "Local polling deduplicates replay, preserves cursor after HTTP failure, handles commits/reviews/deleted latest URLs, and disarms a running poll",
+    "result": "pass",
+    "live": true
+  }
+]

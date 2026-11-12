@@ -1,0 +1,21 @@
+ok - mentions and assignments become owner-marked or not-from-owner notes, reacted and de-duplicated
+ok - a note that cannot be saved keeps the poll cursor unchanged
+ok - configuration and token problems are reported once per change
+ok - arm registers the watcher check and disarm removes it
+ok - complete paginated mention retrieval precedes notes; absent mentions create no placeholders
+ok - assignment and review-request events are collected across pages and incomplete retrieval is retried
+ok - unsupported notifications do not hide later discovery pages
+ok - submitted review summaries across all pages join the complete retrieval boundary
+ok - complete discovery is required for oldest-first ordering and failed discovery preserves its cursor
+ok - mentions, assignments, and review requests are captured regardless of reason or read state
+ok - bounded overlapping polls capture owner mentions arriving during reactions without changing read state
+ok - a timed-out poll job keeps the cursor and is reported by the next check
+ok - threads run oldest first across pages and replayed notes skip reactions
+ok - the bot's existing eyes reaction skips another POST while preserving note capture
+ok - bounded polls checkpoint completed oldest threads and eventually capture the entire backlog
+ok - check starts one detached poll job and returns without waiting for it
+ok - owner items edited by someone else, or by an unknown editor, lose owner authority
+ok - a note carries exactly the body whose author and last editor were verified
+ok - commit-comment mentions are captured without issue endpoints and later threads still advance
+ok - a notification whose latest comment was deleted does not block intake
+ok - disarm stops and awaits its running poll job before removing its records
