@@ -82,6 +82,56 @@ SH
   chmod +x "$fakebin/gh"
 }
 
+# fm_test_fake_github_api <fakebin> <log-dir> <routes-file>
+# Drops a curl stub for bin/fm-gh-api-lib.sh. Each call is answered from
+# <routes-file>, whose tab-separated lines are METHOD, a path glob relative to
+# FM_GH_API_URL, an HTTP status, and a body file; the first match wins and an
+# unmatched call answers 404. The stub appends to <log-dir>: `argv` (the whole
+# command line, so a test can prove no credential rode on it), `calls` (METHOD
+# path), `auth` (the Authorization value read from the stdin --config), and
+# `bodies` (request bodies).
+fm_test_fake_github_api() {
+  local fakebin=$1 log=$2 routes=$3
+  mkdir -p "$log"
+  cat > "$fakebin/curl" <<SH
+#!/usr/bin/env bash
+log=$(printf '%q' "$log")
+routes=$(printf '%q' "$routes")
+SH
+  cat >> "$fakebin/curl" <<'SH'
+printf '%s\n' "$*" >> "$log/argv"
+cfg=$(cat)
+auth=$(printf '%s\n' "$cfg" | sed -n 's/^header = "Authorization: \(.*\)"$/\1/p')
+method=GET out=/dev/null data= url=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -X) method=$2; shift 2 ;;
+    -o) out=$2; shift 2 ;;
+    --data-binary) data=$2; shift 2 ;;
+    -w|--max-time|-H|--config) shift 2 ;;
+    -*) shift ;;
+    *) url=$1; shift ;;
+  esac
+done
+path=${url#"${FM_GH_API_URL:-https://api.github.com}"}
+printf '%s %s\n' "$method" "$path" >> "$log/calls"
+printf '%s\n' "$auth" >> "$log/auth"
+[ -z "$data" ] || printf '%s\n' "$data" >> "$log/bodies"
+status=404 body=
+while IFS=$'\t' read -r m glob st file; do
+  [ -n "$m" ] || continue
+  [ "$m" = "$method" ] || continue
+  # shellcheck disable=SC2053 # The route column is a glob on purpose.
+  [[ "$path" == $glob ]] || continue
+  status=$st body=$file
+  break
+done < "$routes"
+if [ -n "$body" ]; then cat "$body" > "$out"; else printf '{}' > "$out"; fi
+printf '%s' "$status"
+SH
+  chmod +x "$fakebin/curl"
+}
+
 # fm_test_fake_gh_axi <fakebin>
 # Answers --version with FM_FAKE_GH_AXI_VERSION or FM_TEST_GH_AXI_VERSION.
 fm_test_fake_gh_axi() {

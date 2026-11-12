@@ -14,6 +14,7 @@ Start with the directory layout, then use the setting reference for the behavior
 | Supervision and presentation | [Pi supervision branch](#pi-supervision-branch), [supervision host](#supervision-host-configsupervision-host), and [Calm preference](#calm-preference-configcalm) |
 | Persistent secondmates | [Secondmate routes](#secondmate-routes-datasecondmatesmd) |
 | Review bots on owned GitHub pull requests | [Contribution review bots](#contribution-review-bots-configcontribution-review-bots) |
+| GitHub identities for worker pull requests and owner mentions | [GitHub identities](#github-identities-configgithub-identity-configgithub-bot) |
 | Per-run overrides and tuning | [Environment variables](#environment-variables) |
 
 ## FM_HOME
@@ -1960,6 +1961,111 @@ Arm the check once per home with `bin/fm-usage-warner.sh arm`.
 That writes `state/usage-warner.check.sh` and binds its bytes with `bin/fm-check-register.sh`, so the existing watcher polls it on its normal cadence and turns a crossing into a `check:` wake; no separate schedule is involved.
 `arm` refuses on any platform other than macOS.
 `bin/fm-usage-warner.sh disarm` removes the shim, its trust binding, and the de-dupe record (`state/.usage-warner`).
+
+## GitHub identities (config/github-identity, config/github-bot)
+
+A home can give its GitHub work identities of its own while this machine's own `gh` and git sign-in stay as they are.
+A writing identity, either a user account such as a machine user or a GitHub App, is what workers push, commit, open pull requests, and reply as.
+A listening bot account is what the owner @-mentions or assigns issues and pull requests to, and that reaches firstmate as a captain inbox note.
+The two can be the same account: point both configurations at the same token file.
+Both are opt-in; a home with neither file behaves exactly as before, and the owner keeps reviewing and commenting under their own account.
+Neither file is inherited into secondmate homes, so a secondmate's workers use a writing identity only when that home has its own `config/github-identity`.
+
+### Writing identity
+
+`config/github-identity` holds `key=value` lines, and `#` starts a comment.
+
+| Key | Meaning |
+| --- | --- |
+| `kind` | `token` for a user account, or `app` for a GitHub App (required). |
+| `token_file` | With `kind=token`: absolute path of the account's token; default `config/github-identity.token`. |
+| `app_id` | With `kind=app`: the App's numeric ID (required for that kind). |
+| `private_key` | With `kind=app`: absolute path of the App's private key; default `config/github-identity.pem`. |
+
+The token or key file must be a readable regular file owned by this user with no group or other permissions; use mode 600.
+A symlink, an unknown key, or an unknown kind refuses.
+A `kind=token` account commits as its own login with its `users.noreply.github.com` address, and its token is read on every use, so replacing the file rotates it.
+A `kind=app` App commits as its `<app-slug>[bot]` user; give it the repository permissions its workers need, typically Contents, Pull requests, and Issues (read and write) plus Metadata (read).
+
+When `config/github-identity` exists, every ship and scout spawn whose configured `origin` is on github.com checks that the identity can write to that repository: write access for a token, an installation covering the repository with Contents write permission for an App.
+Origin fetch and push URLs must resolve under the worker's Git rewrite settings to plain HTTPS on github.com for the same repository, without userinfo or a port.
+Remove embedded credentials and unsupported transport rewrites before spawning.
+A netrc entry for `github.com` or `default` also refuses spawn and worker environment setup: remove that entry from `$NETRC` when set, otherwise from the worker home's `.netrc` or `_netrc`.
+The refusal names the file without revealing its contents.
+If it can, the worker:
+
+- runs `gh` through a wrapper that supplies the identity's token on every call, with gh pointed at an empty config directory so the owner's stored login cannot answer;
+- fetches and pushes github.com over HTTPS through a git credential helper that supplies the same token, after clearing every inherited github.com helper and HTTP extra header, with SSH github.com URLs rewritten to HTTPS;
+- commits with the identity as author and committer.
+
+An App token is minted through the repository's own installation and scoped to that one repository.
+App tokens are cached owner-only under `state/gh-identity/` and minted again when less than ten minutes remain, so a long-running worker keeps working past the one-hour token lifetime.
+Because each repository is matched to its own installation, one App installed on several accounts, such as an organization and the owner's personal account, needs no installation ID in the configuration.
+
+If the identity cannot write to the repository, or `origin` is not on github.com, the spawn refuses and names the repository; grant access or install the App, configure a github.com origin, or remove `config/github-identity`.
+If the identity is configured but cannot be used, such as an unreadable secret, a wrong App ID, a refused token, or GitHub out of reach, the spawn refuses and names the problem; fix it or remove `config/github-identity`.
+`bin/fm-gh-identity.sh status <owner/repo>` reports whether the identity can write to a repository and which commit identity workers would use, and never prints a token.
+
+Current limits:
+
+- `paseo-agent` does not yet support the configured GitHub identity; ship and scout spawns and relaunches refuse with that backend until identity support is added.
+- The no-mistakes pipeline pushes and opens its pull request from its own shared daemon, which uses this machine's own sign-in, so under that delivery path the commits carry the configured identity but the push and the pull request are the owner's; the direct pull request path uses the identity end to end.
+- Only `gh` found on `PATH` and git over github.com use the identity; a tool that calls the GitHub API with credentials of its own is outside this wiring.
+- A worker never falls back to the owner's sign-in inside a launched session: a repository the identity cannot reach fails rather than switching accounts.
+
+`bin/fm-gh-identity.sh --help` owns the exact commands and the launch environment it writes.
+
+### Listening as a bot account
+
+`config/github-bot` holds `key=value` lines, and `#` starts a comment.
+
+| Key | Meaning |
+| --- | --- |
+| `login` | The bot account's GitHub login (required). |
+| `owner` | The owner's GitHub login; only this account's mentions and assignments count as instructions (required). |
+| `token_file` | Absolute path of the bot's token; default `config/github-bot.token`. |
+
+The token must be a classic personal access token of the bot account with the `notifications` and `repo` scopes, because GitHub's notifications API does not accept fine-grained tokens, and its file must be owner-only.
+Arm the poll with `bin/fm-gh-bot-check.sh arm` and remove it with `bin/fm-gh-bot-check.sh disarm`.
+GitHub cannot reach this machine, so the watcher polls on its normal check interval (`FM_CHECK_INTERVAL`, five minutes by default).
+The check itself returns immediately: it starts the poll as a detached background job, and does nothing while a previous poll job still holds `state/.github-bot-poll.lock`.
+`disarm` stops a running poll job and waits for it before removing the check and its records.
+The job has its own timeout (`FM_GH_BOT_POLL_TIMEOUT`, 600 seconds by default) and records any problem for the next check to print; a poll that cannot finish within that timeout retries on the next check.
+
+Each poll reads participating notifications updated within an overlapping time window, regardless of read state.
+The first window covers the preceding day; later polls resume the since cursor in `state/.github-bot-check`.
+The [`fm-gh-bot-check.sh` header](../bin/fm-gh-bot-check.sh) owns cursor checkpointing and retry mechanics.
+An @-mention in an issue or pull request body, an issue comment, a pull request review comment, a submitted review summary, or a commit comment becomes one captain inbox note with the repository, the subject title and URL, the mention URL, and up to 4,000 characters of text.
+An assignment or review request becomes one note identifying the actor, repository, and issue or pull request title and URL.
+A note from the owner says it is an instruction for firstmate.
+Owner-authored mention text counts as the owner's only when one GraphQL response reports the owner as its author and either no edit or the owner as its last editor; the note carries the body from that same response, and unverifiable owner text is headed NOT FROM THE OWNER.
+Assignments and review requests count as the owner's when their event actor is the configured owner.
+Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
+For issue and pull request threads whose notification reason is mention, assignment, or review request, the poll retrieves all mentions and assignment/review-request events naming the bot, regardless of which of those reasons triggered the notification.
+Commit threads contribute commit-comment mentions only; other subject types are skipped.
+After a new note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up.
+Replayed notes and items already carrying the bot's own eyes reaction skip another reaction POST.
+The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried.
+Other notification reasons, including team mentions, are skipped.
+The check prints a line only when the last poll's problem changes, such as a missing or refused token; `bin/fm-gh-bot-check.sh --help` owns the details.
+
+### Placing the tokens and App key
+
+Place every secret from an ordinary terminal on this machine, never through an agent session, so no secret passes through a model.
+Keep the only copies on this host and in LastPass, and never paste one into a chat, brief, issue, pull request, or commit.
+With the LastPass CLI signed in, from the home directory, a machine user that both writes and listens looks like this:
+
+```sh
+umask 077
+lpass show --password '<bot token entry>' > config/github-bot.token
+chmod 600 config/github-bot.token
+printf 'kind=token\ntoken_file=%s\n' "$PWD/config/github-bot.token" > config/github-identity
+printf 'login=%s\nowner=%s\n' '<bot login>' '<your login>' > config/github-bot
+```
+
+For an App instead, save its key with `lpass show --notes '<App private key entry>' > config/github-identity.pem`, run `chmod 600` on it, and write `kind=app` and `app_id=<App ID>` into `config/github-identity`.
+Without the LastPass CLI, move the key file downloaded from the App's settings page into place, or run `cat > config/github-bot.token`, paste the token, and press Ctrl-D, then apply the same `chmod 600`.
+To rotate a secret, replace its file; delete `state/gh-identity/tokens/` to drop cached App tokens at once rather than within the hour.
 
 ## Mail plane (.env)
 

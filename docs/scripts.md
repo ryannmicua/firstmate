@@ -180,6 +180,9 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-mail.sh`             | General-purpose mail plane: read unseen IMAP mail, send one SMTP message, or surface new mail as a `check` wake via `poll` (configuration in the home's gitignored `.env`) |
 | `fm-mail.py`             | The IMAP/SMTP engine behind `fm-mail.sh` |
 | `fm-mail-check.sh`       | Standing received-mail poll: `arm` registers a watcher check that runs `fm-mail.sh poll` on the watcher cadence (new mail still wakes via the poll; the check's own line also wakes unless the poll is a proven no-op), `disarm` removes it |
+| `fm-gh-api-lib.sh`       | Shared GitHub REST access for the writing and listening identities: credentials only through curl's stdin config, owner-only key and token files, App JWT signing |
+| `fm-gh-identity.sh`      | Optional GitHub writing identity (a user token or a GitHub App): write-access check, cached repository-scoped App tokens, the worker `gh` wrapper, git credential helper, and launch environment `fm-spawn.sh` sources ([configuration](configuration.md#github-identities-configgithub-identity-configgithub-bot)) |
+| `fm-gh-bot-check.sh`     | Standing bot-account poll: `arm` registers a watcher check that turns the bot's GitHub @-mentions, assignments, and review requests into owner-marked or not-from-owner inbox notes from a background poll job and reacts, without marking them read; `disarm` removes it |
 | `fm-voice-relay.py`      | Hold the spoken conversation on this host, answer from the records, and hand real work to `fm-inbox.sh` ([voice-relay.md](voice-relay.md)) |
 | `fm-voice-client.py`     | The laptop end of the spoken interface: capture, playback, and turn timing over SSH; audio devices unverified |
 | `fm_voice_frame.py`      | The wire format both machines share, copied to the laptop beside the client          |

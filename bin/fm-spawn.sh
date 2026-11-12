@@ -2128,6 +2128,11 @@ if [ "$RELAUNCH" -eq 0 ]; then
   fi
   fm_backend_validate_spawn "$BACKEND" || exit 1
   fm_backend_source "$BACKEND" || exit 1
+  if [ "$BACKEND" = paseo-agent ] && [ "$KIND" != secondmate ] &&
+    { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+    echo "error: backend=paseo-agent does not apply config/github-identity; use a backend that applies the identity or remove config/github-identity" >&2
+    exit 1
+  fi
   if [ "$BACKEND" = orca ] && [ "$KIND" = secondmate ]; then
     echo "error: backend=orca does not support --secondmate spawns yet" >&2
     exit 1
@@ -2223,6 +2228,11 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_TARGET=$FM_BACKEND_VALIDATED_TARGET
   fm_backend_validate_spawn "$BACKEND" || exit 1
   fm_backend_source "$BACKEND" || exit 1
+  if [ "$BACKEND" = paseo-agent ] && [ "$KIND" != secondmate ] &&
+    { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+    echo "error: backend=paseo-agent does not apply config/github-identity; use a backend that applies the identity or remove config/github-identity" >&2
+    exit 1
+  fi
   # A relaunch must PROVE the previous agent is gone before it launches another
   # one into the same endpoint, and only tmux, herdr, and rex have a recovery-grade
   # classifier that can (bin/fm-control-lib.sh owns that capability table);
@@ -3684,6 +3694,12 @@ else
   PROJ_ABS="$(cd "$(resolve_project_dir_arg "$PROJ")" && pwd)"
   WT=""
   BRIEF="$DATA/$ID/brief.md"
+fi
+if [ "$KIND" != secondmate ] && { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+  "$FM_ROOT/bin/fm-gh-identity.sh" check-remotes "$PROJ_ABS" || exit 1
+  if [ "$RELAUNCH" -eq 1 ]; then
+    "$FM_ROOT/bin/fm-gh-identity.sh" check-remotes "$RELAUNCH_WT" || exit 1
+  fi
 fi
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ] &&
   git -C "$PROJ_ABS" rev-parse --git-dir >/dev/null 2>&1 &&
@@ -6318,6 +6334,36 @@ elif [ "$KEEP_AI_TRAILERS" = 0 ]; then
   GIT_HOOKS_INSTALLED=1
 fi
 
+# Optional GitHub writing identity (config/github-identity, opt-in): a GitHub
+# App or a user account such as a machine user. A ship or scout whose origin
+# is on github.com and writable by that identity runs its gh and git pushes
+# with the identity's token and commits as it; the launch sources the
+# pane-time env file below.
+# bin/fm-gh-identity.sh owns tokens, caching, and the env contract.
+GH_IDENTITY_DIR=
+if { [ "$KIND" = ship ] || [ "$KIND" = scout ]; } && { [ -e "$CONFIG/github-identity" ] || [ -L "$CONFIG/github-identity" ]; }; then
+  "$FM_ROOT/bin/fm-gh-identity.sh" check-remotes "$WT" || exit 1
+  gh_identity_slug=$("$FM_ROOT/bin/fm-gh-identity.sh" slug-of "$WT" 2>/dev/null) || gh_identity_slug=
+  if [ -z "$gh_identity_slug" ]; then
+    echo "error: repository $WT has no github.com origin; configure a github.com origin or remove config/github-identity" >&2
+    exit 1
+  else
+    gh_identity_status=0
+    FM_HOME="$FM_HOME" "$FM_ROOT/bin/fm-gh-identity.sh" prepare-worker "$STATE_REAL/$ID.gh-identity" "$gh_identity_slug" >/dev/null || gh_identity_status=$?
+    case "$gh_identity_status" in
+      0) GH_IDENTITY_DIR="$STATE_REAL/$ID.gh-identity" ;;
+      3)
+        echo "error: the configured GitHub identity cannot write to $gh_identity_slug; grant access/install the App, or remove config/github-identity" >&2
+        exit 1
+        ;;
+      *)
+        echo "error: config/github-identity is present but the GitHub identity for $gh_identity_slug could not be prepared (see above); fix it or remove config/github-identity" >&2
+        exit 1
+        ;;
+    esac
+  fi
+fi
+
 fi
 
 # Delivery posture recorded in meta so fm-teardown's safety check and the
@@ -6782,6 +6828,12 @@ LAUNCH_DIR="/tmp/fm-$ID+$LAUNCH_HOME_TOKEN"
 # command, &&, || and that export list. A bad inherited count returns from the
 # sourced launch file before the worker runs, preserving the interactive pane
 # and its visible error for inspection.
+# The GitHub identity env file (prepared above) uses the same pane-time
+# append, so its entries land after whatever the hooks step added.
+if [ -n "${GH_IDENTITY_DIR:-}" ]; then
+  GH_IDENTITY_ENV_FILE=$(shell_quote "$LAUNCH_DIR/gh-identity.$SPAWN_GEN.sh")
+  LAUNCH="$(shell_quote "$FM_ROOT/bin/fm-gh-identity.sh") env-file $(shell_quote "$GH_IDENTITY_DIR") $GH_IDENTITY_ENV_FILE && . $GH_IDENTITY_ENV_FILE || return 1 2>/dev/null || exit 1; $LAUNCH"
+fi
 if [ "$GIT_HOOKS_INSTALLED" = 1 ]; then
   GIT_CONFIG_ENV_FILE=$(shell_quote "$LAUNCH_DIR/git-config.$SPAWN_GEN.sh")
   LAUNCH="$(shell_quote "$FM_ROOT/bin/fm-git-strip-ai-trailers.sh") env-file $(shell_quote "$GIT_HOOKS_DIR") $GIT_CONFIG_ENV_FILE && . $GIT_CONFIG_ENV_FILE || return 1 2>/dev/null || exit 1; $LAUNCH"
