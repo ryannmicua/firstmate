@@ -1,0 +1,3 @@
+ok - fm-pr-merge merges as the bot when it can, falls back for workflow changes and unreachable repositories, and never prints the token
+ok - fm-pr-merge refuses red GitHub checks and waives only a named --allow-red check
+ok - fm-pr-merge refuses when a required check from branch protection or a ruleset never reported

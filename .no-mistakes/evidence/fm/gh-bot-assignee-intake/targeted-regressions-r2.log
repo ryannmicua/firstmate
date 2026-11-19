@@ -1,0 +1,24 @@
+fm-gh-bot-check: test_assigned_thread_captures_activity_without_mentions, test_unassigned_thread_ignores_unmentioned_activity, test_item_identity_survives_mention_edits, test_bot_mentions_are_excluded_across_item_types, test_assign_action, test_can_merge_and_reply_actions, test_gh_action_keeps_token_off_argv
+exit=0
+ok - on an assigned PR, owner comments and empty approvals are trusted, others are information, and replays deduplicate
+ok - unmentioned activity on a PR the bot is not assigned to is ignored
+ok - adding and removing mentions preserves item identity and existing mention reservations
+ok - bot-authored comments, inline comments, and reviews are excluded even when they quote a mention
+ok - assign adds the bot idempotently with its own token and reports refusals
+ok - can-merge accepts only writable repositories without workflow changes, and reply posts as the bot
+ok - gh runs as the bot with the token only in its environment
+
+fm-dod-lib: test_pr_based_dod_draft_check_uses_gh_axi
+exit=0
+all fm-dod-lib tests passed
+ok - PR-based DoD draft check uses gh-axi
+
+fm-pr-check-security: test_ready_pull_request_assigns_the_bot
+exit=0
+ok - a ready GitHub pull request is assigned to the configured bot, and a refusal never blocks arming
+
+fm-pr-merge: test_github_merge_identity_prefers_the_bot, test_github_red_checks_refuse_and_allow_red_waives_named, test_required_check_that_never_reported_refuses
+exit=0
+ok - fm-pr-merge merges as the bot when it can, falls back for workflow changes and unreachable repositories, and never prints the token
+ok - fm-pr-merge refuses red GitHub checks and waives only a named --allow-red check
+ok - fm-pr-merge refuses when a required check from branch protection or a ruleset never reported

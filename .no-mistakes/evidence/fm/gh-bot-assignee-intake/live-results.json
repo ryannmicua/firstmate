@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Assignment is idempotent and reports permission or silently dropped assignment",
+    "result": "pass"
+  },
+  {
+    "name": "Assigned local PR and issue activity preserves owner authority and downgrades visitors or foreign edits",
+    "result": "pass"
+  },
+  {
+    "name": "Blank local approvals and request-changes reach inbox with reviewed and current head commits",
+    "result": "pass"
+  },
+  {
+    "name": "Mention edits replay one inbox item and bot quotations are excluded across all three item types",
+    "result": "pass"
+  },
+  {
+    "name": "Unassigned local threads ignore plain comments while preserving owner mentions",
+    "result": "pass"
+  },
+  {
+    "name": "Unassigned local PR allows bot identity and reply; workflow or write limits refuse identity",
+    "result": "pass"
+  }
+]
