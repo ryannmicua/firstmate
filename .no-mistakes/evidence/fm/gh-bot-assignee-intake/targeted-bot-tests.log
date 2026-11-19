@@ -1,0 +1,8 @@
+ok - on an assigned PR, owner comments and empty approvals are trusted, others are information, and replays deduplicate
+ok - an owner approval names the migration label only for a repository configured to gate migrations with one
+ok - unmentioned activity on a PR the bot is not assigned to is ignored
+ok - adding and removing mentions preserves item identity and existing mention reservations
+ok - bot-authored comments, inline comments, and reviews are excluded even when they quote a mention
+ok - assign adds the bot idempotently with its own token and reports refusals
+ok - can-merge accepts only writable repositories without workflow changes, and reply posts as the bot
+ok - gh runs as the bot with the token only in its environment

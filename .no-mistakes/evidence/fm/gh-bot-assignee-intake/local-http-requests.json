@@ -1,0 +1,418 @@
+[
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/assignees/lab-bot",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/repos/demo/repo/issues/7/assignees",
+    "body": {
+      "assignees": [
+        "lab-bot"
+      ]
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/assignees/lab-bot",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/reviews?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N201",
+          "N202",
+          "N101",
+          "N301"
+        ]
+      }
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/events?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/comments/201/reactions?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/repos/demo/repo/pulls/comments/201/reactions",
+    "body": {
+      "content": "eyes"
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/comments/101/reactions?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/repos/demo/repo/issues/comments/101/reactions",
+    "body": {
+      "content": "eyes"
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/reactions?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/repos/demo/repo/issues/7/reactions",
+    "body": {
+      "content": "eyes"
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/reviews?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N201",
+          "N202",
+          "N101",
+          "N301"
+        ]
+      }
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/events?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/reviews?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N201",
+          "N202",
+          "N101",
+          "N301"
+        ]
+      }
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/events?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/reviews?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N201",
+          "N202",
+          "N101",
+          "N301",
+          "N303"
+        ]
+      }
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/events?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/7/reactions?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/8",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/8/comments?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/graphql",
+    "body": {
+      "query": "query($ids: [ID!]!) { nodes(ids: $ids) { ... on Comment { id body author { login } lastEditedAt editor { login } } } }",
+      "variables": {
+        "ids": [
+          "N401"
+        ]
+      }
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/8/events?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/issues/comments/401/reactions?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/repos/demo/repo/issues/comments/401/reactions",
+    "body": {
+      "content": "eyes"
+    },
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/notifications?all=true&participating=true&per_page=50&since=2000-01-01T00:00:00Z&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/files?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/files?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo/pulls/7/files?per_page=100&page=1",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/repos/demo/repo",
+    "body": null,
+    "synthetic_bot_auth": true
+  },
+  {
+    "method": "POST",
+    "path": "/repos/demo/repo/issues/7/comments",
+    "body": {
+      "body": "Approval received; checking the current head."
+    },
+    "synthetic_bot_auth": true
+  }
+]

@@ -1,0 +1,1 @@
+ok - fm-pr-merge merges as the bot when it can, falls back for workflow changes, unreachable repositories, and --admin without bot admin access, and never prints the token

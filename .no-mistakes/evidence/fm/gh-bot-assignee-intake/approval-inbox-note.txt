@@ -1,0 +1,15 @@
+id=1795078726-RLdWVi
+at=2026-11-19T08:58:46Z
+source=text
+announce_marker=1
+request_id=ghbot-38df108adf3f434510da23786e06d00d
+--
+GitHub review on a thread assigned to @lab-bot by Lab-Owner (the owner) in demo/repo
+From the owner: an instruction for firstmate.
+Issue or PR: Local approval exercise https://github.com/demo/repo/pull/7
+Comment: https://github.com/demo/repo/pull/7#pullrequestreview-301
+Review state: APPROVED
+Reviewed commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+PR head when captured: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Owner approval: the owner's word to merge this PR only while the reviewed commit is still its head and no later request-changes followed; merge through bin/fm-pr-merge.sh with green checks, nothing merges automatically (docs/configuration.md "GitHub identities").
+Migration label: demo/repo gates data migrations with the label migration-reviewed; if this PR contains a data migration, add that label before merging.

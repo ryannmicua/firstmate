@@ -1,0 +1,59 @@
+$ bin/fm-gh-bot-check.sh assign https://github.com/demo/repo/pull/7
+exit=0
+assigned: lab-bot
+
+$ bin/fm-gh-bot-check.sh assign https://github.com/demo/repo/pull/7
+exit=0
+already assigned: lab-bot
+
+OBSERVED: Assign bot through real HTTP, then repeat without another assignment POST
+$ bin/fm-gh-bot-check.sh poll
+exit=0
+
+OBSERVED: Assigned PR: owner comments and inline reviews trusted, stranger and externally edited text untrusted, bot activity excluded
+OBSERVED: Empty owner approval emits reviewed/head SHAs, green-check and cancellation conditions, and configured migration label
+$ bin/fm-gh-bot-check.sh poll
+exit=0
+
+$ bin/fm-gh-bot-check.sh poll
+exit=0
+
+OBSERVED: Adding/removing mentions and replaying the poll preserves note IDs and avoids repeat reactions
+$ bin/fm-gh-bot-check.sh poll
+exit=0
+
+OBSERVED: Later push and empty request-changes reach inbox with new head; supervisor enforcement remains outside this local CLI check
+$ bin/fm-gh-bot-check.sh poll
+exit=0
+
+OBSERVED: Assigned issue: owner instruction and non-owner information reach inbox without mentions
+$ bin/fm-gh-bot-check.sh poll
+exit=0
+
+OBSERVED: Unassigned PR unmentioned activity is ignored
+$ bin/fm-gh-bot-check.sh can-merge https://github.com/demo/repo/pull/7
+exit=0
+lab-bot
+
+$ bin/fm-gh-bot-check.sh can-merge https://github.com/demo/repo/pull/7 --admin
+exit=3
+the bot lab-bot has no admin access to demo/repo for an --admin merge
+
+$ bin/fm-gh-bot-check.sh can-merge https://github.com/demo/repo/pull/7 --admin
+exit=0
+lab-bot
+
+$ bin/fm-gh-bot-check.sh can-merge https://github.com/demo/repo/pull/7
+exit=3
+https://github.com/demo/repo/pull/7 changes .github/workflows, which needs a workflow scope the bot token lacks
+
+$ bin/fm-gh-bot-check.sh can-merge https://github.com/demo/repo/pull/7
+exit=3
+the bot lab-bot has no write access to demo/repo
+
+OBSERVED: Unassigned PR bot merge eligibility: write allowed; admin requires admin; workflow and read-only cases refuse bot identity
+$ bin/fm-gh-bot-check.sh reply https://github.com/demo/repo/pull/7
+exit=0
+https://github.com/demo/repo/pull/7#issuecomment-999
+
+OBSERVED: Bot reply posts supplied acknowledgement through real HTTP using synthetic bot credential

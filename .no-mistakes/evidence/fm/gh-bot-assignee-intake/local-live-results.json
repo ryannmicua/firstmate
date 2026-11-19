@@ -1,0 +1,11 @@
+[
+  "Assign bot through real HTTP, then repeat without another assignment POST",
+  "Assigned PR: owner comments and inline reviews trusted, stranger and externally edited text untrusted, bot activity excluded",
+  "Empty owner approval emits reviewed/head SHAs, green-check and cancellation conditions, and configured migration label",
+  "Adding/removing mentions and replaying the poll preserves note IDs and avoids repeat reactions",
+  "Later push and empty request-changes reach inbox with new head; supervisor enforcement remains outside this local CLI check",
+  "Assigned issue: owner instruction and non-owner information reach inbox without mentions",
+  "Unassigned PR unmentioned activity is ignored",
+  "Unassigned PR bot merge eligibility: write allowed; admin requires admin; workflow and read-only cases refuse bot identity",
+  "Bot reply posts supplied acknowledgement through real HTTP using synthetic bot credential"
+]
