@@ -327,17 +327,17 @@ handle_thread() {
     html=$(jq -r '.html_url' <<<"$item")
     url=$(jq -r '.url // empty' <<<"$item")
     trusted=$(jq -r '.trusted == true' <<<"$item")
+    [ "$(lower "$author")" != "$bot" ] || continue
     if mentions_bot "$body"; then
       kind="mention of"
       scope=mention
-      rid="ghbot-$(sha_hex "mention:$html")"
     else
-      [ "$assigned" = true ] && [ "$html" != "$issue_url" ] && [ "$(lower "$author")" != "$bot" ] || continue
+      [ "$assigned" = true ] && [ "$html" != "$issue_url" ] || continue
       kind="comment on a thread assigned to"
       [ "$(jq -r '.fm_review == true' <<<"$item")" = false ] || kind="review on a thread assigned to"
       scope=assigned
-      rid="ghbot-$(sha_hex "assigned:$html")"
     fi
+    rid="ghbot-$(sha_hex "mention:$html")"
     review=$(review_lines "$item" "$trusted" "$head_sha") || return 1
     if ! save_note "$rid" "$(note_body "$kind" "$author" "$trusted" "$repo" "$title" "${issue_url:-$html}" "$html" "$body" "$scope" "$review")"; then
       ok=1

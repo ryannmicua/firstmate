@@ -765,6 +765,58 @@ test_assigned_thread_captures_activity_without_mentions() {
   pass "on an assigned PR, owner comments and empty approvals are trusted, others are information, and replays deduplicate"
 }
 
+test_item_identity_survives_mention_edits() {
+  local stage files='' note
+  make_assigned_world mention-edits true comment
+  for stage in 0 1 2; do
+    jq --argjson stage "$stage" '
+      .[0].body = (if $stage == 1 then "@example-bot old owner remark before the assignment" else "old owner remark before the assignment" end)
+      | .[1].body = (if $stage == 1 then "please rename the export flag" else "@example-bot please rename the export flag" end)'       "$BODIES/comments7" > "$BODIES/next"
+    mv "$BODIES/next" "$BODIES/comments7"
+    jq --argjson stage "$stage" '.[0].body = (if $stage == 1 then "@example-bot inline note rewritten by someone else" else "inline note rewritten by someone else" end)'       "$BODIES/review-comments7" > "$BODIES/next"
+    mv "$BODIES/next" "$BODIES/review-comments7"
+    jq --argjson stage "$stage" '.[0].body = (if $stage == 1 then "@example-bot" else "" end)'       "$BODIES/reviews7" > "$BODIES/next"
+    mv "$BODIES/next" "$BODIES/reviews7"
+    jq '.[0]' "$BODIES/comments7" > "$BODIES/c701"
+    jq '.[1]' "$BODIES/comments7" > "$BODIES/c702"
+    jq '.[0]' "$BODIES/review-comments7" > "$BODIES/rc801"
+    jq '.[0]' "$BODIES/reviews7" > "$BODIES/r901"
+    printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2000-01-01T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+    : > "$LOG/calls"
+    run_check poll >/dev/null || fail "mention edit stage $stage failed"
+    [ "$(note_files | wc -l | tr -d ' ')" = 5 ] || fail "mention edit stage $stage duplicated a GitHub item"
+    if [ "$stage" = 0 ]; then
+      files=$(note_files)
+      note=$(note_with 'please rename the export flag')
+      assert_grep 'request_id=ghbot-bd92797b780d3b13b575c978eead35eb' "$note" "the existing mention request identity changed"
+    else
+      [ "$(note_files)" = "$files" ] || fail "mention edit replaced an existing note"
+      assert_no_grep '^POST .*reactions' "$LOG/calls" "mention edit reacted to a replay"
+    fi
+  done
+  pass "adding and removing mentions preserves item identity and existing mention reservations"
+}
+
+test_bot_mentions_are_excluded_across_item_types() {
+  make_assigned_world bot-mentions true comment
+  jq '.[3].body = "bot quoted comment @example-bot"' "$BODIES/comments7" > "$BODIES/next"
+  mv "$BODIES/next" "$BODIES/comments7"
+  jq '. + [.[0] | .id = 802 | .node_id = "RC_802" | .user.login = "Example-Bot"
+    | .url = "https://api.test.invalid/repos/acme/widget/pulls/comments/802"
+    | .html_url = "https://github.com/acme/widget/pull/7#discussion_r802"
+    | .body = "bot quoted inline comment @example-bot"]' "$BODIES/review-comments7" > "$BODIES/next"
+  mv "$BODIES/next" "$BODIES/review-comments7"
+  jq '. + [.[0] | .id = 903 | .node_id = "PRR_903" | .user.login = "EXAMPLE-BOT"
+    | .html_url = "https://github.com/acme/widget/pull/7#pullrequestreview-903"
+    | .body = "bot quoted review @example-bot"]' "$BODIES/reviews7" > "$BODIES/next"
+  mv "$BODIES/next" "$BODIES/reviews7"
+  run_check poll >/dev/null || fail "bot-mention poll failed"
+  [ -z "$(note_with 'bot quoted')" ] || fail "a bot-authored mention became an inbox note"
+  [ "$(note_files | wc -l | tr -d ' ')" = 5 ] || fail "bot exclusion lost ordinary owner or informational items"
+  [ -z "$(note_with 'GitHub assignment of')" ] || fail "the bot assigning itself became a note"
+  pass "bot-authored comments, inline comments, and reviews are excluded even when they quote a mention"
+}
+
 test_unassigned_thread_ignores_unmentioned_activity() {
   local reason
   for reason in comment assign; do
@@ -905,6 +957,8 @@ test_lock_naming_unrelated_process_is_stale
 test_disarm_stops_running_poll_job
 test_assigned_thread_captures_activity_without_mentions
 test_unassigned_thread_ignores_unmentioned_activity
+test_item_identity_survives_mention_edits
+test_bot_mentions_are_excluded_across_item_types
 test_assign_action
 test_can_merge_and_reply_actions
 test_gh_action_keeps_token_off_argv
