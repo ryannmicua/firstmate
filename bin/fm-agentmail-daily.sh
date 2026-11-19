@@ -3,9 +3,16 @@
 # Usage: fm-agentmail-daily.sh --repo <owner/name> --html-file <file>
 #        --text-file <file> [--subject <text>]
 # Sends through fm-agentmail-send.sh using only the repository's owner route.
-# state/agentmail-daily.sent-day stores the last successful local date;
-# state/agentmail-daily.log records dates and send/refusal results without mail
-# content or credentials. state/.agentmail-daily.lock serializes invocations.
+# state/agentmail-daily.sent-day holds "<local date> pending" while a send is
+# in flight and "<local date> sent" after it succeeds. Any record for today
+# refuses another send: a send whose outcome is uncertain (timeout, transport
+# failure, lost response, server error, unrecordable success) or that was
+# interrupted keeps the day consumed. Only a definitive refusal (AgentMail's
+# 4xx with an error message, or a local check before any API call) clears the
+# reservation for a retry. state/agentmail-daily.log records dates and
+# send/refusal results without mail content or credentials.
+# state/.agentmail-daily.lock, a symlink to the holder's pid, serializes
+# invocations; a lock whose holder is no longer running is taken over.
 # FM_AGENTMAIL_DAILY_DATE overrides the local YYYY-MM-DD date for testing.
 set -u
 umask 077
@@ -51,20 +58,46 @@ if [ -n "${FM_AGENTMAIL_DAILY_DATE:-}" ]; then
 fi
 mkdir -p "$STATE" || exit 1
 LOCK="$STATE/.agentmail-daily.lock"
-mkdir "$LOCK" 2>/dev/null || refuse 'daily send is locked'
-trap 'rmdir "$LOCK"' EXIT
 SENT="$STATE/agentmail-daily.sent-day"
-if [ -f "$SENT" ]; then
-  LAST_DAY=$(cat "$SENT") || refuse 'cannot read sent day'
+
+lock_holder_live() {
+  local pid
+  pid=$(readlink "$LOCK" 2>/dev/null) || return 1
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null && ps -o args= -p "$pid" 2>/dev/null | grep -q 'fm-agentmail-daily\.sh'
+}
+
+write_record() {
+  local tmp
+  tmp=$(mktemp "$STATE/.agentmail-daily.sent-day.XXXXXX") || return 1
+  if ! printf '%s %s\n' "$DAY" "$1" > "$tmp" || ! mv -f -- "$tmp" "$SENT"; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+}
+
+if ! ln -s "$$" "$LOCK" 2>/dev/null; then
+  STALE=$(readlink "$LOCK" 2>/dev/null) || refuse 'daily send is locked'
+  lock_holder_live && refuse 'daily send is locked'
+  [ "$(readlink "$LOCK" 2>/dev/null)" = "$STALE" ] && rm -f -- "$LOCK"
+  ln -s "$$" "$LOCK" 2>/dev/null || refuse 'daily send is locked'
+fi
+trap '[ "$(readlink "$LOCK" 2>/dev/null)" != "$$" ] || rm -f -- "$LOCK"' EXIT
+if [ -e "$SENT" ]; then
+  LAST_DAY=
+  read -r LAST_DAY _ < "$SENT" || [ -n "$LAST_DAY" ] || refuse 'cannot read sent day'
   [ "$LAST_DAY" != "$DAY" ] || refuse 'already sent today'
 fi
-TMP=$(mktemp "$STATE/.agentmail-daily.sent-day.XXXXXX") || refuse 'cannot prepare sent day'
-trap 'rm -f -- "$TMP"; rmdir "$LOCK"' EXIT
-printf '%s\n' "$DAY" > "$TMP" || refuse 'cannot prepare sent day'
 log_result attempt || exit 1
-if ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-agentmail-send.sh" --repo "$REPO" --html-file "$HTML" --text-file "$TEXT" --subject "$SUBJECT" >/dev/null 2>&1; then
-  refuse 'send failed'
-fi
-mv -f -- "$TMP" "$SENT" || refuse 'sent but could not record day'
+write_record pending || refuse 'cannot reserve the day'
+rc=0
+FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-agentmail-send.sh" --repo "$REPO" --html-file "$HTML" --text-file "$TEXT" --subject "$SUBJECT" >/dev/null 2>&1 || rc=$?
+case "$rc" in
+  0) ;;
+  1|2) rm -f -- "$SENT" || refuse 'send refused; day stays reserved'
+     refuse 'send failed' ;;
+  *) refuse 'send outcome uncertain; day consumed' ;;
+esac
+write_record sent || refuse 'sent but could not record day'
 log_result sent || exit 1
 printf 'sent: %s\n' "$DAY"

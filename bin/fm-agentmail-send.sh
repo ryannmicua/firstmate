@@ -26,7 +26,11 @@
 # address. A repository whose owner has no route is refused. The routed address
 # still passes the allowlist check.
 #
-# Prints message_id=<id> and thread_id=<id> on success. The API key is read from
+# Prints message_id=<id> and thread_id=<id> on success. Exit status 1 or 2
+# means nothing was sent: a local check failed before the API call, or
+# AgentMail refused it with a 4xx error message. Exit status 3 means the outcome
+# is uncertain (no response, timeout, server error, or a reply without a message
+# id) and the email may have been sent. The API key is read from
 # config/agentmail.key and is never printed.
 # Operator setup is owned by docs/configuration.md "AgentMail inbox".
 set -u
@@ -116,9 +120,12 @@ fi
 
 if ! fm_am_api POST "$target" "$body" || [ "$FM_AM_STATUS" != 200 ]; then
   detail=$(jq -r '.message // empty' <<<"$FM_AM_BODY" 2>/dev/null | head -c 200)
-  die "AgentMail did not send the email (HTTP $FM_AM_STATUS)${detail:+: $detail}"
+  case "$FM_AM_STATUS" in
+    4[0-9][0-9]) [ -z "$detail" ] || die "AgentMail refused the email (HTTP $FM_AM_STATUS): $detail" ;;
+  esac
+  die "AgentMail gave no definitive answer (HTTP $FM_AM_STATUS)${detail:+: $detail}; the email may have been sent" 3
 fi
 mid=$(jq -r '.message_id // empty' <<<"$FM_AM_BODY")
 tid=$(jq -r '.thread_id // empty' <<<"$FM_AM_BODY")
-[ -n "$mid" ] || die "AgentMail answered without a message id; the email may not have been sent"
+[ -n "$mid" ] || die "AgentMail answered without a message id; the email may have been sent" 3
 printf 'message_id=%s\nthread_id=%s\n' "$mid" "$tid"

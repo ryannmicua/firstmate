@@ -2148,7 +2148,8 @@ Any other recipient is refused unless that exact address is named by `--allow-re
 Replies name their recipients explicitly and never reply to all.
 `bin/fm-agentmail-daily.sh` sends the Quarterdeck product email through this sender, with HTML and a plain-text alternative, only to the configured owner route for its repository.
 It accepts no arbitrary recipient or recipient exception and permits one successful daily email per home per local date, across repositories.
-A home-wide lock serializes calls; failed sends leave the day available for retry.
+A home-wide lock serializes calls, and a lock left by a process that is no longer running is taken over.
+The day is reserved before sending, so only a definitive refusal (a local check before the API call, or an AgentMail 4xx with an error message) leaves it available for retry; a timeout, lost response, server error, interruption, or unrecordable success consumes it.
 Its header and `--help` own the arguments, sent-day record, result log, and test date override.
 `bin/fm-agentmail-send.sh --help` owns the exact options.
 

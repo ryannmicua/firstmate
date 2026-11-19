@@ -402,7 +402,7 @@ test_send_routes_by_repository() {
 }
 
 test_daily_product_email() {
-  local out DAILY_DAY=2026-11-19
+  local out holder uncertain DAILY_DAY=2026-11-19
   make_world daily
   printf '<p>Daily report</p>\n' > "$HOME_DIR/report.html"
   printf 'Daily report\n' > "$HOME_DIR/report.txt"
@@ -411,7 +411,7 @@ test_daily_product_email() {
   out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") || fail "daily send failed: $out"
   assert_contains "$out" 'sent: 2026-11-19' "daily send did not report success"
   jq -e '.to == ["owner@example.test"] and .text == "Daily report" and .html == "<p>Daily report</p>" and .subject == "Quarterdeck daily product email"' "$LOG/bodies" >/dev/null || fail "daily payload lost its owner route or body alternative"
-  [ "$(cat "$HOME_DIR/state/agentmail-daily.sent-day")" = "$DAILY_DAY" ] || fail "successful daily send did not record its date"
+  [ "$(cat "$HOME_DIR/state/agentmail-daily.sent-day")" = "$DAILY_DAY sent" ] || fail "successful daily send did not record its date"
   : > "$LOG/calls"
   out=$(run_daily --repo work-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "second daily send was allowed across repositories"
   assert_contains "$out" 'already sent today' "daily refusal did not explain the limit"
@@ -421,30 +421,58 @@ test_daily_product_email() {
   out=$(run_daily --repo work-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt" --subject 'Product update') || fail "next-day daily send failed: $out"
   jq -e '.to == ["second@example.test"] and .subject == "Product update"' "$LOG/bodies" >/dev/null || fail "next day lost routing or custom subject"
   DAILY_DAY=2026-11-21
+  printf '{"name":"ValidationError","message":"invalid recipient"}' > "$BODIES/rejected"
   : > "$ROUTES"
-  route POST "$INBOX_PATH/messages/send" 500 empty
-  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "failed daily send reported success"
-  [ "$(cat "$HOME_DIR/state/agentmail-daily.sent-day")" = 2026-11-20 ] || fail "failed send consumed the day"
+  route POST "$INBOX_PATH/messages/send" 422 rejected
+  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "rejected daily send reported success"
+  [ ! -e "$HOME_DIR/state/agentmail-daily.sent-day" ] || fail "a definitive API rejection kept the day reserved"
   : > "$ROUTES"
   route POST "$INBOX_PATH/messages/send" 200 sent
-  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") || fail "retry after failure was refused: $out"
-  DAILY_DAY=2026-11-22
+  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") || fail "retry after a definitive rejection was refused: $out"
+  printf '{"thread_id":"t"}' > "$BODIES/no-id"
+  for uncertain in '2026-11-22 500 empty' '2026-11-23 000 empty' '2026-11-24 200 no-id' '2026-11-25 404 empty'; do
+    set -- $uncertain
+    DAILY_DAY=$1
+    : > "$ROUTES"
+    route POST "$INBOX_PATH/messages/send" "$2" "$3"
+    out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "uncertain send (HTTP $2) reported success"
+    assert_contains "$out" 'outcome uncertain' "uncertain send (HTTP $2) was not reported as uncertain"
+    [ "$(cat "$HOME_DIR/state/agentmail-daily.sent-day")" = "$DAILY_DAY pending" ] || fail "uncertain send (HTTP $2) released the day"
+    : > "$ROUTES"
+    route POST "$INBOX_PATH/messages/send" 200 sent
+    : > "$LOG/calls"
+    out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "retry after an uncertain send (HTTP $2) sent a second email"
+    assert_contains "$out" 'already sent today' "retry after an uncertain send (HTTP $2) did not explain the limit"
+    [ ! -s "$LOG/calls" ] || fail "retry after an uncertain send (HTTP $2) called the API"
+  done
+  DAILY_DAY=2026-11-26
+  printf '%s pending\n' "$DAILY_DAY" > "$HOME_DIR/state/agentmail-daily.sent-day"
+  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "an interrupted send's reservation was ignored"
+  assert_contains "$out" 'already sent today' "an interrupted send's reservation did not consume the day"
+  DAILY_DAY=2026-11-27
   : > "$LOG/calls"
   out=$(run_daily --repo personal-org/product --to stranger@elsewhere.test --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "daily sender accepted an arbitrary recipient"
   out=$(run_daily --repo personal-org/product --allow-recipient stranger@elsewhere.test --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "daily sender accepted a recipient exception"
   printf 'route=outside:stranger@elsewhere.test\n' >> "$HOME_DIR/config/agentmail"
   out=$(run_daily --repo outside/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "daily sender bypassed the owner allowlist"
-  mkdir "$HOME_DIR/state/.agentmail-daily.lock"
+  bash -c 'sleep 30; :' fm-agentmail-daily.sh &
+  holder=$!
+  ln -s "$holder" "$HOME_DIR/state/.agentmail-daily.lock"
   out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "concurrent daily sender bypassed the lock"
-  rmdir "$HOME_DIR/state/.agentmail-daily.lock"
+  assert_contains "$out" 'daily send is locked' "a live lock holder was not reported"
   [ ! -s "$LOG/calls" ] || fail "refused daily send reached the API"
+  kill "$holder" 2>/dev/null
+  wait "$holder" 2>/dev/null
+  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") || fail "a lock left by a dead process blocked the daily send: $out"
+  [ ! -e "$HOME_DIR/state/.agentmail-daily.lock" ] && [ ! -L "$HOME_DIR/state/.agentmail-daily.lock" ] || fail "daily send left its lock behind"
   assert_grep '2026-11-19 sent' "$HOME_DIR/state/agentmail-daily.log" "successful send was not logged"
   assert_grep '2026-11-19 refused already sent today' "$HOME_DIR/state/agentmail-daily.log" "same-day refusal was not logged"
-  assert_grep '2026-11-21 refused send failed' "$HOME_DIR/state/agentmail-daily.log" "failed send was not logged"
+  assert_grep '2026-11-21 refused send failed' "$HOME_DIR/state/agentmail-daily.log" "rejected send was not logged"
+  assert_grep '2026-11-22 refused send outcome uncertain; day consumed' "$HOME_DIR/state/agentmail-daily.log" "uncertain send was not logged"
   assert_no_grep "$FAKE_KEY" "$HOME_DIR/state/agentmail-daily.log" "daily log leaked the key"
   assert_no_grep "$FAKE_KEY" "$LOG/argv" "daily send put the key in argv"
   assert_not_contains "$out" "$FAKE_KEY" "daily output leaked the key"
-  pass "daily product email uses owner routes and both bodies, limits each date, logs results, and permits retries after failure"
+  pass "daily product email uses owner routes and both bodies, reserves each date before sending, frees it only after a definitive rejection, and recovers an abandoned lock"
 }
 
 test_arm_and_disarm() {
