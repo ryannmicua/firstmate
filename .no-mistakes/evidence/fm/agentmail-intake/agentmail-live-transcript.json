@@ -1,0 +1,2358 @@
+{
+  "scenarios": [
+    {
+      "name": "Local intake captures both verified owners, rejects spoofed authority, withholds flagged text, paginates and deduplicates",
+      "result": "pass",
+      "live": true,
+      "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+      "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+    },
+    {
+      "name": "Local intake retries pending scans and label failures, and discovers delayed mail despite future sent timestamps",
+      "result": "pass",
+      "live": true,
+      "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+      "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+    },
+    {
+      "name": "Local sender routes repositories, replies explicitly, and requires a one-use exact recipient exception",
+      "result": "pass",
+      "live": true,
+      "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+      "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+    },
+    {
+      "name": "Local sender transmits 400 KB of plain text and HTML through real curl without argv limits",
+      "result": "pass",
+      "live": true,
+      "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+      "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+    },
+    {
+      "name": "Local daily sender permits only one concurrent send per date and permits the next date without deleting prior records",
+      "result": "pass",
+      "live": true,
+      "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+      "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+    },
+    {
+      "name": "Local daily sender blocks retries after a lost response but allows retry after definitive HTTP rejection",
+      "result": "pass",
+      "live": true,
+      "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+      "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+    },
+    {
+      "name": "Local operator arms the lightweight check, captures mail through its background poll, and disarms cleanly",
+      "result": "pass",
+      "live": true,
+      "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+      "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+    }
+  ],
+  "commands": [
+    {
+      "command": "bash bin/fm-agentmail-check.sh poll",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh poll",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh poll",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh poll",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh poll",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh poll",
+      "exit": 1,
+      "stdout": "could not label an AgentMail message firstmate-seen (HTTP 503); its note is saved and a retry will not duplicate it\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh poll",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh poll",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --repo ryannmicua/project --subject Synthetic report --text Report body",
+      "exit": 0,
+      "stdout": "message_id=sent-97\nthread_id=outbound-thread\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --repo adventistasia/project --subject Synthetic report --text Report body",
+      "exit": 0,
+      "stdout": "message_id=sent-98\nthread_id=outbound-thread\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --to other@example.test --subject Report --text Body",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-send: other@example.test is not on the allowlist in config/agentmail; pass --allow-recipient other@example.test only when the owner asked for this specific email\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --to other@example.test --allow-recipient other@example.test --subject Requested specific email --text Body",
+      "exit": 0,
+      "stdout": "message_id=sent-99\nthread_id=outbound-thread\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --to other@example.test --subject Report --text Body",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-send: other@example.test is not on the allowlist in config/agentmail; pass --allow-recipient other@example.test only when the owner asked for this specific email\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --reply-to-message <personal@mail.test> --to personal@example.test --text Task reply",
+      "exit": 0,
+      "stdout": "message_id=sent-100\nthread_id=outbound-thread\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --repo unknown/project --subject Report --text Body",
+      "exit": 2,
+      "stdout": "",
+      "stderr": "fm-agentmail-send: no recipient route for repository unknown/project; add route=<github owner>:<address> to config/agentmail\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --to personal@example.test,other@example.test --subject Report --text Body",
+      "exit": 2,
+      "stdout": "",
+      "stderr": "fm-agentmail-send: --to is not a plain email address\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --repo ryannmicua/project --subject Report --text Body",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-send: the AgentMail key file is missing, not owner-only (chmod 600), or not one token\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-send.sh --repo ryannmicua/project --subject Large synthetic report --text-file {run-worktree}/.agentmail-live-bnloy7ke/report.txt --html-file {run-worktree}/.agentmail-live-bnloy7ke/report.html",
+      "exit": 0,
+      "stdout": "message_id=sent-101\nthread_id=outbound-thread\n",
+      "stderr": ""
+    },
+    {
+      "command": "concurrent fm-agentmail-daily.sh",
+      "exit": 0,
+      "stdout": "sent: 2026-11-19\n",
+      "stderr": ""
+    },
+    {
+      "command": "concurrent fm-agentmail-daily.sh",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "concurrent fm-agentmail-daily.sh",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "concurrent fm-agentmail-daily.sh",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "concurrent fm-agentmail-daily.sh",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "concurrent fm-agentmail-daily.sh",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "concurrent fm-agentmail-daily.sh",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "concurrent fm-agentmail-daily.sh",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-daily.sh --repo ryannmicua/project --text-file {run-worktree}/.agentmail-live-bnloy7ke/report.txt --html-file {run-worktree}/.agentmail-live-bnloy7ke/report.html",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-daily.sh --repo ryannmicua/project --text-file {run-worktree}/.agentmail-live-bnloy7ke/report.txt --html-file {run-worktree}/.agentmail-live-bnloy7ke/report.html",
+      "exit": 0,
+      "stdout": "sent: 2026-11-20\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-daily.sh --repo ryannmicua/project --text-file {run-worktree}/.agentmail-live-bnloy7ke/report.txt --html-file {run-worktree}/.agentmail-live-bnloy7ke/report.html",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: send outcome uncertain; day consumed\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-daily.sh --repo ryannmicua/project --text-file {run-worktree}/.agentmail-live-bnloy7ke/report.txt --html-file {run-worktree}/.agentmail-live-bnloy7ke/report.html",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: already sent today\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-daily.sh --repo ryannmicua/project --text-file {run-worktree}/.agentmail-live-bnloy7ke/report.txt --html-file {run-worktree}/.agentmail-live-bnloy7ke/report.html",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "fm-agentmail-daily: send failed\n"
+    },
+    {
+      "command": "bash bin/fm-agentmail-daily.sh --repo ryannmicua/project --text-file {run-worktree}/.agentmail-live-bnloy7ke/report.txt --html-file {run-worktree}/.agentmail-live-bnloy7ke/report.html",
+      "exit": 0,
+      "stdout": "sent: 2026-11-22\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh arm",
+      "exit": 0,
+      "stdout": "armed: state/agentmail.check.sh\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh check",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh disarm",
+      "exit": 0,
+      "stdout": "disarmed: state/agentmail.check.sh\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash bin/fm-agentmail-check.sh disarm",
+      "exit": 0,
+      "stdout": "disarmed: state/agentmail.check.sh\n",
+      "stderr": ""
+    }
+  ],
+  "http_calls": [
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/personal",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "personal",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/work",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "work",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/spoof",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "spoof",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/stranger",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "stranger",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/bad-dkim",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "bad-dkim",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/spam",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "spam",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/blocked",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "blocked",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/unauthenticated",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "unauthenticated",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/armor-stranger",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "armor-stranger",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/long",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "long",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/unknown-receipt",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "unknown-receipt",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "12"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/pending",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "12"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/pending",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "pending",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/after-pending",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "after-pending",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "12"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "14"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/late-arrival",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "late-arrival",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "12"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "14"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "16"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/label-retry",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "label-retry",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "12"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "14"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "16"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/label-retry",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "label-retry",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "12"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "14"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "16"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/expired",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "expired",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "personal@example.test"
+        ],
+        "subject": "Synthetic report",
+        "text": "Report body"
+      },
+      "body_sizes": {
+        "text": 11
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "work@example.test"
+        ],
+        "subject": "Synthetic report",
+        "text": "Report body"
+      },
+      "body_sizes": {
+        "text": 11
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "other@example.test"
+        ],
+        "subject": "Requested specific email",
+        "text": "Body"
+      },
+      "body_sizes": {
+        "text": 4
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/<personal@mail.test>/reply",
+      "body": {
+        "to": [
+          "personal@example.test"
+        ],
+        "text": "Task reply"
+      },
+      "body_sizes": {
+        "text": 10
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "personal@example.test"
+        ],
+        "subject": "Large synthetic report",
+        "text": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT [evidence truncated; exact lengths above]",
+        "html": "<p>HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH [evidence truncated; exact lengths above]"
+      },
+      "body_sizes": {
+        "text": 200000,
+        "html": 200007
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "personal@example.test"
+        ],
+        "subject": "Quarterdeck daily product email",
+        "text": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT [evidence truncated; exact lengths above]",
+        "html": "<p>HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH [evidence truncated; exact lengths above]"
+      },
+      "body_sizes": {
+        "text": 200000,
+        "html": 200007
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "personal@example.test"
+        ],
+        "subject": "Quarterdeck daily product email",
+        "text": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT [evidence truncated; exact lengths above]",
+        "html": "<p>HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH [evidence truncated; exact lengths above]"
+      },
+      "body_sizes": {
+        "text": 200000,
+        "html": 200007
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "personal@example.test"
+        ],
+        "subject": "Quarterdeck daily product email",
+        "text": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT [evidence truncated; exact lengths above]",
+        "html": "<p>HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH [evidence truncated; exact lengths above]"
+      },
+      "body_sizes": {
+        "text": 200000,
+        "html": 200007
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "personal@example.test"
+        ],
+        "subject": "Quarterdeck daily product email",
+        "text": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT [evidence truncated; exact lengths above]",
+        "html": "<p>HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH [evidence truncated; exact lengths above]"
+      },
+      "body_sizes": {
+        "text": 200000,
+        "html": 200007
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v0/inboxes/agent@example.test/messages/send",
+      "body": {
+        "to": [
+          "personal@example.test"
+        ],
+        "subject": "Quarterdeck daily product email",
+        "text": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT [evidence truncated; exact lengths above]",
+        "html": "<p>HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH [evidence truncated; exact lengths above]"
+      },
+      "body_sizes": {
+        "text": 200000,
+        "html": 200007
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "2"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "4"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "6"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "8"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "10"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "12"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "14"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "16"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "ascending": [
+          "true"
+        ],
+        "include_unauthenticated": [
+          "true"
+        ],
+        "include_spam": [
+          "true"
+        ],
+        "include_blocked": [
+          "true"
+        ],
+        "page_token": [
+          "18"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/agent@example.test/messages/background-task",
+      "query": {}
+    },
+    {
+      "method": "PATCH",
+      "mid": "background-task",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      }
+    }
+  ]
+}

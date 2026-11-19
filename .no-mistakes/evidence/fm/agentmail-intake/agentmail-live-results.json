@@ -1,0 +1,51 @@
+[
+  {
+    "name": "Local intake captures both verified owners, rejects spoofed authority, withholds flagged text, paginates and deduplicates",
+    "result": "pass",
+    "live": true,
+    "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+    "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+  },
+  {
+    "name": "Local intake retries pending scans and label failures, and discovers delayed mail despite future sent timestamps",
+    "result": "pass",
+    "live": true,
+    "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+    "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+  },
+  {
+    "name": "Local sender routes repositories, replies explicitly, and requires a one-use exact recipient exception",
+    "result": "pass",
+    "live": true,
+    "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+    "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+  },
+  {
+    "name": "Local sender transmits 400 KB of plain text and HTML through real curl without argv limits",
+    "result": "pass",
+    "live": true,
+    "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+    "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+  },
+  {
+    "name": "Local daily sender permits only one concurrent send per date and permits the next date without deleting prior records",
+    "result": "pass",
+    "live": true,
+    "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+    "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+  },
+  {
+    "name": "Local daily sender blocks retries after a lost response but allows retry after definitive HTTP rejection",
+    "result": "pass",
+    "live": true,
+    "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+    "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+  },
+  {
+    "name": "Local operator arms the lightweight check, captures mail through its background poll, and disarms cleanly",
+    "result": "pass",
+    "live": true,
+    "evidence": "agentmail-live-transcript.json; agentmail-live-state.json",
+    "reason": "Real Bash helpers and system curl against a disposable localhost HTTP API with synthetic mail and configuration."
+  }
+]
