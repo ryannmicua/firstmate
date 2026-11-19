@@ -15,6 +15,7 @@ Start with the directory layout, then use the setting reference for the behavior
 | Persistent secondmates | [Secondmate routes](#secondmate-routes-datasecondmatesmd) |
 | Review bots on owned GitHub pull requests | [Contribution review bots](#contribution-review-bots-configcontribution-review-bots) |
 | GitHub identities for worker pull requests and owner mentions | [GitHub identities](#github-identities-configgithub-identity-configgithub-bot) |
+| The agent's own email inbox (AgentMail) | [AgentMail inbox](#agentmail-inbox-configagentmail-configagentmailkey) |
 | Per-run overrides and tuning | [Environment variables](#environment-variables) |
 
 ## FM_HOME
@@ -2100,6 +2101,55 @@ printf 'login=%s\nowner=%s\n' '<bot login>' '<your login>' > config/github-bot
 For an App instead, save its key with `lpass show --notes '<App private key entry>' > config/github-identity.pem`, run `chmod 600` on it, and write `kind=app` and `app_id=<App ID>` into `config/github-identity`.
 Without the LastPass CLI, move the key file downloaded from the App's settings page into place, or run `cat > config/github-bot.token`, paste the token, and press Ctrl-D, then apply the same `chmod 600`.
 To rotate a secret, replace its file; delete `state/gh-identity/tokens/` to drop cached App tokens at once rather than within the hour.
+
+## AgentMail inbox (config/agentmail, config/agentmail.key)
+
+A home can give firstmate an email address of its own on AgentMail.
+Firstmate sends from that inbox, and the owner can email or reply to it to hand firstmate a task.
+It is opt-in, uses plain HTTPS calls with the API key and no SDK, MCP server, or worker, and is not inherited into secondmate homes.
+
+`config/agentmail` holds `key=value` lines, and `#` starts a comment.
+
+| Key | Meaning |
+| --- | --- |
+| `inbox` | The AgentMail inbox address (required). |
+| `owner` | An owner address whose verified mail counts as an instruction; repeat the line or comma-separate for several (at least one required). |
+| `allow` | An extra address the sender may email without a per-send exception; owner addresses are always allowed. |
+| `route` | `route=<github owner>:<address>`, repeatable; the recipient `fm-agentmail-send.sh --repo <owner/name>` picks for that owner's repositories. |
+| `key_file` | Absolute path of the API key; default `config/agentmail.key`. |
+
+Keep the owner addresses and routes in this untracked file only.
+The key file holds one line starting with `am_`, must be a regular file owned by this user with mode 600, and is read on every call, so replacing it rotates the key.
+The key reaches curl only through its standard-input configuration, never on a command line, and is never printed, logged, or written into a note.
+
+### Inbound mail
+
+Arm the poll with `bin/fm-agentmail-check.sh arm` and remove it with `bin/fm-agentmail-check.sh disarm`.
+The watcher polls on its normal check interval, the check returns immediately, and a detached single-instance job does the polling, as the GitHub bot check does ([`fm-agentmail-check.sh` header](../bin/fm-agentmail-check.sh) owns cursor and retry mechanics).
+Each received message becomes one captain inbox note with the sender, subject, received time, thread id, message id, the extracted reply text (no quoted history, at most 4,000 characters), and attachment names and sizes.
+Attachments are never downloaded or opened.
+Processed messages get the `firstmate-seen` label in AgentMail, and the message id also deduplicates notes, so a replay creates no second note.
+
+A message is the owner's instruction only when all of these hold:
+
+- its single From address is a configured owner address;
+- AgentMail's authentication results show an SPF pass, or a DKIM pass signed for the sender's own domain;
+- AgentMail did not label it `unauthenticated`, `spam`, or `blocked`;
+- Agent Armor either is not running or completed with a `clear` verdict.
+
+Everything else is an untrusted information note that tells firstmate to surface it to the captain and not act on it.
+A message whose Agent Armor scan is still pending is held for the next poll, and one Agent Armor flagged or could not scan has its text withheld from the note.
+AgentMail only reports authentication results for mail received after 2026-09-09, so a message without them is always untrusted.
+
+### Sending
+
+`bin/fm-agentmail-send.sh` sends one email, new or as a reply in a thread with `--reply-to-message`, from the configured inbox and prints the message and thread ids.
+A recipient must be an owner or `allow` address.
+Any other recipient is refused unless that exact address is named by `--allow-recipient` on that one send, which is for an email the owner asked for specifically.
+`--repo <owner/name>` picks the recipient from the `route` lines, so mail about each GitHub owner's repositories reaches the right owner address.
+Replies name their recipients explicitly and never reply to all.
+The once-a-day limit on the Quarterdeck email belongs to whatever sends it, not to this script.
+`bin/fm-agentmail-send.sh --help` owns the exact options.
 
 ## Mail plane (.env)
 
