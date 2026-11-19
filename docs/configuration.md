@@ -2125,12 +2125,15 @@ The key reaches curl only through its standard-input configuration, never on a c
 
 Arm the poll with `bin/fm-agentmail-check.sh arm` and remove it with `bin/fm-agentmail-check.sh disarm`.
 The watcher polls on its normal check interval, the check returns immediately, and a detached single-instance job does the polling, as the GitHub bot check does ([`fm-agentmail-check.sh` header](../bin/fm-agentmail-check.sh) owns discovery and retry mechanics).
-Each received message becomes one captain inbox note with the sender, subject, received time from `created_at` (`unknown` if absent), thread id, message id, and attachment names and sizes.
+Mail AgentMail labels `blocked` comes from a sender on the inbox's own block list and is dropped quietly: no note and no wake, only the `firstmate-seen` label so it is not read again.
+To silence a sender, add its address or domain to the inbox's receive block list in AgentMail; the next message from it is dropped.
+
+Each remaining received message becomes one captain inbox note with the sender, subject, received time from `created_at` (`unknown` if absent), thread id, message id, and attachment names and sizes.
 The note uses extracted reply text when present, otherwise the message preview, limited to 4,000 characters plus a truncation marker.
 Attachments are never downloaded or opened.
 Processed messages get the `firstmate-seen` label in AgentMail, and the message id also deduplicates notes, so a replay creates no second note.
 
-A message is the owner's instruction only when all of these hold:
+A remaining message is the owner's instruction only when all of these hold:
 
 - its single From address is a configured owner address;
 - AgentMail's authentication results show an SPF pass, or a DKIM pass signed for the sender's domain or a parent domain;
@@ -2142,10 +2145,6 @@ A pending Agent Armor scan with a parseable future deadline holds that message a
 Once the deadline expires, or if it is absent or invalid, the message becomes an untrusted note with its text withheld.
 Any other scan result that is incomplete or not `clear` also withholds the text, regardless of sender classification.
 AgentMail only reports authentication results for mail received after 2026-09-09, so a message without them is always untrusted.
-
-Mail AgentMail labels `blocked` comes from a sender on the inbox's own block list and is dropped quietly: no note and no wake, only the `firstmate-seen` label so it is not read again.
-Spam and unauthenticated mail still become untrusted notes.
-To silence a sender, add its address or domain to the inbox's receive block list in AgentMail; the next message from it is dropped.
 
 ### Sending
 
