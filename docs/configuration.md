@@ -2068,7 +2068,7 @@ The bot assigns itself with its own token, which needs triage or write access to
 The owner's approving review on a pull request firstmate is waiting on is the owner's word to merge that pull request, with no text or mention needed.
 It holds only while the commit it approved is still the pull request head: a later push, or a later request for changes from the owner, cancels it.
 Before merging on it, firstmate checks that the current head matches the note's reviewed commit, and the merge still goes through `bin/fm-pr-merge.sh` with every guard, including green checks; nothing merges automatically.
-If the pull request contains a data migration and the project gates migrations with a label (for example rms-cares uses `migration-approved`), firstmate adds that label before merging on the owner's approval.
+For database changes, firstmate adds the migration label (for example rms-cares uses `migration-approved`) before merging on the owner's approval, regardless of whether the project separately gates migrations with a label.
 Firstmate then replies on the pull request as the bot, so the owner sees the approval was picked up.
 
 Firstmate's own GitHub writes run as the bot whenever it has access to the repository, regardless of assignment, and as this machine's `gh` login only where the bot cannot do it:

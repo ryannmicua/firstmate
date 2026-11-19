@@ -745,7 +745,9 @@ test_assigned_thread_captures_activity_without_mentions() {
   assert_grep 'PR head when captured: 1111111111111111111111111111111111111111' "$note" "approval lacks the PR head"
   assert_grep 'https://github.com/acme/widget/pull/7#pullrequestreview-901' "$note" "approval lacks its URL"
   assert_grep 'Owner approval:' "$note" "approval does not state how it counts"
-  assert_grep 'firstmate adds that label before merging through bin/fm-pr-merge.sh with green checks' "$note" "emitted approval instruction omitted the migration gate"
+  # Criterion 3 requires a label for database changes even without a project
+  # label gate. Assert the delivered instruction, not its implementation source.
+  assert_grep 'For database changes, firstmate adds the migration label (for example migration-approved in rms-cares) before merging through bin/fm-pr-merge.sh with green checks' "$note" "emitted approval instruction made the migration label conditional on a project gate"
   [ -z "$(note_with 'Review state: COMMENTED')" ] || fail "an empty plain-comment review was captured"
   note=$(note_with 'old owner remark')
   [ -n "$note" ] || fail "an owner comment before assignment was lost"

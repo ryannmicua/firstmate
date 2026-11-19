@@ -223,7 +223,7 @@ review_lines() {
   commit=$(jq -r '.commit_id // "unknown"' <<<"$item")
   printf 'Review state: %s\nReviewed commit: %s\nPR head when captured: %s' "$state" "$commit" "${head:-unknown}"
   if [ "$trusted" = true ] && [ "$state" = APPROVED ]; then
-    printf '\nOwner approval: the owner'"'"'s word to merge this PR only while the reviewed commit is still its head and no later request-changes followed. If the PR contains a data migration and the project gates migrations with a label (for example migration-approved in rms-cares), firstmate adds that label before merging through bin/fm-pr-merge.sh with green checks; nothing merges automatically (docs/configuration.md "GitHub identities").'
+    printf '\nOwner approval: the owner'"'"'s word to merge this PR only while the reviewed commit is still its head and no later request-changes followed. For database changes, firstmate adds the migration label (for example migration-approved in rms-cares) before merging through bin/fm-pr-merge.sh with green checks; nothing merges automatically (docs/configuration.md "GitHub identities").'
   fi
 }
 
