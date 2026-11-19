@@ -2068,7 +2068,9 @@ The bot assigns itself with its own token, which needs triage or write access to
 The owner's approving review on a pull request firstmate is waiting on is the owner's word to merge that pull request, with no text or mention needed.
 It holds only while the commit it approved is still the pull request head: a later push, or a later request for changes from the owner, cancels it.
 Before merging on it, firstmate checks that the current head matches the note's reviewed commit, and the merge still goes through `bin/fm-pr-merge.sh` with every guard, including green checks; nothing merges automatically.
-For database changes, firstmate adds the migration label (for example rms-cares uses `migration-approved`) before merging on the owner's approval, regardless of whether the project separately gates migrations with a label.
+When the repository gates data migrations with a label and the pull request contains a data migration, firstmate adds that label before merging on the owner's approval.
+The optional local `config/migration-labels` file names those labels, one `<owner>/<repo> <label>` line per repository, with `#` starting a comment; for example `adventistasia/rms-cares migration-approved`.
+The approval note names the label only for a listed repository; any other repository gets no label added and no merge blocked on one.
 Firstmate then replies on the pull request as the bot, so the owner sees the approval was picked up.
 
 Firstmate's merges and replies use the bot under the following conditions, regardless of assignment:

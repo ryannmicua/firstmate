@@ -214,16 +214,37 @@ note_body() {
   [ -z "$text" ] || printf 'Text:\n%s\n' "$text"
 }
 
-# review_lines <item> <trusted> <head-sha>: the review state, the commit the
-# review was submitted on, and the PR head when captured, for a review item.
+# migration_label <owner/repo>: print the label config/migration-labels names
+# for <owner/repo>, or nothing when that repository gates no migration label.
+migration_label() {
+  local file="$CONFIG/migration-labels" line repo label
+  [ -f "$file" ] && [ ! -L "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%%#*}
+    line=${line//$'\r'/}
+    read -r repo label _ <<<"$line" || true
+    [ -n "$repo" ] && [ -n "$label" ] || continue
+    case "$label" in *[!A-Za-z0-9._:/-]*) continue ;; esac
+    if [ "$(lower "$repo")" = "$(lower "$1")" ]; then
+      printf '%s' "$label"
+      return 0
+    fi
+  done < "$file"
+}
+
+# review_lines <item> <trusted> <head-sha> <repo>: the review state, the
+# commit the review was submitted on, and the PR head when captured, for a
+# review item; an owner approval adds how it counts.
 review_lines() {
-  local item=$1 trusted=$2 head=$3 state commit
+  local item=$1 trusted=$2 head=$3 repo=$4 state commit label
   state=$(jq -r 'if .fm_review == true then (.state // "") else "" end' <<<"$item")
   [ -n "$state" ] || return 0
   commit=$(jq -r '.commit_id // "unknown"' <<<"$item")
   printf 'Review state: %s\nReviewed commit: %s\nPR head when captured: %s' "$state" "$commit" "${head:-unknown}"
   if [ "$trusted" = true ] && [ "$state" = APPROVED ]; then
-    printf '\nOwner approval: the owner'"'"'s word to merge this PR only while the reviewed commit is still its head and no later request-changes followed. For database changes, firstmate adds the migration label (for example migration-approved in rms-cares) before merging through bin/fm-pr-merge.sh with green checks; nothing merges automatically (docs/configuration.md "GitHub identities").'
+    printf '\nOwner approval: the owner'"'"'s word to merge this PR only while the reviewed commit is still its head and no later request-changes followed; merge through bin/fm-pr-merge.sh with green checks, nothing merges automatically (docs/configuration.md "GitHub identities").'
+    label=$(migration_label "$repo")
+    [ -z "$label" ] || printf '\nMigration label: %s gates data migrations with the label %s; if this PR contains a data migration, add that label before merging.' "$repo" "$label"
   fi
 }
 
@@ -338,7 +359,7 @@ handle_thread() {
       scope=assigned
     fi
     rid="ghbot-$(sha_hex "mention:$html")"
-    review=$(review_lines "$item" "$trusted" "$head_sha") || return 1
+    review=$(review_lines "$item" "$trusted" "$head_sha" "$repo") || return 1
     if ! save_note "$rid" "$(note_body "$kind" "$author" "$trusted" "$repo" "$title" "${issue_url:-$html}" "$html" "$body" "$scope" "$review")"; then
       ok=1
       continue

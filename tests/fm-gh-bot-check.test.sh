@@ -745,9 +745,8 @@ test_assigned_thread_captures_activity_without_mentions() {
   assert_grep 'PR head when captured: 1111111111111111111111111111111111111111' "$note" "approval lacks the PR head"
   assert_grep 'https://github.com/acme/widget/pull/7#pullrequestreview-901' "$note" "approval lacks its URL"
   assert_grep 'Owner approval:' "$note" "approval does not state how it counts"
-  # Criterion 3 requires a label for database changes even without a project
-  # label gate. Assert the delivered instruction, not its implementation source.
-  assert_grep 'For database changes, firstmate adds the migration label (for example migration-approved in rms-cares) before merging through bin/fm-pr-merge.sh with green checks' "$note" "emitted approval instruction made the migration label conditional on a project gate"
+  # A repository with no configured migration label gets no label step.
+  assert_no_grep 'label' "$note" "an approval in a repository without a migration label gate named a label"
   [ -z "$(note_with 'Review state: COMMENTED')" ] || fail "an empty plain-comment review was captured"
   note=$(note_with 'old owner remark')
   [ -n "$note" ] || fail "an owner comment before assignment was lost"
@@ -765,6 +764,18 @@ test_assigned_thread_captures_activity_without_mentions() {
   assert_no_grep '^POST .*reactions' "$LOG/calls" "replayed backfill reacted again"
   [ "$(note_files | wc -l | tr -d ' ')" = 5 ] || fail "a replayed poll duplicated assigned-thread notes"
   pass "on an assigned PR, owner comments and empty approvals are trusted, others are information, and replays deduplicate"
+}
+
+test_approval_names_a_configured_migration_label() {
+  local note
+  make_assigned_world migration-label true comment
+  printf '%s\n' '# repositories that gate data migrations' 'other/repo other-label' 'Acme/Widget migration-approved' > "$HOME_DIR/config/migration-labels"
+  run_check poll >/dev/null || fail "migration-label poll failed"
+  note=$(note_with 'Review state: APPROVED')
+  [ -n "$note" ] || fail "the owner's approval was not captured"
+  assert_grep 'Migration label: acme/widget gates data migrations with the label migration-approved; if this PR contains a data migration, add that label before merging.' "$note" "a configured migration label was not named"
+  assert_no_grep 'other-label' "$note" "another repository's label was named"
+  pass "an owner approval names the migration label only for a repository configured to gate migrations with one"
 }
 
 test_item_identity_survives_mention_edits() {
@@ -958,6 +969,7 @@ test_deleted_latest_comment_does_not_block_poll
 test_lock_naming_unrelated_process_is_stale
 test_disarm_stops_running_poll_job
 test_assigned_thread_captures_activity_without_mentions
+test_approval_names_a_configured_migration_label
 test_unassigned_thread_ignores_unmentioned_activity
 test_item_identity_survives_mention_edits
 test_bot_mentions_are_excluded_across_item_types
