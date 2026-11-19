@@ -2045,7 +2045,7 @@ For issue and pull request threads whose notification reason is mention, assignm
 The bot assigning itself is never a note.
 Commit threads contribute commit-comment mentions only; other subject types are skipped.
 
-On an issue or pull request the bot is currently assigned to, no mention is needed: whatever the notification reason, every comment, pull request review comment, and submitted review made since the bot's latest assignment becomes a note, except the bot's own.
+On an issue or pull request the bot is currently assigned to, no mention is needed: whatever the notification reason, every comment, pull request review comment, and submitted review made since the thread was created becomes a note, except the bot's own.
 A review that approves or requests changes counts even with no text, and its note names the review state, the commit it was submitted on, and the pull request head when captured.
 The owner's items there follow the same provenance rule as owner mentions.
 Any other author's item there is headed NOT FROM THE OWNER and marked as information only, never an instruction.
@@ -2060,12 +2060,15 @@ The check prints a line only when the last poll's problem changes, such as a mis
 
 ### Assigning, approving, and writing as the bot
 
-When `bin/fm-pr-check.sh` registers a newly ready github.com pull request, it assigns the bot to it so the owner can comment and review without a mention.
+The worker delivery instructions assign the bot as soon as a github.com pull request opens, including in the pipeline PR-opening handoff before CI monitoring.
+`bin/fm-pr-check.sh` also ensures assignment when registering the ready pull request.
+On assignment, the existing notification poll backfills comments and reviews from the thread's creation, with the same durable request IDs used for later activity.
 The bot assigns itself with its own token, which needs triage or write access to the repository; a refusal is printed and never blocks registration.
 
 The owner's approving review on a pull request firstmate is waiting on is the owner's word to merge that pull request, with no text or mention needed.
 It holds only while the commit it approved is still the pull request head: a later push, or a later request for changes from the owner, cancels it.
-Before merging on it, firstmate checks that the current head matches the note's reviewed commit, and the merge still goes through `bin/fm-pr-merge.sh` with every guard, including green checks and any label the project requires; nothing merges automatically.
+Before merging on it, firstmate checks that the current head matches the note's reviewed commit, and the merge still goes through `bin/fm-pr-merge.sh` with every guard, including green checks; nothing merges automatically.
+If the pull request contains a data migration and the project gates migrations with a label (for example rms-cares uses `migration-approved`), firstmate adds that label before merging on the owner's approval.
 Firstmate then replies on the pull request as the bot, so the owner sees the approval was picked up.
 
 Firstmate's own GitHub writes run as the bot whenever it has access to the repository, regardless of assignment, and as this machine's `gh` login only where the bot cannot do it:

@@ -399,6 +399,9 @@ test_pr_based_dod_draft_check_uses_gh_axi() {
     out="$TMP_ROOT/dod-$mode.md"
     fm_dod_block "$mode" dod-draft-task > "$out"
     assert_no_grep 'gh pr view' "$out" "$mode: DoD must not document a raw gh draft check"
+    assert_grep 'As soon as a github.com PR opens, run' "$out" "$mode: emitted handoff delays bot assignment"
+    assert_grep 'fm-gh-bot-check.sh assign <pr-url>' "$out" "$mode: emitted handoff lacks the bot assignment command"
+    assert_grep 'before CI monitoring; do not wait for the CI-ready report' "$out" "$mode: emitted handoff delays assignment until green"
     # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
     assert_grep 'confirm it is not a draft (`gh-axi pr view <number>` must print `draft: no`' "$out" \
       "$mode: DoD must read the draft state through gh-axi"

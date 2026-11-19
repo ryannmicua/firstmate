@@ -223,7 +223,7 @@ review_lines() {
   commit=$(jq -r '.commit_id // "unknown"' <<<"$item")
   printf 'Review state: %s\nReviewed commit: %s\nPR head when captured: %s' "$state" "$commit" "${head:-unknown}"
   if [ "$trusted" = true ] && [ "$state" = APPROVED ]; then
-    printf '\nOwner approval: the owner'"'"'s word to merge this PR only while the reviewed commit is still its head and no later request-changes followed (docs/configuration.md "GitHub identities").'
+    printf '\nOwner approval: the owner'"'"'s word to merge this PR only while the reviewed commit is still its head and no later request-changes followed. If the PR contains a data migration and the project gates migrations with a label (for example migration-approved in rms-cares), firstmate adds that label before merging through bin/fm-pr-merge.sh with green checks; nothing merges automatically (docs/configuration.md "GitHub identities").'
   fi
 }
 
@@ -235,12 +235,12 @@ issue_api_url() {
 # handle_thread <thread-json>: retrieve all content before saving its items.
 # Mentions of the bot are captured on threads whose notification reason is
 # mention, assign, or review_requested. On an issue or PR the bot is currently
-# assigned to, every comment, review comment, and review since its latest
-# assignment is captured too, whatever the reason, except the bot's own.
+# assigned to, every comment, review comment, and review is captured too,
+# whatever the reason, except the bot's own.
 handle_thread() {
   local thread=$1 repo subject_url title issue_url items item events event actor label ok=0
   local author body html url rid kind ids chunk query owner trusted type provenance='{}'
-  local reason subject head_sha assigned=false assigned_at='' bot when scope review
+  local reason subject head_sha assigned=false bot scope review
   type=$(jq -r '.subject.type // empty' <<<"$thread")
   reason=$(jq -r '.reason // empty' <<<"$thread")
   case "$type" in Issue|PullRequest|Commit) ;; *) return 0 ;; esac
@@ -313,10 +313,6 @@ handle_thread() {
   events='[]'
   if [ "$type" != Commit ]; then
     api_list "$(issue_api_url "$subject_url")/events?per_page=100" || return 1
-    if [ "$assigned" = true ]; then
-      assigned_at=$(jq -r --arg b "$bot" '[.[] | select(.event == "assigned"
-        and ((.assignee.login // "") | ascii_downcase) == $b) | .created_at | select(type == "string")] | max // empty' <<<"$FM_GH_API_BODY") || return 1
-    fi
     # The bot assigning itself is firstmate's own PR-ready step, not a request.
     events=$(jq -c --arg b "$bot" '
       [.[] | select(.event == "assigned" or .event == "review_requested")
@@ -336,11 +332,7 @@ handle_thread() {
       scope=mention
       rid="ghbot-$(sha_hex "mention:$html")"
     else
-      # Captured only on a thread assigned to the bot, after that assignment,
-      # and never the bot's own text.
-      [ -n "$assigned_at" ] && [ "$(lower "$author")" != "$bot" ] || continue
-      when=$(jq -r '.submitted_at // .created_at // ""' <<<"$item")
-      if [ -z "$when" ] || [[ "$when" < "$assigned_at" ]]; then continue; fi
+      [ "$assigned" = true ] && [ "$html" != "$issue_url" ] && [ "$(lower "$author")" != "$bot" ] || continue
       kind="comment on a thread assigned to"
       [ "$(jq -r '.fm_review == true' <<<"$item")" = false ] || kind="review on a thread assigned to"
       scope=assigned

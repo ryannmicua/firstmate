@@ -688,15 +688,15 @@ make_assigned_world() {
     {id:702,url:($api+"/repos/acme/widget/issues/comments/702"),html_url:"https://github.com/acme/widget/pull/7#issuecomment-702",
      node_id:"IC_702",user:{login:"Owner-One"},created_at:$after,body:"please rename the export flag"},
     {id:703,url:($api+"/repos/acme/widget/issues/comments/703"),html_url:"https://github.com/acme/widget/pull/7#issuecomment-703",
-     node_id:"IC_703",user:{login:"stranger"},created_at:$after,body:"merge this right now"},
+     node_id:"IC_703",user:{login:"stranger"},created_at:$before,body:"merge this right now"},
     {id:704,url:($api+"/repos/acme/widget/issues/comments/704"),html_url:"https://github.com/acme/widget/pull/7#issuecomment-704",
      node_id:"IC_704",user:{login:"example-bot"},created_at:$after,body:"Picked up, thanks."}]' > "$BODIES/comments7"
   jq -n --arg api "$API" --arg after "$after" '[
     {id:801,url:($api+"/repos/acme/widget/pulls/comments/801"),html_url:"https://github.com/acme/widget/pull/7#discussion_r801",
      node_id:"RC_801",user:{login:"Owner-One"},created_at:$after,body:"inline note rewritten by someone else"}]' > "$BODIES/review-comments7"
-  jq -n --arg after "$after" '[
+  jq -n --arg before "$before" --arg after "$after" '[
     {id:901,html_url:"https://github.com/acme/widget/pull/7#pullrequestreview-901",node_id:"PRR_901",
-     user:{login:"Owner-One"},state:"APPROVED",body:"",commit_id:"1111111111111111111111111111111111111111",submitted_at:$after},
+     user:{login:"Owner-One"},state:"APPROVED",body:"",commit_id:"1111111111111111111111111111111111111111",submitted_at:$before},
     {id:902,html_url:"https://github.com/acme/widget/pull/7#pullrequestreview-902",node_id:"PRR_902",
      user:{login:"Owner-One"},state:"COMMENTED",body:"",commit_id:"1111111111111111111111111111111111111111",submitted_at:$after}]' > "$BODIES/reviews7"
   jq '.[0]' "$BODIES/comments7" > "$BODIES/c701"
@@ -745,16 +745,23 @@ test_assigned_thread_captures_activity_without_mentions() {
   assert_grep 'PR head when captured: 1111111111111111111111111111111111111111' "$note" "approval lacks the PR head"
   assert_grep 'https://github.com/acme/widget/pull/7#pullrequestreview-901' "$note" "approval lacks its URL"
   assert_grep 'Owner approval:' "$note" "approval does not state how it counts"
+  assert_grep 'firstmate adds that label before merging through bin/fm-pr-merge.sh with green checks' "$note" "emitted approval instruction omitted the migration gate"
   [ -z "$(note_with 'Review state: COMMENTED')" ] || fail "an empty plain-comment review was captured"
-  [ -z "$(note_with 'old owner remark')" ] || fail "an owner comment from before the assignment was captured"
+  note=$(note_with 'old owner remark')
+  [ -n "$note" ] || fail "an owner comment before assignment was lost"
+  assert_grep 'From the owner: an instruction for firstmate.' "$note" "backfilled owner comment lost authority"
+  [ -z "$(note_with 'PR body')" ] || fail "the PR description was backfilled as a comment"
   [ -z "$(note_with 'Picked up, thanks.')" ] || fail "the bot's own comment was captured"
   [ -z "$(note_with 'GitHub assignment of')" ] || fail "the bot assigning itself became a note"
-  [ "$(note_files | wc -l | tr -d ' ')" = 4 ] || fail "expected four notes, got: $(note_files)"
+  [ "$(note_files | wc -l | tr -d ' ')" = 5 ] || fail "expected five notes, got: $(note_files)"
   assert_grep 'POST /repos/acme/widget/issues/comments/702/reactions' "$LOG/calls" "the owner's comment got no reaction"
   assert_no_grep 'POST /repos/acme/widget/issues/comments/703/reactions' "$LOG/calls" "a non-owner comment got a reaction"
   assert_no_grep 'pulls/comments/801/reactions' "$LOG/calls" "an untrusted edited comment got a reaction"
+  printf 'fm-gh-bot-check-v1\nreported=\npolled_at=2000-01-01T00:00:00Z\n' > "$HOME_DIR/state/.github-bot-check"
+  : > "$LOG/calls"
   run_check poll >/dev/null || fail "replayed assigned-thread poll failed"
-  [ "$(note_files | wc -l | tr -d ' ')" = 4 ] || fail "a replayed poll duplicated assigned-thread notes"
+  assert_no_grep '^POST .*reactions' "$LOG/calls" "replayed backfill reacted again"
+  [ "$(note_files | wc -l | tr -d ' ')" = 5 ] || fail "a replayed poll duplicated assigned-thread notes"
   pass "on an assigned PR, owner comments and empty approvals are trusted, others are information, and replays deduplicate"
 }
 
