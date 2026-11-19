@@ -753,7 +753,10 @@ test_verified_merge_records_pr_and_head() {
 # printed. The bot token never reaches output or argv.
 test_github_merge_identity_prefers_the_bot() {
   local case_dir variant rc
-  for variant in bot workflow no-access; do
+  local -a extra
+  for variant in bot workflow no-access admin; do
+    extra=()
+    [ "$variant" != admin ] || extra=(--attended-override -- --admin)
     case_dir=$(make_case "merge-identity-$variant")
     mkdir -p "$case_dir/wt" "$case_dir/bodies"
     add_gh_mocks "$case_dir" 7373737373737373737373737373737373737373
@@ -770,11 +773,15 @@ test_github_merge_identity_prefers_the_bot() {
     fm_test_fake_github_api "$case_dir/fakebin" "$case_dir/api" "$case_dir/routes"
     set +e
     FM_GH_API_URL=https://api.test.invalid run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/73 \
-      > "$case_dir/stdout" 2> "$case_dir/stderr"
+      "${extra[@]+"${extra[@]}"}" > "$case_dir/stdout" 2> "$case_dir/stderr"
     rc=$?
     set -e
     expect_code 0 "$rc" "merge-identity-$variant: the merge should succeed"
-    assert_logged_gh_merge "$case_dir" 73 example/repo --squash
+    if [ "$variant" = admin ]; then
+      assert_logged_gh_merge "$case_dir" 73 example/repo --squash --admin
+    else
+      assert_logged_gh_merge "$case_dir" 73 example/repo --squash
+    fi
     case "$variant" in
       bot)
         assert_grep 'merge-as=bot' "$case_dir/gh.log" "merge-identity-bot: the merge did not run as the bot"
@@ -789,6 +796,10 @@ test_github_merge_identity_prefers_the_bot() {
         assert_grep 'merge-as=login' "$case_dir/gh.log" "merge-identity-no-access: an unreachable repository merged as the bot"
         assert_grep 'cannot reach example/repo' "$case_dir/stdout" "merge-identity-no-access: the fallback reason was not named"
         ;;
+      admin)
+        assert_grep 'merge-as=login' "$case_dir/gh.log" "merge-identity-admin: an --admin merge ran as a bot without admin access"
+        assert_grep 'no admin access to example/repo' "$case_dir/stdout" "merge-identity-admin: the fallback reason was not named"
+        ;;
     esac
     assert_no_grep ghp_FakeBotToken0003 "$case_dir/stdout" "merge-identity-$variant: the bot token was printed"
     assert_no_grep ghp_FakeBotToken0003 "$case_dir/stderr" "merge-identity-$variant: the bot token was printed"
@@ -801,7 +812,7 @@ test_github_merge_identity_prefers_the_bot() {
     > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "merge-identity-unconfigured: the merge failed"
   assert_grep 'merge-as=login' "$case_dir/gh.log" "merge-identity-unconfigured: merged as something other than the gh login"
   assert_no_grep 'merge identity' "$case_dir/stdout" "merge-identity-unconfigured: a home without a bot printed an identity line"
-  pass "fm-pr-merge merges as the bot when it can, falls back for workflow changes and unreachable repositories, and never prints the token"
+  pass "fm-pr-merge merges as the bot when it can, falls back for workflow changes, unreachable repositories, and --admin without bot admin access, and never prints the token"
 }
 
 # The forge call is the point of no return: once gh-axi has merged, nothing this

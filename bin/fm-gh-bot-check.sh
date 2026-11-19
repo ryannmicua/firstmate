@@ -16,10 +16,11 @@
 #                                assign the bot to a github.com PR with its own
 #                                token; nothing without config/github-bot;
 #                                exit 3 when the bot cannot be assigned there
-#   fm-gh-bot-check.sh can-merge <pr-url>
+#   fm-gh-bot-check.sh can-merge <pr-url> [--admin]
 #                                print the bot login when the bot should merge
 #                                the PR; otherwise print why not and exit 3 (no
-#                                bot, no write access, or a .github/workflows
+#                                bot, no write access, no admin access for a
+#                                requested --admin merge, or a .github/workflows
 #                                change) or 1 (a problem)
 #   fm-gh-bot-check.sh gh <gh-args...>
 #                                run gh as the bot (GH_TOKEN in its environment)
@@ -637,7 +638,7 @@ action_assign() {  # <pr-url>
   return 1
 }
 
-action_can_merge() {  # <pr-url>
+action_can_merge() {  # <pr-url> [--admin]
   local perms
   [ -f "$CONFIG/github-bot" ] || { printf 'no bot account is configured\n'; return 3; }
   bot_setup "${1:-}" pull || return 1
@@ -647,6 +648,10 @@ action_can_merge() {  # <pr-url>
   fi
   if ! jq -e '.push == true' <<<"$perms" >/dev/null; then
     printf 'the bot %s has no write access to %s\n' "$BOT_LOGIN" "$ITEM_SLUG"
+    return 3
+  fi
+  if [ "${2:-}" = --admin ] && ! jq -e '.admin == true' <<<"$perms" >/dev/null; then
+    printf 'the bot %s has no admin access to %s for an --admin merge\n' "$BOT_LOGIN" "$ITEM_SLUG"
     return 3
   fi
   # The bot token has no workflow scope, which GitHub requires to land a
@@ -699,7 +704,7 @@ case "${1:-check}" in
   arm) action_arm ;;
   disarm) action_disarm ;;
   assign) action_assign "${2:-}" ;;
-  can-merge) action_can_merge "${2:-}" ;;
+  can-merge) action_can_merge "${2:-}" "${3:-}" ;;
   gh) shift; action_gh "$@" ;;
   reply) action_reply "${2:-}" ;;
   -h|--help) usage ;;

@@ -2075,7 +2075,7 @@ Firstmate then replies on the pull request as the bot, so the owner sees the app
 
 Firstmate's merges and replies use the bot under the following conditions, regardless of assignment:
 
-- `bin/fm-pr-merge.sh` runs the merge command as the bot when the bot has write access and the pull request changes nothing under `.github/workflows/`, which needs a workflow scope the bot token lacks; it prints which identity merged.
+- `bin/fm-pr-merge.sh` runs the merge command as the bot when the bot has write access, has admin access when the merge arguments request `--admin`, and the pull request changes nothing under `.github/workflows/`, which needs a workflow scope the bot token lacks; it prints which identity merged.
 - Replies go through `bin/fm-gh-bot-check.sh reply`, and fall back to firstmate's usual tool when it reports that the bot cannot reach the repository.
 
 Every check, read, and guard of the merge runs exactly as without a bot; only the merge command changes identity.

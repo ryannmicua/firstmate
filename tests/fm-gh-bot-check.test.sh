@@ -897,6 +897,12 @@ test_can_merge_and_reply_actions() {
   route POST /repos/acme/widget/issues/7/comments 201 reply
   out=$(run_bot can-merge https://github.com/acme/widget/pull/7) || fail "can-merge refused a writable repository: $out"
   [ "$out" = example-bot ] || fail "can-merge did not print the bot login: $out"
+  out=$(run_bot can-merge https://github.com/acme/widget/pull/7 --admin); rc=$?
+  expect_code 3 "$rc" "an --admin merge without admin access must fall back"
+  assert_contains "$out" 'no admin access' "the admin fallback was not named"
+  printf '{"permissions":{"push":true,"admin":true}}' > "$BODIES/repo-write"
+  out=$(run_bot can-merge https://github.com/acme/widget/pull/7 --admin) || fail "can-merge refused an --admin merge for an admin bot: $out"
+  [ "$out" = example-bot ] || fail "can-merge did not print the bot login for an admin bot: $out"
   route_body() { sed -i "s@$1\$@$2@" "$ROUTES"; }
   route_body "$BODIES/files" "$BODIES/files-workflow"
   out=$(run_bot can-merge https://github.com/acme/widget/pull/7); rc=$?
