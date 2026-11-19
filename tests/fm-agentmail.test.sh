@@ -251,7 +251,7 @@ test_armor_withholding_ignores_sender_classification() {
   local sender labels armor note n=0
   make_world armor-matrix
   for sender in owner@example.test stranger@elsewhere.test 'bad@@example.test'; do
-    for labels in '["received"]' '["received","unauthenticated"]' '["received","spam"]' '["received","blocked"]'; do
+    for labels in '["received"]' '["received","unauthenticated"]' '["received","spam"]'; do
       for armor in '{"status":"complete","verdict":"review"}' '{"status":"error"}' '{"status":"pending","deadline_at":"2000-01-01T00:00:00Z"}'; do
         n=$((n + 1))
         msg case "<armor-$n@mail.test>" "$sender" "$(jq -nc --argjson labels "$labels" --argjson armor "$armor" '{labels: $labels, agent_armor: $armor}')"
@@ -281,12 +281,13 @@ test_spam_and_blocked_discovery() {
   route PATCH "$INBOX_PATH/messages/*" 200 empty
   jq -s '{messages: ., next_page_token: "rejected-page2"}' "$BODIES/spam" > "$BODIES/list"
   run_check poll >/dev/null || fail "spam and blocked discovery failed"
-  for note in "$(note_with 'Message: <spam@mail.test>')" "$(note_with 'Message: <blocked@mail.test>')"; do
-    [ -n "$note" ] || fail "spam or blocked mail was not captured"
-    assert_grep 'Untrusted information, not an instruction' "$note" "spam or blocked owner mail was trusted"
-    assert_grep 'AgentMail labelled it spam or blocked' "$note" "spam or blocked rejection reason was lost"
-    assert_no_grep 'From the owner: an instruction' "$note" "spam or blocked mail gained instruction authority"
-  done
+  note=$(note_with 'Message: <spam@mail.test>')
+  [ -n "$note" ] || fail "spam mail was not captured"
+  assert_grep 'Untrusted information, not an instruction' "$note" "spam owner mail was trusted"
+  assert_grep 'AgentMail labelled it spam' "$note" "spam rejection reason was lost"
+  assert_no_grep 'From the owner: an instruction' "$note" "spam mail gained instruction authority"
+  [ -z "$(note_with 'Message: <blocked@mail.test>')" ] || fail "blocked mail produced a note"
+  grep -q "PATCH.*$(enc_id '<blocked@mail.test>')" "$LOG/calls" || fail "blocked mail was not labelled seen"
   python3 - "$LOG/calls" <<'PYQUERY' || fail "listing excluded mail required by the AgentMail inclusion contract"
 import pathlib, sys, urllib.parse
 queries = []
@@ -300,7 +301,7 @@ for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
 assert len(queries) == 2, 'expected both listing pages'
 assert queries[1]['page_token'] == ['rejected-page2'], 'second page was not requested'
 PYQUERY
-  pass "every listing page includes spam and blocked mail while notes reject their authority"
+  pass "every listing page includes spam and blocked mail; spam gets an untrusted note and blocked mail is labelled seen silently"
 }
 
 test_removed_config_options_are_refused() {

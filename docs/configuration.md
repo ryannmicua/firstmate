@@ -2134,7 +2134,7 @@ A message is the owner's instruction only when all of these hold:
 
 - its single From address is a configured owner address;
 - AgentMail's authentication results show an SPF pass, or a DKIM pass signed for the sender's domain or a parent domain;
-- AgentMail did not label it `unauthenticated`, `spam`, or `blocked`;
+- AgentMail did not label it `unauthenticated` or `spam`;
 - Agent Armor either is not running or completed with a `clear` verdict.
 
 Everything else is an untrusted information note that tells firstmate to surface it to the captain and not act on it.
@@ -2142,6 +2142,10 @@ A pending Agent Armor scan with a parseable future deadline holds that message a
 Once the deadline expires, or if it is absent or invalid, the message becomes an untrusted note with its text withheld.
 Any other scan result that is incomplete or not `clear` also withholds the text, regardless of sender classification.
 AgentMail only reports authentication results for mail received after 2026-09-09, so a message without them is always untrusted.
+
+Mail AgentMail labels `blocked` comes from a sender on the inbox's own block list and is dropped quietly: no note and no wake, only the `firstmate-seen` label so it is not read again.
+Spam and unauthenticated mail still become untrusted notes.
+To silence a sender, add its address or domain to the inbox's receive block list in AgentMail; the next message from it is dropped.
 
 ### Sending
 

@@ -104,7 +104,7 @@ trust_verdict() {
     | (.authentication_results // {}) as $a
     | def aligned($x): ($x // "" | ascii_downcase) as $s | $s == $d or ($d | endswith("." + $s));
     if ($l | index("unauthenticated")) != null then "untrusted:AgentMail labelled it unauthenticated"
-    elif ($l | index("spam")) != null or ($l | index("blocked")) != null then "untrusted:AgentMail labelled it spam or blocked"
+    elif ($l | index("spam")) != null then "untrusted:AgentMail labelled it spam"
     elif (.agent_armor != null and (.agent_armor.status != "complete" or .agent_armor.verdict != "clear")) then
       "untrusted:Agent Armor flagged it or could not clear it"
     elif ($a.spf == "pass") or ($a.dkim == "pass" and aligned($a.dkim_domain)) then "trusted"
@@ -154,6 +154,14 @@ handle_message() {
   mid=$(jq -r '.message_id // empty' <<<"$item")
   [ -n "$mid" ] || return 0
   enc=$(fm_am_urlenc "$mid")
+  # Mail on the inbox's own block list is dropped quietly: labelled seen, no note.
+  if jq -e '(.labels // []) | index("blocked") != null' <<<"$item" >/dev/null; then
+    if fm_am_api PATCH "/v0/inboxes/$(fm_am_urlenc "$FM_AM_INBOX")/messages/$enc" "{\"add_labels\":[\"$SEEN_LABEL\"]}" && [ "$FM_AM_STATUS" = 200 ]; then
+      return 0
+    fi
+    problem "could not label a blocked AgentMail message $SEEN_LABEL (HTTP $FM_AM_STATUS)"
+    return 1
+  fi
   if ! fm_am_api GET "/v0/inboxes/$(fm_am_urlenc "$FM_AM_INBOX")/messages/$enc" || [ "$FM_AM_STATUS" != 200 ] ||
     ! jq -e 'type == "object"' <<<"$FM_AM_BODY" >/dev/null 2>&1; then
     problem "could not retrieve an AgentMail message (HTTP $FM_AM_STATUS)"
