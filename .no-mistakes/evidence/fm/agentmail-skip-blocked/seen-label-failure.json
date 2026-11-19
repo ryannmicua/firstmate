@@ -1,0 +1,45 @@
+{
+  "command": [
+    "bash",
+    "{run-worktree}/bin/fm-agentmail-check.sh",
+    "poll"
+  ],
+  "exit": 1,
+  "stdout": "could not label a blocked AgentMail message firstmate-seen (HTTP 503)\n",
+  "stderr": "",
+  "notes": {},
+  "wake_queue": "",
+  "http_calls": [
+    {
+      "method": "GET",
+      "path": "/v0/inboxes/lab%40example.test/messages?limit=50&ascending=true&include_unauthenticated=true&include_spam=true&include_blocked=true"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v0/inboxes/lab%40example.test/messages/github-blocked",
+      "body": {
+        "add_labels": [
+          "firstmate-seen"
+        ]
+      },
+      "status": 503
+    }
+  ],
+  "mailbox": [
+    {
+      "message_id": "github-blocked",
+      "thread_id": "thread-github-blocked",
+      "labels": [
+        "received",
+        "blocked"
+      ],
+      "subject": "Synthetic github-blocked",
+      "from": "notifications@github.com",
+      "created_at": "2026-11-19T00:00:00Z",
+      "extracted_text": "Body of github-blocked",
+      "authentication_results": {
+        "spf": "pass"
+      }
+    }
+  ]
+}

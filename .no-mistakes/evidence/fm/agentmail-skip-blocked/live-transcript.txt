@@ -1,0 +1,5 @@
+PASS blocked GitHub, authenticated owner, and pending-scan mail: no notes/wakes; seen labels persisted; repeat poll quiet
+REPRODUCED base commit: identical blocked GitHub message creates an inbox note and wake
+PASS mixed paginated inbox: blocked discarded; owner trusted; spam/unauthenticated/stranger untrusted; exactly four wakes; repeat poll adds nothing
+PASS HTTP 503 acknowledgement: reports failure without note/wake; next poll recovers and persists seen label
+CLEANUP localhost server stopped and joined; disposable homes removed
