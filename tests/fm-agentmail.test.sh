@@ -174,8 +174,7 @@ test_replay_and_dedup() {
   pass "replays and seen-labelled messages never produce a second note"
 }
 
-test_pending_armor_defers_and_holds_cursor() {
-  local cursor
+test_pending_armor_defers_and_retries() {
   make_world pending
   jq '.agent_armor = {status: "pending", started_at: "2026-01-01T00:00:00Z", deadline_at: (now + 600 | floor | todateiso8601)}' "$BODIES/owner-pass" > "$BODIES/x"
   mv "$BODIES/x" "$BODIES/owner-pass"
@@ -186,47 +185,60 @@ test_pending_armor_defers_and_holds_cursor() {
   list_of owner-pass stranger
   run_check poll >/dev/null || fail "deferring poll failed"
   [ -z "$(note_files)" ] || fail "a message still being scanned was noted, or a later one jumped it"
-  cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.agentmail-check" 2>/dev/null)
-  [ -z "$cursor" ] || fail "the cursor moved past a deferred message"
   jq '.agent_armor = {status: "complete", verdict: "clear", reason: "ok"}' "$BODIES/owner-pass" > "$BODIES/x"
   mv "$BODIES/x" "$BODIES/owner-pass"
   run_check poll >/dev/null || fail "retry poll failed"
   assert_grep 'From the owner: an instruction' "$(note_with 'text of <m1@mail.test>')" "the cleared message was not trusted on retry"
   [ -n "$(note_with 'text of <m4@mail.test>')" ] || fail "the later message was lost"
-  pass "a message whose Armor scan is pending is deferred, holding the cursor, and noted once cleared"
+  pass "a message whose Armor scan is pending is deferred and noted once cleared"
 }
 
-test_future_timestamps_keep_cursor_bounded() {
-  local labels cursor upper
+test_delivery_ignores_sending_time() {
+  local labels
   for labels in '["received"]' '["sent"]' '["draft"]' '["received","firstmate-seen"]'; do
     make_world "future-$RANDOM"
     msg future '<future@mail.test>' owner@example.test "$(jq -nc --argjson labels "$labels" '{labels: $labels, timestamp: (now + 3600 | floor | todateiso8601)}')"
     list_of future
     run_check poll >/dev/null || fail "future timestamp poll failed"
-    upper=$(jq -nr 'now | floor | todateiso8601')
-    cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.agentmail-check")
-    [ -n "$cursor" ] && [[ ! "$cursor" > "$upper" ]] || fail "future message advanced checkpoint beyond current time"
-    msg current '<current@mail.test>' owner@example.test '{}'
-    list_of current
-    run_check poll >/dev/null || fail "ordinary poll after future message failed"
-    [ -n "$(note_with 'text of <current@mail.test>')" ] || fail "ordinary mail was lost after future timestamp"
+    msg delayed '<delayed@mail.test>' owner@example.test '{"timestamp":"2000-01-01T11:45:00Z"}'
+    list_of delayed
+    run_check poll >/dev/null || fail "delayed delivery poll failed"
+    [ -n "$(note_with 'text of <delayed@mail.test>')" ] || fail "delayed mail was lost after future timestamp"
   done
-  make_world future-saved
-  printf 'fm-agentmail-check-v1\npolled_at=%s\n' "$(jq -nr 'now + 3600 | floor | todateiso8601')" > "$HOME_DIR/state/.agentmail-check"
-  run_check poll >/dev/null || fail "poll with a future saved cursor failed"
-  upper=$(jq -nr 'now | floor | todateiso8601')
-  cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.agentmail-check")
-  [[ ! "$cursor" > "$upper" ]] || fail "saved future checkpoint was not bounded"
+  make_world delayed-pages
+  printf 'fm-agentmail-check-v1\npolled_at=2099-01-01T12:00:00Z\n' > "$HOME_DIR/state/.agentmail-check"
+  msg delayed '<delayed@mail.test>' owner@example.test '{"timestamp":"2000-01-01T11:45:00Z"}'
+  list_of delayed
+  cp "$BODIES/list" "$BODIES/last-page"
+  printf '{"messages":[],"next_page_token":"page2"}' > "$BODIES/first-page"
+  : > "$ROUTES"
+  route GET "$INBOX_PATH/messages?*page_token=page2" 200 last-page
+  route GET "$INBOX_PATH/messages?limit=50&*" 200 first-page
+  route GET "$INBOX_PATH/messages/$(enc_id '<delayed@mail.test>')" 200 delayed
+  route PATCH "$INBOX_PATH/messages/$(enc_id '<delayed@mail.test>')" 200 empty
+  run_check poll >/dev/null || fail "poll with an old saved cursor failed"
+  [ -n "$(note_with 'text of <delayed@mail.test>')" ] || fail "delayed mail on a later page was lost"
   python3 - "$LOG/calls" <<'PYQUERY'
-import datetime, pathlib, sys, urllib.parse
+import pathlib, sys, urllib.parse
+queries = []
 for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
-    query = urllib.parse.parse_qs(urllib.parse.urlparse(line.split()[1]).query)
-    if 'after' in query:
-        after = datetime.datetime.fromisoformat(query['after'][0].replace('Z', '+00:00'))
-        assert after <= datetime.datetime.now(datetime.timezone.utc), 'query excluded current mail'
+    url = urllib.parse.urlparse(line.split()[1])
+    if url.path.endswith('/messages'):
+        query = urllib.parse.parse_qs(url.query)
+        assert 'after' not in query and 'before' not in query, 'sending-time filter can exclude delayed delivery'
+        queries.append(query)
+assert len(queries) == 2, 'poll did not consume both pages'
+assert queries[1]['page_token'] == ['page2'], 'poll lost the pagination token'
 PYQUERY
-  [ "$?" -eq 0 ] || fail "future checkpoint produced a future query"
-  pass "received and skipped future mail and saved cursors keep checkpoints and queries bounded"
+  [ "$?" -eq 0 ] || fail "discovery violated the AgentMail timestamp and pagination contract"
+  run_check poll >/dev/null || fail "delayed mail replay failed"
+  [ "$(note_files | wc -l | tr -d ' ')" = 1 ] || fail "delayed mail replay created duplicate notes"
+  make_world delayed-initial
+  msg delayed '<initial@mail.test>' owner@example.test '{"timestamp":"2000-01-01T11:45:00Z"}'
+  list_of delayed
+  run_check poll >/dev/null || fail "initial delayed delivery poll failed"
+  [ -n "$(note_with 'text of <initial@mail.test>')" ] || fail "first poll lost old-sent newly delivered mail"
+  pass "delayed delivery survives future messages, legacy cursors, pagination, initial polls, and replays"
 }
 
 test_armor_withholding_ignores_sender_classification() {
@@ -372,8 +384,8 @@ test_check_runs_poll_in_background() {
 test_trust_matrix
 test_missing_authentication_results_is_untrusted
 test_replay_and_dedup
-test_pending_armor_defers_and_holds_cursor
-test_future_timestamps_keep_cursor_bounded
+test_pending_armor_defers_and_retries
+test_delivery_ignores_sending_time
 test_armor_withholding_ignores_sender_classification
 test_removed_config_options_are_refused
 test_problem_lines

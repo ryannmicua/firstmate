@@ -16,14 +16,11 @@
 # Operator setup, the trust rule, and the note format are owned by
 # docs/configuration.md "AgentMail inbox".
 #
-# state/.agentmail-check stores the since cursor. The poll lists received
-# messages oldest first from ten minutes before the cursor (so a late-delivered
-# message is still seen) and moves the cursor to each message once its note is
-# saved. A message labelled firstmate-seen in AgentMail is skipped, and the
-# inbox request id derived from the message id deduplicates any replay, so the
-# overlap and an interrupted poll never create a second note.
+# The poll lists all messages oldest first across every page.
+# A message labelled firstmate-seen in AgentMail is skipped, and the inbox
+# request id derived from the message id deduplicates any replay.
 # A message whose Agent Armor scan is still pending inside its deadline is left
-# for the next poll, and the cursor stops before it.
+# for the next poll, which starts listing from the beginning again.
 # The inbox note's own wake reaches firstmate; this check prints nothing on a
 # clean poll and one line when the recorded problem report changes.
 #
@@ -86,7 +83,7 @@ one_line() {
 }
 
 # save_note <request-id> <body>: 0 when the inbox note is saved and announced
-# (or already was); nonzero keeps the poll cursor where it is.
+# (or already was); nonzero stops the poll.
 save_note() {
   local rid=$1 body=$2 rc=0
   printf '%s\n' "$body" | FM_HOME="$FM_HOME" "$INBOX_BIN" note --request-id "$rid" --json - >/dev/null 2>&1 || rc=$?
@@ -184,23 +181,15 @@ handle_message() {
 }
 
 action_poll() {
-  local started cursor since query page_token items item ts rc deferred=0
+  local query page_token items item rc deferred=0
   if ! fm_am_load_config "$CONFIG"; then
     printf '%s\n' "$FM_AM_CONFIG_ERROR"
     return 1
   fi
-  started=$(jq -nr 'now | floor') || return 1
-  cursor=$(record_get polled_at)
-  if [ -n "$cursor" ]; then
-    cursor=$(jq -nr --arg cursor "$cursor" --argjson started "$started" '[($cursor | fromdateiso8601), $started] | min | todateiso8601') || return 1
-    record_set polled_at "$cursor" || return 1
-  fi
-  since=$(jq -nr --arg cursor "$cursor" --argjson started "$started" '
-    (if $cursor == "" then $started - 86400 else ($cursor | fromdateiso8601) - 600 end) | todateiso8601') || return 1
   mkdir -p "$STATE" || return 1
   page_token=
   while :; do
-    query="limit=50&ascending=true&include_unauthenticated=true&after=$(fm_am_urlenc "$since")"
+    query="limit=50&ascending=true&include_unauthenticated=true"
     [ -z "$page_token" ] || query="$query&page_token=$(fm_am_urlenc "$page_token")"
     if ! fm_am_api GET "/v0/inboxes/$(fm_am_urlenc "$FM_AM_INBOX")/messages?$query" || [ "$FM_AM_STATUS" != 200 ] ||
       ! jq -e '(.messages | type) == "array"' <<<"$FM_AM_BODY" >/dev/null 2>&1; then
@@ -221,10 +210,6 @@ action_poll() {
         2) deferred=1; break ;;
         *) printf '%s\n' "${PROBLEMS[0]:-could not completely capture an AgentMail message}"; return 1 ;;
       esac
-      ts=$(jq -r --argjson started "$started" '(.timestamp // empty) | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 | [., $started] | min | todateiso8601' <<<"$item" 2>/dev/null)
-      if [ -n "$ts" ] && [[ "$ts" > "$(record_get polled_at)" ]]; then
-        record_set polled_at "$ts" || return 1
-      fi
     done < <(jq -c '.messages[]' <<<"$items")
     [ "$deferred" -eq 0 ] || break
     [ -n "$page_token" ] || break
@@ -242,18 +227,16 @@ record_get() {  # <key>
 }
 
 record_set() {  # <key> <value>
-  local tmp reported polled_at problem
+  local tmp reported problem
   reported=$(record_get reported)
-  polled_at=$(record_get polled_at)
   problem=$(record_get problem)
   case "$1" in
     reported) reported=$2 ;;
-    polled_at) polled_at=$2 ;;
     problem) problem=$2 ;;
     *) return 1 ;;
   esac
   tmp=$(umask 077; mktemp "$RECORD.XXXXXX" 2>/dev/null) || return 1
-  if ! printf 'fm-agentmail-check-v1\nreported=%s\npolled_at=%s\nproblem=%s\n' "$reported" "$polled_at" "$problem" > "$tmp" ||
+  if ! printf 'fm-agentmail-check-v1\nreported=%s\nproblem=%s\n' "$reported" "$problem" > "$tmp" ||
     ! mv -f -- "$tmp" "$RECORD"; then
     rm -f -- "$tmp"
     return 1

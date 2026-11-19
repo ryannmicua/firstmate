@@ -2123,7 +2123,7 @@ The key reaches curl only through its standard-input configuration, never on a c
 ### Inbound mail
 
 Arm the poll with `bin/fm-agentmail-check.sh arm` and remove it with `bin/fm-agentmail-check.sh disarm`.
-The watcher polls on its normal check interval, the check returns immediately, and a detached single-instance job does the polling, as the GitHub bot check does ([`fm-agentmail-check.sh` header](../bin/fm-agentmail-check.sh) owns cursor and retry mechanics).
+The watcher polls on its normal check interval, the check returns immediately, and a detached single-instance job does the polling, as the GitHub bot check does ([`fm-agentmail-check.sh` header](../bin/fm-agentmail-check.sh) owns discovery and retry mechanics).
 Each received message becomes one captain inbox note with the sender, subject, received time, thread id, message id, the extracted reply text (no quoted history, at most 4,000 characters), and attachment names and sizes.
 Attachments are never downloaded or opened.
 Processed messages get the `firstmate-seen` label in AgentMail, and the message id also deduplicates notes, so a replay creates no second note.
