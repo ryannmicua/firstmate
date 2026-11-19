@@ -189,7 +189,7 @@ action_poll() {
   mkdir -p "$STATE" || return 1
   page_token=
   while :; do
-    query="limit=50&ascending=true&include_unauthenticated=true"
+    query="limit=50&ascending=true&include_unauthenticated=true&include_spam=true&include_blocked=true"
     [ -z "$page_token" ] || query="$query&page_token=$(fm_am_urlenc "$page_token")"
     if ! fm_am_api GET "/v0/inboxes/$(fm_am_urlenc "$FM_AM_INBOX")/messages?$query" || [ "$FM_AM_STATUS" != 200 ] ||
       ! jq -e '(.messages | type) == "array"' <<<"$FM_AM_BODY" >/dev/null 2>&1; then
