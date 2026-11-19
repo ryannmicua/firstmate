@@ -2114,12 +2114,10 @@ It is opt-in, uses plain HTTPS calls with the API key and no SDK, MCP server, or
 | --- | --- |
 | `inbox` | The AgentMail inbox address (required). |
 | `owner` | An owner address whose verified mail counts as an instruction; repeat the line or comma-separate for several (at least one required). |
-| `allow` | An extra address the sender may email without a per-send exception; owner addresses are always allowed. |
 | `route` | `route=<github owner>:<address>`, repeatable; the recipient `fm-agentmail-send.sh --repo <owner/name>` picks for that owner's repositories. |
-| `key_file` | Absolute path of the API key; default `config/agentmail.key`. |
 
 Keep the owner addresses and routes in this untracked file only.
-The key file holds one line starting with `am_`, must be a regular file owned by this user with mode 600, and is read on every call, so replacing it rotates the key.
+`config/agentmail.key` holds one line starting with `am_`, must be a regular file owned by this user with mode 600, and is read on every call, so replacing it rotates the key.
 The key reaches curl only through its standard-input configuration, never on a command line, and is never printed, logged, or written into a note.
 
 ### Inbound mail
@@ -2144,7 +2142,7 @@ AgentMail only reports authentication results for mail received after 2026-09-09
 ### Sending
 
 `bin/fm-agentmail-send.sh` sends one email, new or as a reply in a thread with `--reply-to-message`, from the configured inbox and prints the message and thread ids.
-A recipient must be an owner or `allow` address.
+A recipient must be a configured owner address.
 Any other recipient is refused unless that exact address is named by `--allow-recipient` on that one send, which is for an email the owner asked for specifically.
 `--repo <owner/name>` picks the recipient from the `route` lines, so mail about each GitHub owner's repositories reaches the right owner address.
 Replies name their recipients explicitly and never reply to all.

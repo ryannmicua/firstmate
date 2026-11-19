@@ -196,6 +196,74 @@ test_pending_armor_defers_and_holds_cursor() {
   pass "a message whose Armor scan is pending is deferred, holding the cursor, and noted once cleared"
 }
 
+test_future_timestamps_keep_cursor_bounded() {
+  local labels cursor upper
+  for labels in '["received"]' '["sent"]' '["draft"]' '["received","firstmate-seen"]'; do
+    make_world "future-$RANDOM"
+    msg future '<future@mail.test>' owner@example.test "$(jq -nc --argjson labels "$labels" '{labels: $labels, timestamp: (now + 3600 | floor | todateiso8601)}')"
+    list_of future
+    run_check poll >/dev/null || fail "future timestamp poll failed"
+    upper=$(jq -nr 'now | floor | todateiso8601')
+    cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.agentmail-check")
+    [ -n "$cursor" ] && [[ ! "$cursor" > "$upper" ]] || fail "future message advanced checkpoint beyond current time"
+    msg current '<current@mail.test>' owner@example.test '{}'
+    list_of current
+    run_check poll >/dev/null || fail "ordinary poll after future message failed"
+    [ -n "$(note_with 'text of <current@mail.test>')" ] || fail "ordinary mail was lost after future timestamp"
+  done
+  make_world future-saved
+  printf 'fm-agentmail-check-v1\npolled_at=%s\n' "$(jq -nr 'now + 3600 | floor | todateiso8601')" > "$HOME_DIR/state/.agentmail-check"
+  run_check poll >/dev/null || fail "poll with a future saved cursor failed"
+  upper=$(jq -nr 'now | floor | todateiso8601')
+  cursor=$(sed -n 's/^polled_at=//p' "$HOME_DIR/state/.agentmail-check")
+  [[ ! "$cursor" > "$upper" ]] || fail "saved future checkpoint was not bounded"
+  python3 - "$LOG/calls" <<'PYQUERY'
+import datetime, pathlib, sys, urllib.parse
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(line.split()[1]).query)
+    if 'after' in query:
+        after = datetime.datetime.fromisoformat(query['after'][0].replace('Z', '+00:00'))
+        assert after <= datetime.datetime.now(datetime.timezone.utc), 'query excluded current mail'
+PYQUERY
+  [ "$?" -eq 0 ] || fail "future checkpoint produced a future query"
+  pass "received and skipped future mail and saved cursors keep checkpoints and queries bounded"
+}
+
+test_armor_withholding_ignores_sender_classification() {
+  local sender labels armor note n=0
+  make_world armor-matrix
+  for sender in owner@example.test stranger@elsewhere.test 'bad@@example.test'; do
+    for labels in '["received"]' '["received","unauthenticated"]' '["received","spam"]' '["received","blocked"]'; do
+      for armor in '{"status":"complete","verdict":"review"}' '{"status":"error"}' '{"status":"pending","deadline_at":"2000-01-01T00:00:00Z"}'; do
+        n=$((n + 1))
+        msg case "<armor-$n@mail.test>" "$sender" "$(jq -nc --argjson labels "$labels" --argjson armor "$armor" '{labels: $labels, agent_armor: $armor}')"
+        list_of case
+        run_check poll >/dev/null || fail "Armor matrix poll failed"
+        note=$(note_with "Message: <armor-$n@mail.test>")
+        [ -n "$note" ] || fail "Armor matrix note missing"
+        assert_grep 'text withheld' "$note" "unsafe Armor text was not withheld"
+        assert_no_grep "text of <armor-$n@mail.test>" "$note" "unsafe Armor text leaked"
+      done
+    done
+  done
+  pass "unsafe Armor text is withheld for every sender and rejection label"
+}
+
+test_removed_config_options_are_refused() {
+  local option out
+  for option in 'allow=stranger@elsewhere.test' 'key_file=/unused/agentmail.key'; do
+    make_world "removed-$RANDOM"
+    printf '%s\n' "$option" >> "$HOME_DIR/config/agentmail"
+    : > "$LOG/calls"
+    out=$(run_send --to stranger@elsewhere.test --subject Hi --text hello) && fail "removed option was accepted by sender"
+    assert_contains "$out" 'unknown key' "removed option refusal was not explained"
+    out=$(run_check poll) && fail "removed option was accepted by intake"
+    assert_contains "$out" 'unknown key' "intake did not reject removed option"
+    [ ! -s "$LOG/calls" ] || fail "invalid config reached the API"
+  done
+  pass "persistent recipient permissions and alternate credential paths are refused"
+}
+
 test_problem_lines() {
   local out
   make_world problems
@@ -305,6 +373,9 @@ test_trust_matrix
 test_missing_authentication_results_is_untrusted
 test_replay_and_dedup
 test_pending_armor_defers_and_holds_cursor
+test_future_timestamps_keep_cursor_bounded
+test_armor_withholding_ignores_sender_classification
+test_removed_config_options_are_refused
 test_problem_lines
 test_send_allowlist
 test_send_reply

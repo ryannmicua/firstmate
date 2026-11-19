@@ -12,8 +12,8 @@
 #   fm-agentmail-send.sh --repo <owner/name> ...   (instead of or besides --to)
 #   fm-agentmail-send.sh --help
 #
-# Every recipient must be on the allowlist in config/agentmail (the owner
-# addresses plus any allow= entries). A recipient outside it is refused unless
+# Every recipient must be an owner address in config/agentmail.
+# A recipient outside that allowlist is refused unless
 # that exact address is named by --allow-recipient on this one invocation; the
 # flag is never remembered. A reply names its recipients explicitly with --to
 # and never uses reply-all, so the same check covers it. cc and bcc are not
@@ -27,7 +27,7 @@
 # still passes the allowlist check.
 #
 # Prints message_id=<id> and thread_id=<id> on success. The API key is read from
-# the private key file named by config/agentmail and is never printed.
+# config/agentmail.key and is never printed.
 # Operator setup is owned by docs/configuration.md "AgentMail inbox".
 set -u
 export LC_ALL=C
@@ -97,7 +97,7 @@ done
 [ "${#TO[@]}" -gt 0 ] || die "at least one --to or --repo is required" 2
 
 for addr in "${TO[@]}"; do
-  if fm_am_in_list "$addr" "${FM_AM_ALLOW[@]}"; then continue; fi
+  if fm_am_in_list "$addr" "${FM_AM_OWNERS[@]}"; then continue; fi
   if [ "${#EXTRA[@]}" -gt 0 ] && fm_am_in_list "$addr" "${EXTRA[@]}"; then continue; fi
   die "$addr is not on the allowlist in config/agentmail; pass --allow-recipient $addr only when the owner asked for this specific email"
 done

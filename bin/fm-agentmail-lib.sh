@@ -37,8 +37,6 @@ FM_AM_KEY=
 # shellcheck disable=SC2034
 FM_AM_OWNERS=()
 # shellcheck disable=SC2034
-FM_AM_ALLOW=()
-# shellcheck disable=SC2034
 FM_AM_ROUTES=()
 # shellcheck disable=SC2034
 FM_AM_CONFIG_ERROR=
@@ -100,13 +98,12 @@ fm_am_add_list() {
 }
 
 # fm_am_load_config <config-dir>: read config/agentmail and its key file.
-# Sets FM_AM_INBOX, FM_AM_OWNERS, FM_AM_ALLOW (owners plus any `allow` entries)
+# Sets FM_AM_INBOX, FM_AM_OWNERS, FM_AM_ROUTES
 # and FM_AM_KEY, or fails with FM_AM_CONFIG_ERROR set.
 fm_am_load_config() {
-  local dir=$1 file line key value key_file
+  local dir=$1 file line key value
   file="$dir/agentmail"
-  key_file="$dir/agentmail.key"
-  FM_AM_INBOX='' FM_AM_KEY='' FM_AM_OWNERS=() FM_AM_ALLOW=() FM_AM_ROUTES=() FM_AM_CONFIG_ERROR=''
+  FM_AM_INBOX='' FM_AM_KEY='' FM_AM_OWNERS=() FM_AM_ROUTES=() FM_AM_CONFIG_ERROR=''
   if ! [ -f "$file" ] || [ -L "$file" ]; then
     FM_AM_CONFIG_ERROR="config/agentmail is missing"
     return 1
@@ -129,27 +126,21 @@ fm_am_load_config() {
       owner)
         fm_am_add_list FM_AM_OWNERS "$value" || { FM_AM_CONFIG_ERROR="config/agentmail owner is not an email address"; return 1; }
         ;;
-      allow)
-        fm_am_add_list FM_AM_ALLOW "$value" || { FM_AM_CONFIG_ERROR="config/agentmail allow is not an email address"; return 1; }
-        ;;
       route)
         # route=<github owner>:<address> picks the recipient for that owner's repositories.
         case "${value%%:*}" in ''|*[!A-Za-z0-9-]*|-*) FM_AM_CONFIG_ERROR="config/agentmail route needs <github owner>:<address>"; return 1 ;; esac
         fm_am_addr_ok "${value#*:}" || { FM_AM_CONFIG_ERROR="config/agentmail route needs <github owner>:<address>"; return 1; }
         FM_AM_ROUTES+=("$(fm_am_lower "${value%%:*}"):$(fm_am_lower "${value#*:}")")
         ;;
-      key_file) key_file=$value ;;
-      *) FM_AM_CONFIG_ERROR="config/agentmail has unknown key $key (accepted: inbox, owner, allow, route, key_file)"; return 1 ;;
+      *) FM_AM_CONFIG_ERROR="config/agentmail has unknown key $key (accepted: inbox, owner, route)"; return 1 ;;
     esac
   done < "$file"
   [ -n "$FM_AM_INBOX" ] || { FM_AM_CONFIG_ERROR="config/agentmail needs inbox=<address>"; return 1; }
   [ "${#FM_AM_OWNERS[@]}" -gt 0 ] || { FM_AM_CONFIG_ERROR="config/agentmail needs owner=<address>"; return 1; }
-  case "$key_file" in /*) ;; *) FM_AM_CONFIG_ERROR="config/agentmail key_file must be an absolute path"; return 1 ;; esac
-  FM_AM_KEY=$(fm_gh_read_token_file "$key_file") || {
+  FM_AM_KEY=$(fm_gh_read_token_file "$dir/agentmail.key") || {
     FM_AM_CONFIG_ERROR="the AgentMail key file is missing, not owner-only (chmod 600), or not one token"
     return 1
   }
-  FM_AM_ALLOW=("${FM_AM_OWNERS[@]}" "${FM_AM_ALLOW[@]}")
 }
 
 # fm_am_route_for <owner/repo>: print the address configured for that
