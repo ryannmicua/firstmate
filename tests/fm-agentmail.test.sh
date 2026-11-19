@@ -411,7 +411,7 @@ test_daily_product_email() {
   out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") || fail "daily send failed: $out"
   assert_contains "$out" 'sent: 2026-11-19' "daily send did not report success"
   jq -e '.to == ["owner@example.test"] and .text == "Daily report" and .html == "<p>Daily report</p>" and .subject == "Quarterdeck daily product email"' "$LOG/bodies" >/dev/null || fail "daily payload lost its owner route or body alternative"
-  [ "$(cat "$HOME_DIR/state/agentmail-daily.sent-day")" = "$DAILY_DAY sent" ] || fail "successful daily send did not record its date"
+  [ "$(cat "$HOME_DIR/state/agentmail-daily/$DAILY_DAY")" = sent ] || fail "successful daily send did not record its date"
   : > "$LOG/calls"
   out=$(run_daily --repo work-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "second daily send was allowed across repositories"
   assert_contains "$out" 'already sent today' "daily refusal did not explain the limit"
@@ -425,7 +425,7 @@ test_daily_product_email() {
   : > "$ROUTES"
   route POST "$INBOX_PATH/messages/send" 422 rejected
   out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "rejected daily send reported success"
-  [ ! -e "$HOME_DIR/state/agentmail-daily.sent-day" ] || fail "a definitive API rejection kept the day reserved"
+  [ ! -e "$HOME_DIR/state/agentmail-daily/$DAILY_DAY" ] || fail "a definitive API rejection kept the day reserved"
   : > "$ROUTES"
   route POST "$INBOX_PATH/messages/send" 200 sent
   out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") || fail "retry after a definitive rejection was refused: $out"
@@ -437,7 +437,7 @@ test_daily_product_email() {
     route POST "$INBOX_PATH/messages/send" "$2" "$3"
     out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "uncertain send (HTTP $2) reported success"
     assert_contains "$out" 'outcome uncertain' "uncertain send (HTTP $2) was not reported as uncertain"
-    [ "$(cat "$HOME_DIR/state/agentmail-daily.sent-day")" = "$DAILY_DAY pending" ] || fail "uncertain send (HTTP $2) released the day"
+    [ "$(cat "$HOME_DIR/state/agentmail-daily/$DAILY_DAY")" = pending ] || fail "uncertain send (HTTP $2) released the day"
     : > "$ROUTES"
     route POST "$INBOX_PATH/messages/send" 200 sent
     : > "$LOG/calls"
@@ -446,7 +446,7 @@ test_daily_product_email() {
     [ ! -s "$LOG/calls" ] || fail "retry after an uncertain send (HTTP $2) called the API"
   done
   DAILY_DAY=2026-11-26
-  printf '%s pending\n' "$DAILY_DAY" > "$HOME_DIR/state/agentmail-daily.sent-day"
+  printf 'pending\n' > "$HOME_DIR/state/agentmail-daily/$DAILY_DAY"
   out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "an interrupted send's reservation was ignored"
   assert_contains "$out" 'already sent today' "an interrupted send's reservation did not consume the day"
   DAILY_DAY=2026-11-27
@@ -455,16 +455,15 @@ test_daily_product_email() {
   out=$(run_daily --repo personal-org/product --allow-recipient stranger@elsewhere.test --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "daily sender accepted a recipient exception"
   printf 'route=outside:stranger@elsewhere.test\n' >> "$HOME_DIR/config/agentmail"
   out=$(run_daily --repo outside/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "daily sender bypassed the owner allowlist"
-  bash -c 'sleep 30; :' fm-agentmail-daily.sh &
-  holder=$!
-  ln -s "$holder" "$HOME_DIR/state/.agentmail-daily.lock"
-  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "concurrent daily sender bypassed the lock"
-  assert_contains "$out" 'daily send is locked' "a live lock holder was not reported"
   [ ! -s "$LOG/calls" ] || fail "refused daily send reached the API"
-  kill "$holder" 2>/dev/null
-  wait "$holder" 2>/dev/null
-  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") || fail "a lock left by a dead process blocked the daily send: $out"
-  [ ! -e "$HOME_DIR/state/.agentmail-daily.lock" ] && [ ! -L "$HOME_DIR/state/.agentmail-daily.lock" ] || fail "daily send left its lock behind"
+  DAILY_DAY=2026-11-28
+  for holder in 1 2 3 4 5 6; do
+    run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt" > "$HOME_DIR/race-$holder.out" &
+  done
+  wait
+  [ "$(grep -c '^POST ' "$LOG/calls")" = 1 ] || fail "concurrent daily sends sent more than one email: $(cat "$LOG/calls")"
+  [ "$(cat "$HOME_DIR"/race-*.out | grep -c 'already sent today')" = 5 ] || fail "concurrent daily sends were not refused for the reserved day"
+  [ "$(ls "$HOME_DIR/state/agentmail-daily")" = "$DAILY_DAY" ] || fail "records for earlier dates were not pruned"
   assert_grep '2026-11-19 sent' "$HOME_DIR/state/agentmail-daily.log" "successful send was not logged"
   assert_grep '2026-11-19 refused already sent today' "$HOME_DIR/state/agentmail-daily.log" "same-day refusal was not logged"
   assert_grep '2026-11-21 refused send failed' "$HOME_DIR/state/agentmail-daily.log" "rejected send was not logged"
@@ -472,7 +471,7 @@ test_daily_product_email() {
   assert_no_grep "$FAKE_KEY" "$HOME_DIR/state/agentmail-daily.log" "daily log leaked the key"
   assert_no_grep "$FAKE_KEY" "$LOG/argv" "daily send put the key in argv"
   assert_not_contains "$out" "$FAKE_KEY" "daily output leaked the key"
-  pass "daily product email uses owner routes and both bodies, reserves each date before sending, frees it only after a definitive rejection, and recovers an abandoned lock"
+  pass "daily product email uses owner routes and both bodies, reserves each date before sending, frees it only after a definitive rejection, and lets one of several concurrent calls send"
 }
 
 test_arm_and_disarm() {
