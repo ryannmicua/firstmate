@@ -2040,7 +2040,7 @@ An assignment or review request becomes one note identifying the actor, reposito
 A note from the owner says it is an instruction for firstmate.
 Owner-authored mention text counts as the owner's only when one GraphQL response reports the owner as its author and either no edit or the owner as its last editor; the note carries the body from that same response, and unverifiable owner text is headed NOT FROM THE OWNER.
 Assignments and review requests count as the owner's when their event actor is the configured owner.
-Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
+For mentions, assignments, and review requests, any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
 For issue and pull request threads whose notification reason is mention, assignment, or review request, the poll retrieves all mentions and assignment/review-request events naming the bot, regardless of which of those reasons triggered the notification.
 The bot assigning itself is never a note.
 Commit threads contribute commit-comment mentions only; other subject types are skipped.
@@ -2048,13 +2048,13 @@ Commit threads contribute commit-comment mentions only; other subject types are 
 On an issue or pull request the bot is currently assigned to, no mention is needed: whatever the notification reason, every comment, pull request review comment, and submitted review made since the thread was created becomes a note, except the bot's own.
 A review that approves or requests changes counts even with no text, and its note names the review state, the commit it was submitted on, and the pull request head when captured.
 The owner's items there follow the same provenance rule as owner mentions.
-Any other author's item there is headed NOT FROM THE OWNER and marked as information only, never an instruction.
+An unmentioned item from any other author there is headed NOT FROM THE OWNER and marked as information only, never an instruction; mentions follow the rules above.
 Reading the assignment costs one subject read for a participating thread with another reason; a subject that is gone or out of the bot's reach is skipped.
 Comments and reviews on a thread the bot is not assigned to require a mention; assignments and review requests follow the event rules above.
 
 After a new note is saved, the owner's comment, or the issue or pull request for an assignment or review, gets an eyes reaction so the owner sees it was picked up; nothing from another author gets a reaction.
 Replayed notes and items already carrying the bot's own eyes reaction skip another reaction POST.
-The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried.
+The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried or an item is edited to add or remove a mention.
 Other notification reasons on commits and other subject types, including team mentions, are skipped.
 The check prints a line only when the last poll's problem changes, such as a missing or refused token; `bin/fm-gh-bot-check.sh --help` owns the details.
 
@@ -2075,7 +2075,8 @@ Firstmate then replies on the pull request as the bot, so the owner sees the app
 
 Firstmate's merges and replies use the bot under the following conditions, regardless of assignment:
 
-- `bin/fm-pr-merge.sh` runs the merge command as the bot when the bot has write access, has admin access when the merge arguments request `--admin`, and the pull request changes nothing under `.github/workflows/`, which needs a workflow scope the bot token lacks; it prints which identity merged.
+- `bin/fm-pr-merge.sh` runs the merge command as the bot when the bot has write access, has admin access when the merge arguments request `--admin`, and the pull request changes nothing under `.github/workflows/`, which needs a workflow scope the bot token lacks.
+  If the bot eligibility check refuses or fails, the merge command uses this machine's `gh` login; the script prints the selected identity and any fallback reason before attempting the merge.
 - Replies go through `bin/fm-gh-bot-check.sh reply`, and fall back to firstmate's usual tool when it reports that the bot cannot reach the repository.
 
 Every check, read, and guard of the merge runs exactly as without a bot; only the merge command changes identity.
