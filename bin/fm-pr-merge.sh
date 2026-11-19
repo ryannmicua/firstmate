@@ -1645,7 +1645,7 @@ forgejo_confirm_merged() {
 # runs exactly as without a bot (docs/configuration.md "GitHub identities").
 FM_PR_GITHUB_MERGE_GH=(gh)
 github_select_merge_identity() {  # <caller merge args...>
-  local out arg admin= status=0
+  local out arg admin='' status=0
   [ -e "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/github-bot" ] || return 0
   for arg in "$@"; do
     case "$arg" in
