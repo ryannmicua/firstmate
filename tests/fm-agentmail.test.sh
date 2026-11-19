@@ -225,7 +225,7 @@ test_delivery_ignores_sending_time() {
   run_check poll >/dev/null || fail "poll with an old saved cursor failed"
   [ -n "$(note_with 'text of <delayed@mail.test>')" ] || fail "delayed mail on a later page was lost"
   assert_grep 'Received: 2000-01-02T08:30:00Z' "$(note_with 'text of <delayed@mail.test>')" "note showed the sending time as the receipt time"
-  python3 - "$LOG/calls" <<'PYQUERY'
+  python3 - "$LOG/calls" <<'PYQUERY' || fail "discovery violated the AgentMail timestamp and pagination contract"
 import pathlib, sys, urllib.parse
 queries = []
 for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
@@ -237,7 +237,6 @@ for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
 assert len(queries) == 2, 'poll did not consume both pages'
 assert queries[1]['page_token'] == ['page2'], 'poll lost the pagination token'
 PYQUERY
-  [ "$?" -eq 0 ] || fail "discovery violated the AgentMail timestamp and pagination contract"
   run_check poll >/dev/null || fail "delayed mail replay failed"
   [ "$(note_files | wc -l | tr -d ' ')" = 1 ] || fail "delayed mail replay created duplicate notes"
   make_world delayed-initial
@@ -288,7 +287,7 @@ test_spam_and_blocked_discovery() {
     assert_grep 'AgentMail labelled it spam or blocked' "$note" "spam or blocked rejection reason was lost"
     assert_no_grep 'From the owner: an instruction' "$note" "spam or blocked mail gained instruction authority"
   done
-  python3 - "$LOG/calls" <<'PYQUERY'
+  python3 - "$LOG/calls" <<'PYQUERY' || fail "listing excluded mail required by the AgentMail inclusion contract"
 import pathlib, sys, urllib.parse
 queries = []
 for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
@@ -301,7 +300,6 @@ for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
 assert len(queries) == 2, 'expected both listing pages'
 assert queries[1]['page_token'] == ['rejected-page2'], 'second page was not requested'
 PYQUERY
-  [ "$?" -eq 0 ] || fail "listing excluded mail required by the AgentMail inclusion contract"
   pass "every listing page includes spam and blocked mail while notes reject their authority"
 }
 
@@ -403,7 +401,7 @@ test_send_routes_by_repository() {
 }
 
 test_daily_product_email() {
-  local out holder uncertain DAILY_DAY=2026-11-19
+  local out holder uncertain uncertain_status uncertain_body DAILY_DAY=2026-11-19
   make_world daily
   printf '<p>Daily report</p>\n' > "$HOME_DIR/report.html"
   printf 'Daily report\n' > "$HOME_DIR/report.txt"
@@ -432,19 +430,18 @@ test_daily_product_email() {
   out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") || fail "retry after a definitive rejection was refused: $out"
   printf '{"thread_id":"t"}' > "$BODIES/no-id"
   for uncertain in '2026-11-22 500 empty' '2026-11-23 000 empty' '2026-11-24 200 no-id' '2026-11-25 404 empty'; do
-    set -- $uncertain
-    DAILY_DAY=$1
+    read -r DAILY_DAY uncertain_status uncertain_body <<< "$uncertain"
     : > "$ROUTES"
-    route POST "$INBOX_PATH/messages/send" "$2" "$3"
-    out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "uncertain send (HTTP $2) reported success"
-    assert_contains "$out" 'outcome uncertain' "uncertain send (HTTP $2) was not reported as uncertain"
-    [ "$(cat "$HOME_DIR/state/agentmail-daily/$DAILY_DAY")" = pending ] || fail "uncertain send (HTTP $2) released the day"
+    route POST "$INBOX_PATH/messages/send" "$uncertain_status" "$uncertain_body"
+    out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "uncertain send (HTTP $uncertain_status) reported success"
+    assert_contains "$out" 'outcome uncertain' "uncertain send (HTTP $uncertain_status) was not reported as uncertain"
+    [ "$(cat "$HOME_DIR/state/agentmail-daily/$DAILY_DAY")" = pending ] || fail "uncertain send (HTTP $uncertain_status) released the day"
     : > "$ROUTES"
     route POST "$INBOX_PATH/messages/send" 200 sent
     : > "$LOG/calls"
-    out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "retry after an uncertain send (HTTP $2) sent a second email"
-    assert_contains "$out" 'already sent today' "retry after an uncertain send (HTTP $2) did not explain the limit"
-    [ ! -s "$LOG/calls" ] || fail "retry after an uncertain send (HTTP $2) called the API"
+    out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "retry after an uncertain send (HTTP $uncertain_status) sent a second email"
+    assert_contains "$out" 'already sent today' "retry after an uncertain send (HTTP $uncertain_status) did not explain the limit"
+    [ ! -s "$LOG/calls" ] || fail "retry after an uncertain send (HTTP $uncertain_status) called the API"
   done
   DAILY_DAY=2026-11-26
   printf 'pending\n' > "$HOME_DIR/state/agentmail-daily/$DAILY_DAY"
