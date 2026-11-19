@@ -1,0 +1,51 @@
+[
+  {
+    "name": "Local inbound mail: both authenticated owners create instructions; spoofed, spam, blocked and Armor-flagged mail remains untrusted",
+    "result": "pass",
+    "live": true,
+    "evidence": "~/.no-mistakes/evidence/01M7SA8J40GG7DT9PWBN5WNJ80/scenario-1.txt",
+    "reason": "Real CLI scripts and curl executed against a localhost HTTP emulator with synthetic messages and isolated FM_HOME; no tenant mail was accessed."
+  },
+  {
+    "name": "Local delayed delivery and failed-label replay: old sending time is discovered with correct receipt time and no duplicate note",
+    "result": "pass",
+    "live": true,
+    "evidence": "~/.no-mistakes/evidence/01M7SA8J40GG7DT9PWBN5WNJ80/scenario-2.txt",
+    "reason": "Real CLI scripts and curl executed against a localhost HTTP emulator with synthetic messages and isolated FM_HOME; no tenant mail was accessed."
+  },
+  {
+    "name": "Local Armor scan: pending mail waits, then becomes an instruction after a clear result",
+    "result": "pass",
+    "live": true,
+    "evidence": "~/.no-mistakes/evidence/01M7SA8J40GG7DT9PWBN5WNJ80/scenario-3.txt",
+    "reason": "Real CLI scripts and curl executed against a localhost HTTP emulator with synthetic messages and isolated FM_HOME; no tenant mail was accessed."
+  },
+  {
+    "name": "Local outbound mail: repository routes select owners, exceptions apply once, and replies send only to explicit recipients",
+    "result": "pass",
+    "live": true,
+    "evidence": "~/.no-mistakes/evidence/01M7SA8J40GG7DT9PWBN5WNJ80/scenario-4.txt",
+    "reason": "Real CLI scripts and curl executed against a localhost HTTP emulator with synthetic messages and isolated FM_HOME; no tenant mail was accessed."
+  },
+  {
+    "name": "Local daily Quarterdeck email: owner-only routed bodies send once per date across repositories and eight concurrent callers",
+    "result": "pass",
+    "live": true,
+    "evidence": "~/.no-mistakes/evidence/01M7SA8J40GG7DT9PWBN5WNJ80/scenario-5.txt",
+    "reason": "Real CLI scripts and curl executed against a localhost HTTP emulator with synthetic messages and isolated FM_HOME; no tenant mail was accessed."
+  },
+  {
+    "name": "Local lost-response and rejection: accepted mail with a dropped response consumes the date; definitive rejection permits retry",
+    "result": "pass",
+    "live": true,
+    "evidence": "~/.no-mistakes/evidence/01M7SA8J40GG7DT9PWBN5WNJ80/scenario-6.txt",
+    "reason": "Real CLI scripts and curl executed against a localhost HTTP emulator with synthetic messages and isolated FM_HOME; no tenant mail was accessed."
+  },
+  {
+    "name": "Local background intake: arm registers the check, check returns promptly and saves mail, and disarm removes registration",
+    "result": "pass",
+    "live": true,
+    "evidence": "~/.no-mistakes/evidence/01M7SA8J40GG7DT9PWBN5WNJ80/scenario-7.txt",
+    "reason": "Real CLI scripts and curl executed against a localhost HTTP emulator with synthetic messages and isolated FM_HOME; no tenant mail was accessed."
+  }
+]

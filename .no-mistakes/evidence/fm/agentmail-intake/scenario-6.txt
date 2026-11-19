@@ -1,0 +1,43 @@
+$ fm-agentmail-daily.sh --repo ryannmicua/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: send outcome uncertain; day consumed
+
+$ fm-agentmail-daily.sh --repo ryannmicua/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo ryannmicua/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: send failed
+
+$ fm-agentmail-daily.sh --repo ryannmicua/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=0
+sent: 2026-11-23
+
+2026-11-19 attempt
+2026-11-19 sent
+2026-11-19 refused already sent today
+2026-11-20 attempt
+2026-11-20 attempt
+2026-11-20 attempt
+2026-11-20 attempt
+2026-11-20 attempt
+2026-11-20 refused already sent today
+2026-11-20 refused already sent today
+2026-11-20 refused already sent today
+2026-11-20 refused already sent today
+2026-11-20 refused already sent today
+2026-11-20 refused already sent today
+2026-11-20 refused already sent today
+2026-11-20 sent
+2026-11-21 attempt
+2026-11-21 sent
+2026-11-22 attempt
+2026-11-22 refused send outcome uncertain; day consumed
+2026-11-22 refused already sent today
+2026-11-23 attempt
+2026-11-23 refused send failed
+2026-11-23 attempt
+2026-11-23 sent
+
+RESULT Local lost-response and rejection: accepted mail with a dropped response consumes the date; definitive rejection permits retry: pass

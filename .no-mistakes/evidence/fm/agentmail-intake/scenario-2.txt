@@ -1,0 +1,27 @@
+$ fm-agentmail-check.sh poll
+exit=1
+could not label an AgentMail message firstmate-seen (HTTP 503); its note is saved and a retry will not duplicate it
+
+$ fm-agentmail-check.sh poll
+exit=0
+
+$ fm-agentmail-check.sh poll
+exit=0
+
+id=1795080292-e59H2C
+at=2026-11-19T09:24:52Z
+source=text
+announce_marker=1
+request_id=agentmail-0cec983e923ab9fec1520e15283caa8c
+--
+AgentMail email from personal@example.test (the owner) to agent@example.test
+From the owner: an instruction for firstmate.
+Subject: Task delayed
+Received: 2026-11-19T03:00:00Z
+Thread: thread-delayed
+Message: delayed
+Text:
+Please handle delayed
+
+Persisted note count unchanged after failed-label replay and repeated poll: 11
+RESULT Local delayed delivery and failed-label replay: old sending time is discovered with correct receipt time and no duplicate note: pass

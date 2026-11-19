@@ -1,0 +1,81 @@
+$ fm-agentmail-daily.sh --repo ryannmicua/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=0
+sent: 2026-11-19
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=1
+fm-agentmail-daily: already sent today
+
+$ fm-agentmail-daily.sh --repo adventistasia/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=0
+sent: 2026-11-20
+
+$ fm-agentmail-daily.sh --repo ryannmicua/demo --html-file {run-worktree}/.agentmail-live/home/report.html --text-file {run-worktree}/.agentmail-live/home/report.txt
+exit=0
+sent: 2026-11-21
+
+[
+  {
+    "path": "/v0/inboxes/agent@example.test/messages/send",
+    "body": {
+      "to": [
+        "personal@example.test"
+      ],
+      "subject": "Quarterdeck daily product email",
+      "text": "Quarterdeck: product progress today.",
+      "html": "<p>Quarterdeck: product progress today.</p>"
+    }
+  },
+  {
+    "path": "/v0/inboxes/agent@example.test/messages/send",
+    "body": {
+      "to": [
+        "work@example.test"
+      ],
+      "subject": "Quarterdeck daily product email",
+      "text": "Quarterdeck: product progress today.",
+      "html": "<p>Quarterdeck: product progress today.</p>"
+    }
+  },
+  {
+    "path": "/v0/inboxes/agent@example.test/messages/send",
+    "body": {
+      "to": [
+        "personal@example.test"
+      ],
+      "subject": "Quarterdeck daily product email",
+      "text": "Quarterdeck: product progress today.",
+      "html": "<p>Quarterdeck: product progress today.</p>"
+    }
+  }
+]
+Daily records: {"2026-11-20": "sent\n", "2026-11-19": "sent\n", "2026-11-21": "sent\n"}
+RESULT Local daily Quarterdeck email: owner-only routed bodies send once per date across repositories and eight concurrent callers: pass

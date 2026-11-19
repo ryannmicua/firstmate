@@ -1,0 +1,28 @@
+$ fm-agentmail-check.sh arm
+exit=0
+armed: state/agentmail.check.sh
+
+$ fm-agentmail-check.sh check
+exit=0
+
+check returned in 0.073s; completed background note:
+id=1795080297-iXYCJX
+at=2026-11-19T09:24:57Z
+source=text
+announce_marker=1
+request_id=agentmail-3af882411d2fb6ab5e3929f589659162
+--
+AgentMail email from personal@example.test (the owner) to agent@example.test
+From the owner: an instruction for firstmate.
+Subject: Task background
+Received: 2026-11-19T03:00:00Z
+Thread: thread-background
+Message: background
+Text:
+Please handle background
+
+$ fm-agentmail-check.sh disarm
+exit=0
+disarmed: state/agentmail.check.sh
+
+RESULT Local background intake: arm registers the check, check returns promptly and saves mail, and disarm removes registration: pass

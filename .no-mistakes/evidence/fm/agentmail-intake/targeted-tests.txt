@@ -1,0 +1,15 @@
+ok - owner mail with SPF or aligned DKIM is trusted; unverified, flagged, and stranger mail is untrusted
+ok - a message with no authentication results is never trusted
+ok - replays and seen-labelled messages never produce a second note
+ok - a message whose Armor scan is pending is deferred and noted once cleared
+ok - delayed delivery survives future messages, legacy cursors, pagination, initial polls, and replays
+ok - unsafe Armor text is withheld for every sender and rejection label
+ok - every listing page includes spam and blocked mail while notes reject their authority
+ok - persistent recipient permissions and alternate credential paths are refused
+ok - problems are reported once and never include the key
+ok - sending is limited to the allowlist, one-off exceptions are per send, and the key never appears
+ok - a reply names its recipients, never replies to all, and obeys the allowlist
+ok - --repo picks the recipient by repository owner from local config and still obeys the allowlist
+ok - daily product email uses owner routes and both bodies, reserves each date before sending, frees it only after a definitive rejection, and lets one of several concurrent calls send
+ok - arm registers the watcher check and disarm removes it
+ok - check starts one detached poll job that saves the notes

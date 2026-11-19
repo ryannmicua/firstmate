@@ -1,0 +1,74 @@
+$ fm-agentmail-send.sh --repo ryannmicua/demo --subject Progress --text Ready
+exit=0
+message_id=out-1
+thread_id=thread-out
+
+$ fm-agentmail-send.sh --repo adventistasia/demo --subject Progress --text Ready
+exit=0
+message_id=out-2
+thread_id=thread-out
+
+$ fm-agentmail-send.sh --to outsider@evil.test --subject Hello --text Specific mail
+exit=1
+fm-agentmail-send: outsider@evil.test is not on the allowlist in config/agentmail; pass --allow-recipient outsider@evil.test only when the owner asked for this specific email
+
+$ fm-agentmail-send.sh --to outsider@evil.test --allow-recipient outsider@evil.test --subject Hello --text Specific mail
+exit=0
+message_id=out-3
+thread_id=thread-out
+
+$ fm-agentmail-send.sh --to outsider@evil.test --subject Hello --text Later
+exit=1
+fm-agentmail-send: outsider@evil.test is not on the allowlist in config/agentmail; pass --allow-recipient outsider@evil.test only when the owner asked for this specific email
+
+$ fm-agentmail-send.sh --repo unknown/demo --subject Hello --text Ready
+exit=2
+fm-agentmail-send: no recipient route for repository unknown/demo; add route=<github owner>:<address> to config/agentmail
+
+$ fm-agentmail-send.sh --reply-to-message <original@example.test> --to personal@example.test --text Answer
+exit=0
+message_id=out-4
+thread_id=thread-out
+
+[
+  {
+    "path": "/v0/inboxes/agent@example.test/messages/send",
+    "body": {
+      "to": [
+        "personal@example.test"
+      ],
+      "subject": "Progress",
+      "text": "Ready"
+    }
+  },
+  {
+    "path": "/v0/inboxes/agent@example.test/messages/send",
+    "body": {
+      "to": [
+        "work@example.test"
+      ],
+      "subject": "Progress",
+      "text": "Ready"
+    }
+  },
+  {
+    "path": "/v0/inboxes/agent@example.test/messages/send",
+    "body": {
+      "to": [
+        "outsider@evil.test"
+      ],
+      "subject": "Hello",
+      "text": "Specific mail"
+    }
+  },
+  {
+    "path": "/v0/inboxes/agent@example.test/messages/<original@example.test>/reply",
+    "body": {
+      "to": [
+        "personal@example.test"
+      ],
+      "text": "Answer"
+    }
+  }
+]
+RESULT Local outbound mail: repository routes select owners, exceptions apply once, and replies send only to explicit recipients: pass

@@ -1,0 +1,22 @@
+$ fm-agentmail-check.sh poll
+exit=0
+
+$ fm-agentmail-check.sh poll
+exit=0
+
+id=1795080294-Qp3Gf2
+at=2026-11-19T09:24:54Z
+source=text
+announce_marker=1
+request_id=agentmail-d4295ea1673cef636cd719bac54ec92a
+--
+AgentMail email from personal@example.test (the owner) to agent@example.test
+From the owner: an instruction for firstmate.
+Subject: Task pending
+Received: 2026-11-19T03:00:00Z
+Thread: thread-pending
+Message: pending
+Text:
+Please handle pending
+
+RESULT Local Armor scan: pending mail waits, then becomes an instruction after a clear result: pass
