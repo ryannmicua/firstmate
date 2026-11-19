@@ -93,10 +93,7 @@ save_note() {
 }
 
 # trust_verdict <message-json>: print "trusted" or "untrusted:<reason>".
-# A message is the owner's instruction only when all hold: its single From
-# address is a configured owner address, AgentMail reports an SPF pass or a DKIM
-# pass for that address's own domain, AgentMail did not label it unauthenticated,
-# and Agent Armor completed with a clear verdict (or was not running).
+# The trust rule is owned by docs/configuration.md "AgentMail inbox".
 trust_verdict() {
   local msg=$1 addr domain verdict
   addr=$(fm_am_from_addr "$(jq -r '.from // ""' <<<"$msg")") || { printf 'untrusted:the sender is not one plain address'; return 0; }

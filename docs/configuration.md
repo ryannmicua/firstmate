@@ -2117,26 +2117,30 @@ It is opt-in, uses plain HTTPS calls with the API key and no SDK, MCP server, or
 | `route` | `route=<github owner>:<address>`, repeatable; the recipient `fm-agentmail-send.sh --repo <owner/name>` picks for that owner's repositories. |
 
 Keep the owner addresses and routes in this untracked file only.
-`config/agentmail.key` holds one line starting with `am_`, must be a regular file owned by this user with mode 600, and is read on every call, so replacing it rotates the key.
+Store the AgentMail API key as one line starting with `am_` in `config/agentmail.key`, a regular file owned by this user with mode 600.
+Each poll or send invocation loads the key once, so replacing it takes effect on the next invocation.
 The key reaches curl only through its standard-input configuration, never on a command line, and is never printed, logged, or written into a note.
 
 ### Inbound mail
 
 Arm the poll with `bin/fm-agentmail-check.sh arm` and remove it with `bin/fm-agentmail-check.sh disarm`.
 The watcher polls on its normal check interval, the check returns immediately, and a detached single-instance job does the polling, as the GitHub bot check does ([`fm-agentmail-check.sh` header](../bin/fm-agentmail-check.sh) owns discovery and retry mechanics).
-Each received message becomes one captain inbox note with the sender, subject, received time, thread id, message id, the extracted reply text (no quoted history, at most 4,000 characters), and attachment names and sizes.
+Each received message becomes one captain inbox note with the sender, subject, received time from `created_at` (`unknown` if absent), thread id, message id, and attachment names and sizes.
+The note uses extracted reply text when present, otherwise the message preview, limited to 4,000 characters plus a truncation marker.
 Attachments are never downloaded or opened.
 Processed messages get the `firstmate-seen` label in AgentMail, and the message id also deduplicates notes, so a replay creates no second note.
 
 A message is the owner's instruction only when all of these hold:
 
 - its single From address is a configured owner address;
-- AgentMail's authentication results show an SPF pass, or a DKIM pass signed for the sender's own domain;
+- AgentMail's authentication results show an SPF pass, or a DKIM pass signed for the sender's domain or a parent domain;
 - AgentMail did not label it `unauthenticated`, `spam`, or `blocked`;
 - Agent Armor either is not running or completed with a `clear` verdict.
 
 Everything else is an untrusted information note that tells firstmate to surface it to the captain and not act on it.
-A message whose Agent Armor scan is still pending is held for the next poll, and one Agent Armor flagged or could not scan has its text withheld from the note.
+A pending Agent Armor scan with a parseable future deadline holds that message and later messages for the next poll.
+Once the deadline expires, or if it is absent or invalid, the message becomes an untrusted note with its text withheld.
+Any other scan result that is incomplete or not `clear` also withholds the text, regardless of sender classification.
 AgentMail only reports authentication results for mail received after 2026-09-09, so a message without them is always untrusted.
 
 ### Sending
@@ -2148,7 +2152,8 @@ Any other recipient is refused unless that exact address is named by `--allow-re
 Replies name their recipients explicitly and never reply to all.
 `bin/fm-agentmail-daily.sh` sends the Quarterdeck product email through this sender, with HTML and a plain-text alternative, only to the configured owner route for its repository.
 It accepts no arbitrary recipient or recipient exception and permits one successful daily email per home per local date, across repositories.
-Each date is reserved by exclusively creating its record before sending, so concurrent calls cannot both send, so only a definitive refusal (a local check before the API call, or an AgentMail 4xx with an error message) leaves it available for retry; a timeout, lost response, server error, interruption, or unrecordable success consumes it.
+Each date is reserved by exclusively creating its record before sending, so concurrent calls cannot both send.
+Only a definitive refusal (a local check before the API call, or an AgentMail 4xx with an error message) leaves it available for retry; a timeout, lost response, server error, interruption, or unrecordable success consumes it.
 Its header and `--help` own the arguments, sent-day record, result log, and test date override.
 `bin/fm-agentmail-send.sh --help` owns the exact options.
 

@@ -7,7 +7,7 @@
 # Operator setup is owned by docs/configuration.md "AgentMail inbox".
 #
 # Secret handling, owned here:
-#   - The API key is read from a private key file on every call and never enters
+#   - The API key is read when configuration is loaded and never enters
 #     any process argv: it reaches curl as a `header = "Authorization: ..."`
 #     line of a --config document that the shell's printf builtin writes to
 #     curl's stdin.
