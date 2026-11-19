@@ -5,6 +5,8 @@ set -u
 
 # shellcheck source=tests/lib.sh disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-pr-lib.sh"
 # shellcheck source=/dev/null
@@ -685,6 +687,46 @@ test_draft_pull_request_is_not_armed() {
     > "$dir/stdout" 2> "$dir/stderr" || fail "an unreadable draft state blocked arming"
   [ -f "$dir/home/state/task-a.check.sh" ] || fail "an unreadable draft state was not armed"
   pass "arming refuses a draft pull request, naming it, and arms a ready or unreadable one"
+}
+
+# With config/github-bot present, a newly ready github.com pull request is
+# assigned to the bot with the bot's own token; a refusal is reported and never
+# blocks arming, and the merge-time re-record assigns nothing.
+test_ready_pull_request_assigns_the_bot() {
+  local dir body
+  dir=$(make_case assign-bot)
+  write_task_meta "$dir"
+  printf '%s\n' 'login=example-bot' 'owner=owner-one' > "$dir/home/config/github-bot"
+  (umask 077 && printf '%s\n' ghp_FakeBotToken0002 > "$dir/home/config/github-bot.token")
+  body="$dir/bodies"
+  mkdir -p "$body"
+  printf '{}' > "$body/empty"
+  printf '{"assignees":[]}' > "$body/issue"
+  printf '{"assignees":[{"login":"example-bot"}]}' > "$body/assigned"
+  printf 'GET\t/repos/o/r/assignees/example-bot\t204\t%s\n' "$body/empty" > "$dir/routes"
+  printf 'GET\t/repos/o/r/issues/9\t200\t%s\n' "$body/issue" >> "$dir/routes"
+  printf 'POST\t/repos/o/r/issues/9/assignees\t201\t%s\n' "$body/assigned" >> "$dir/routes"
+  fm_test_fake_github_api "$dir/fakebin" "$dir/api" "$dir/routes"
+  FM_GH_API_URL=https://api.test.invalid run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "arming failed with a bot configured: $(cat "$dir/stderr")"
+  grep -qxF 'POST /repos/o/r/issues/9/assignees' "$dir/api/calls" || fail "the ready pull request was not assigned to the bot"
+  grep -qxF 'token ghp_FakeBotToken0002' "$dir/api/auth" || fail "the assignment did not use the bot token"
+  ! grep -q 'github-bot:' "$dir/stderr" || fail "a successful assignment reported a problem: $(cat "$dir/stderr")"
+  ! grep -qF ghp_FakeBotToken0002 "$dir/stdout" "$dir/stderr" "$dir/api/argv" || fail "the bot token was printed or passed on argv"
+
+  : > "$dir/routes"
+  : > "$dir/api/calls"
+  FM_GH_API_URL=https://api.test.invalid run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "a refused assignment blocked arming"
+  grep -qF 'was not assigned to the bot: the bot example-bot cannot be assigned in o/r' "$dir/stderr" \
+    || fail "a refused assignment was not reported: $(cat "$dir/stderr")"
+  [ -f "$dir/home/state/task-a.check.sh" ] || fail "a refused assignment left the pull request unarmed"
+
+  : > "$dir/api/calls"
+  FM_PR_CHECK_MERGE=1 FM_GH_API_URL=https://api.test.invalid run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > /dev/null 2>&1 || fail "the merge-time re-record failed"
+  [ ! -s "$dir/api/calls" ] || fail "the merge-time re-record tried to assign the bot"
+  pass "a ready GitHub pull request is assigned to the configured bot, and a refusal never blocks arming"
 }
 
 # A secondmate is a persistent worker, not a delivery lane: it never owns a
@@ -3630,6 +3672,7 @@ test_retirement_queue_failure_and_receipt_tampering
 test_gitlab_merged_poll_retires
 test_invalid_entrypoints_have_zero_side_effects
 test_draft_pull_request_is_not_armed
+test_ready_pull_request_assigns_the_bot
 test_secondmate_record_refuses_a_pr_watch
 test_unpushed_named_head_refuses_registration
 test_direct_pr_unpushed_commit_refuses_registration

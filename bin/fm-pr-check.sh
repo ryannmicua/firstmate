@@ -296,4 +296,15 @@ case "$READY_RC" in
   0|1) ;;
   *) printf 'actionable: PR %s is registered but its ready line did not reach the parent channel (rc=%s)\n' "$URL" "$READY_RC" >&2 ;;
 esac
+# With config/github-bot present, assign the bot account to a newly ready
+# github.com pull request so the owner's comments and reviews reach firstmate
+# without a mention (docs/configuration.md "GitHub identities"). The bot
+# assigns itself with its own token; a refusal is reported and never blocks.
+if [ "$PROVIDER" = github ] && [ "$HOST" = github.com ] && [ "${FM_PR_CHECK_MERGE:-}" != 1 ] \
+  && [ -e "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/github-bot" ] && command -v jq >/dev/null 2>&1; then
+  ASSIGN_RC=0
+  ASSIGN_OUT=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-gh-bot-check.sh" assign "$URL" 2>/dev/null) || ASSIGN_RC=$?
+  ASSIGN_OUT=$(printf '%s\n' "$ASSIGN_OUT" | sed -n '1p' | tr -cd '[:print:]' | cut -c1-200)
+  [ "$ASSIGN_RC" -eq 0 ] || printf 'github-bot: %s was not assigned to the bot: %s\n' "$URL" "${ASSIGN_OUT:-exit $ASSIGN_RC}" >&2
+fi
 printf 'armed: state/%s.check.sh\n' "$ID"

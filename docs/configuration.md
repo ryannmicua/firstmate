@@ -1966,7 +1966,7 @@ That writes `state/usage-warner.check.sh` and binds its bytes with `bin/fm-check
 
 A home can give its GitHub work identities of its own while this machine's own `gh` and git sign-in stay as they are.
 A writing identity, either a user account such as a machine user or a GitHub App, is what workers push, commit, open pull requests, and reply as.
-A listening bot account is what the owner @-mentions or assigns issues and pull requests to, and that reaches firstmate as a captain inbox note.
+A listening bot account is what the owner @-mentions or assigns issues and pull requests to, and that reaches firstmate as a captain inbox note; firstmate also assigns it to the pull requests its workers open, and merges and replies as it where it can.
 The two can be the same account: point both configurations at the same token file.
 Both are opt-in; a home with neither file behaves exactly as before, and the owner keeps reviewing and commenting under their own account.
 Neither file is inherited into secondmate homes, so a secondmate's workers use a writing identity only when that home has its own `config/github-identity`.
@@ -2022,7 +2022,7 @@ Current limits:
 | Key | Meaning |
 | --- | --- |
 | `login` | The bot account's GitHub login (required). |
-| `owner` | The owner's GitHub login; only this account's mentions and assignments count as instructions (required). |
+| `owner` | The owner's GitHub login; only this account's mentions, assignments, and activity on threads assigned to the bot count as instructions (required). |
 | `token_file` | Absolute path of the bot's token; default `config/github-bot.token`. |
 
 The token must be a classic personal access token of the bot account with the `notifications` and `repo` scopes, because GitHub's notifications API does not accept fine-grained tokens, and its file must be owner-only.
@@ -2035,19 +2035,53 @@ The job has its own timeout (`FM_GH_BOT_POLL_TIMEOUT`, 600 seconds by default) a
 Each poll reads participating notifications updated within an overlapping time window, regardless of read state.
 The first window covers the preceding day; later polls resume the since cursor in `state/.github-bot-check`.
 The [`fm-gh-bot-check.sh` header](../bin/fm-gh-bot-check.sh) owns cursor checkpointing and retry mechanics.
-An @-mention in an issue or pull request body, an issue comment, a pull request review comment, a submitted review summary, or a commit comment becomes one captain inbox note with the repository, the subject title and URL, the mention URL, and up to 4,000 characters of text.
+An @-mention by anyone except the bot itself in an issue or pull request body, an issue comment, a pull request review comment, a submitted review summary, or a commit comment becomes one captain inbox note with the repository, the subject title and URL, the mention URL, and up to 4,000 characters of text.
 An assignment or review request becomes one note identifying the actor, repository, and issue or pull request title and URL.
 A note from the owner says it is an instruction for firstmate.
 Owner-authored mention text counts as the owner's only when one GraphQL response reports the owner as its author and either no edit or the owner as its last editor; the note carries the body from that same response, and unverifiable owner text is headed NOT FROM THE OWNER.
 Assignments and review requests count as the owner's when their event actor is the configured owner.
-Any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
+For mentions, assignments, and review requests, any other author's note is headed NOT FROM THE OWNER and says to surface it to the captain without acting on it.
 For issue and pull request threads whose notification reason is mention, assignment, or review request, the poll retrieves all mentions and assignment/review-request events naming the bot, regardless of which of those reasons triggered the notification.
+The bot assigning itself is never a note.
 Commit threads contribute commit-comment mentions only; other subject types are skipped.
-After a new note is saved, the owner's comment, or the issue or pull request for an assignment, gets an eyes reaction so the owner sees it was picked up.
+
+On an issue or pull request the bot is currently assigned to, no mention is needed: whatever the notification reason, every comment, pull request review comment, and submitted review made since the thread was created becomes a note, except the bot's own.
+A review that approves or requests changes counts even with no text, and its note names the review state, the commit it was submitted on, and the pull request head when captured.
+The owner's items there follow the same provenance rule as owner mentions.
+An unmentioned item from any other author there is headed NOT FROM THE OWNER and marked as information only, never an instruction; mentions follow the rules above.
+Reading the assignment costs one subject read for a participating thread with another reason; a subject that is gone or out of the bot's reach is skipped.
+Comments and reviews on a thread the bot is not assigned to require a mention; assignments and review requests follow the event rules above.
+
+After a new note is saved, the owner's comment, or the issue or pull request for an assignment or review, gets an eyes reaction so the owner sees it was picked up; nothing from another author gets a reaction.
 Replayed notes and items already carrying the bot's own eyes reaction skip another reaction POST.
-The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried.
-Other notification reasons, including team mentions, are skipped.
+The poll never marks notifications read; durable inbox request IDs prevent duplicate notes when a window is retried or an item is edited to add or remove a mention.
+Other notification reasons on commits and other subject types, including team mentions, are skipped.
 The check prints a line only when the last poll's problem changes, such as a missing or refused token; `bin/fm-gh-bot-check.sh --help` owns the details.
+
+### Assigning, approving, and writing as the bot
+
+The worker delivery instructions assign the bot as soon as a github.com pull request opens, including in the pipeline PR-opening handoff before CI monitoring.
+`bin/fm-pr-check.sh` also ensures assignment when registering the ready pull request.
+On assignment, the existing notification poll backfills comments and reviews from the thread's creation, with the same durable request IDs used for later activity.
+The bot assigns itself with its own token, which needs triage or write access to the repository; a refusal is printed and never blocks registration.
+
+The owner's approving review on a pull request firstmate is waiting on is the owner's word to merge that pull request, with no text or mention needed.
+It holds only while the commit it approved is still the pull request head: a later push, or a later request for changes from the owner, cancels it.
+Before merging on it, firstmate checks that the current head matches the note's reviewed commit, and the merge still goes through `bin/fm-pr-merge.sh` with every guard, including green checks; nothing merges automatically.
+When the repository gates data migrations with a label and the pull request contains a data migration, firstmate adds that label before merging on the owner's approval.
+The optional local `config/migration-labels` file names those labels, one `<owner>/<repo> <label>` line per repository, with `#` starting a comment; for example `adventistasia/rms-cares migration-approved`.
+The approval note names the label only for a listed repository; any other repository gets no label added and no merge blocked on one.
+Firstmate then replies on the pull request as the bot, so the owner sees the approval was picked up.
+
+Firstmate's merges and replies use the bot under the following conditions, regardless of assignment:
+
+- `bin/fm-pr-merge.sh` runs the merge command as the bot when the bot has write access, has admin access when the merge arguments request `--admin`, and the pull request changes nothing under `.github/workflows/`, which needs a workflow scope the bot token lacks.
+  If the bot eligibility check refuses or fails, the merge command uses this machine's `gh` login; the script prints the selected identity and any fallback reason before attempting the merge.
+- Replies go through `bin/fm-gh-bot-check.sh reply`, and fall back to firstmate's usual tool when it reports that the bot cannot reach the repository.
+
+Every check, read, and guard of the merge runs exactly as without a bot; only the merge command changes identity.
+The token reaches `gh` only through its environment and is never printed.
+`bin/fm-gh-bot-check.sh --help` owns the exact commands and exit codes.
 
 ### Placing the tokens and App key
 
