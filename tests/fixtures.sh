@@ -89,7 +89,7 @@ SH
 # unmatched call answers 404. The stub appends to <log-dir>: `argv` (the whole
 # command line, so a test can prove no credential rode on it), `calls` (METHOD
 # path), `auth` (the Authorization value read from the stdin --config), and
-# `bodies` (request bodies).
+# `bodies` (request bodies, read from the file an @file argument names).
 fm_test_fake_github_api() {
   local fakebin=$1 log=$2 routes=$3
   mkdir -p "$log"
@@ -107,7 +107,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     -X) method=$2; shift 2 ;;
     -o) out=$2; shift 2 ;;
-    --data-binary) data=$2; shift 2 ;;
+    --data-binary) data=$2; case "$data" in @?*) data=$(cat -- "${data#@}") ;; esac; shift 2 ;;
     -w|--max-time|-H|--config) shift 2 ;;
     -*) shift ;;
     *) url=$1; shift ;;

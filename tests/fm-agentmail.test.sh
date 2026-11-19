@@ -461,6 +461,19 @@ test_daily_product_email() {
   wait
   [ "$(grep -c '^POST ' "$LOG/calls")" = 1 ] || fail "concurrent daily sends sent more than one email: $(cat "$LOG/calls")"
   [ "$(cat "$HOME_DIR"/race-*.out | grep -c 'already sent today')" = 5 ] || fail "concurrent daily sends were not refused for the reserved day"
+  DAILY_DAY=2026-11-29
+  : > "$LOG/bodies"
+  : > "$LOG/argv"
+  head -c 200000 /dev/zero | tr '\0' 'h' > "$HOME_DIR/big.html"
+  head -c 200000 /dev/zero | tr '\0' 't' > "$HOME_DIR/big.txt"
+  out=$(run_daily --repo personal-org/product --html-file "$HOME_DIR/big.html" --text-file "$HOME_DIR/big.txt") || fail "a 400 KB daily email beyond the argv limit was not sent: $out"
+  jq -e '(.html | length) == 200000 and (.text | length) == 200000' "$LOG/bodies" >/dev/null || fail "large daily email bodies did not reach the API intact"
+  [ "$(wc -c < "$LOG/argv")" -lt 10000 ] || fail "the email body travelled on curl's argv"
+  DAILY_DAY=2026-11-30
+  : > "$LOG/calls"
+  out=$(TMPDIR="$HOME_DIR/missing-tmp" run_daily --repo personal-org/product --html-file "$HOME_DIR/report.html" --text-file "$HOME_DIR/report.txt") && fail "a send that could not make its request reported success"
+  [ ! -s "$LOG/calls" ] || fail "a send without a private request file still reached the API"
+  [ ! -e "$HOME_DIR/state/agentmail-daily/$DAILY_DAY" ] || fail "a send that made no request consumed the day"
   assert_grep '2026-11-19 sent' "$HOME_DIR/state/agentmail-daily.log" "successful send was not logged"
   assert_grep '2026-11-19 refused already sent today' "$HOME_DIR/state/agentmail-daily.log" "same-day refusal was not logged"
   assert_grep '2026-11-21 refused send failed' "$HOME_DIR/state/agentmail-daily.log" "rejected send was not logged"

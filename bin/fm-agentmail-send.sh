@@ -106,19 +106,22 @@ for addr in "${TO[@]}"; do
   die "$addr is not on the allowlist in config/agentmail; pass --allow-recipient $addr only when the owner asked for this specific email"
 done
 
-to_json=$(printf '%s\n' "${TO[@]}" | jq -Rn '[inputs]')
+to_json=$(printf '%s\n' "${TO[@]}" | jq -Rn '[inputs]') || die "cannot build the email payload"
 inbox_path="/v0/inboxes/$(fm_am_urlenc "$FM_AM_INBOX")"
 if [ -n "$REPLY_TO" ]; then
-  body=$(jq -nc --argjson to "$to_json" --arg text "$TEXT" --arg html "$HTML" \
-    '{to: $to, text: $text} + (if $html == "" then {} else {html: $html} end)')
+  body=$(jq -nc --argjson to "$to_json" --rawfile text <(printf '%s' "$TEXT") --rawfile html <(printf '%s' "$HTML") \
+    '{to: $to, text: $text} + (if $html == "" then {} else {html: $html} end)') || die "cannot build the email payload"
   target="$inbox_path/messages/$(fm_am_urlenc "$REPLY_TO")/reply"
 else
-  body=$(jq -nc --argjson to "$to_json" --arg subject "$SUBJECT" --arg text "$TEXT" --arg html "$HTML" \
-    '{to: $to, subject: $subject, text: $text} + (if $html == "" then {} else {html: $html} end)')
+  body=$(jq -nc --argjson to "$to_json" --arg subject "$SUBJECT" --rawfile text <(printf '%s' "$TEXT") --rawfile html <(printf '%s' "$HTML") \
+    '{to: $to, subject: $subject, text: $text} + (if $html == "" then {} else {html: $html} end)') || die "cannot build the email payload"
   target="$inbox_path/messages/send"
 fi
 
-if ! fm_am_api POST "$target" "$body" || [ "$FM_AM_STATUS" != 200 ]; then
+api_rc=0
+fm_am_api POST "$target" "$body" || api_rc=$?
+[ "$api_rc" -ne 2 ] || die "could not make the AgentMail request; nothing was sent"
+if [ "$api_rc" -ne 0 ] || [ "$FM_AM_STATUS" != 200 ]; then
   detail=$(jq -r '.message // empty' <<<"$FM_AM_BODY" 2>/dev/null | head -c 200)
   case "$FM_AM_STATUS" in
     4[0-9][0-9]) [ -z "$detail" ] || die "AgentMail refused the email (HTTP $FM_AM_STATUS): $detail" ;;

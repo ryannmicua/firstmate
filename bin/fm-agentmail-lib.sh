@@ -168,30 +168,36 @@ fm_am_in_list() {
 # fm_am_api <method> <path> [json-body]
 # One authenticated call using FM_AM_KEY. Sets FM_AM_STATUS (HTTP status, or
 # 000 when no response arrived) and FM_AM_BODY. Returns 0 when a response
-# arrived, whatever its status; 1 when the call could not be made.
+# arrived, whatever its status; 1 when the request was attempted but no
+# response arrived; 2 when no request was made. The body travels through a
+# private temporary file, never argv.
 fm_am_api() {
-  local method=$1 target=$2 body=${3:-} base out status rc=0
+  local method=$1 target=$2 body=${3:-} base out in status rc=0
   local -a args
   FM_AM_STATUS=000
   FM_AM_BODY=
   base=${FM_AGENTMAIL_API_URL:-https://api.agentmail.to}
-  case "$target" in /*) ;; *) return 1 ;; esac
-  fm_gh_credential_ok "$FM_AM_KEY" || return 1
-  out=$(umask 077; mktemp "${TMPDIR:-/tmp}/fm-agentmail-api.XXXXXX") || return 1
+  case "$target" in /*) ;; *) return 2 ;; esac
+  fm_gh_credential_ok "$FM_AM_KEY" || return 2
+  out=$(umask 077; mktemp "${TMPDIR:-/tmp}/fm-agentmail-api.XXXXXX") || return 2
   args=(-sS --config - -X "$method" -o "$out" -w '%{http_code}'
     --max-time "${FM_AGENTMAIL_API_TIMEOUT:-20}"
     -H 'Accept: application/json'
     -H 'User-Agent: firstmate')
   if [ -n "$body" ]; then
-    args+=(-H 'Content-Type: application/json' --data-binary "$body")
+    if ! in=$(umask 077; mktemp "${TMPDIR:-/tmp}/fm-agentmail-req.XXXXXX") || ! printf '%s' "$body" > "$in"; then
+      rm -f -- "$out" ${in:+"$in"}
+      return 2
+    fi
+    args+=(-H 'Content-Type: application/json' --data-binary "@$in")
   fi
   status=$(printf 'header = "Authorization: Bearer %s"\n' "$FM_AM_KEY" | curl "${args[@]}" "${base%/}$target" 2>/dev/null) || rc=$?
   # shellcheck disable=SC2034 # Read by callers.
   FM_AM_BODY=$(cat "$out" 2>/dev/null) || FM_AM_BODY=
-  rm -f -- "$out"
+  rm -f -- "$out" ${in:+"$in"}
   case "$status" in
     [0-9][0-9][0-9]) FM_AM_STATUS=$status ;;
     *) FM_AM_STATUS=000 ;;
   esac
-  [ "$rc" -eq 0 ] && [ "$FM_AM_STATUS" != 000 ]
+  [ "$rc" -eq 0 ] && [ "$FM_AM_STATUS" != 000 ] || return 1
 }
