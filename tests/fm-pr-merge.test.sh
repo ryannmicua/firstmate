@@ -11,6 +11,8 @@ set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 fm_git_identity fmtest fmtest@example.invalid
 
 PR_MERGE="$ROOT/bin/fm-pr-merge.sh"
@@ -218,6 +220,11 @@ case "${1:-} ${2:-}" in
     esac
     ;;
   "pr merge")
+    if [ "${GH_TOKEN:-}" = ghp_FakeBotToken0003 ]; then
+      printf 'merge-as=bot\n' >> "$FM_TEST_GH_LOG"
+    else
+      printf 'merge-as=login\n' >> "$FM_TEST_GH_LOG"
+    fi
     if [ -n "${FM_TEST_META_AT_MERGE:-}" ] && [ -f "${FM_STATE_OVERRIDE:-}/task-x1.meta" ]; then
       cat "$FM_STATE_OVERRIDE/task-x1.meta" > "$FM_TEST_META_AT_MERGE"
     fi
@@ -738,6 +745,63 @@ test_verified_merge_records_pr_and_head() {
     "records-before-merge: pr_head= was not recorded"
   assert_logged_gh_merge "$case_dir" 9 example/repo --squash
   pass "fm-pr-merge records pr= and pr_head= for a verified GitHub merge"
+}
+
+# With config/github-bot present, the merge command runs as the bot when it can
+# write to the repository and the pull request changes no workflow file, and as
+# this machine's gh login otherwise; every guard still runs and the identity is
+# printed. The bot token never reaches output or argv.
+test_github_merge_identity_prefers_the_bot() {
+  local case_dir variant rc
+  for variant in bot workflow no-access; do
+    case_dir=$(make_case "merge-identity-$variant")
+    mkdir -p "$case_dir/wt" "$case_dir/bodies"
+    add_gh_mocks "$case_dir" 7373737373737373737373737373737373737373
+    printf '%s\n' 'login=example-bot' 'owner=owner-one' > "$case_dir/home/config/github-bot"
+    (umask 077 && printf '%s\n' ghp_FakeBotToken0003 > "$case_dir/home/config/github-bot.token")
+    printf '{"permissions":{"push":true}}' > "$case_dir/bodies/repo"
+    printf '[{"filename":"bin/tool.sh"}]' > "$case_dir/bodies/files"
+    [ "$variant" != workflow ] || printf '[{"filename":"bin/tool.sh"},{"filename":".github/workflows/ci.yml"}]' > "$case_dir/bodies/files"
+    : > "$case_dir/routes"
+    if [ "$variant" != no-access ]; then
+      printf 'GET\t/repos/example/repo\t200\t%s\n' "$case_dir/bodies/repo" >> "$case_dir/routes"
+    fi
+    printf 'GET\t/repos/example/repo/pulls/73/files?per_page=100&page=1\t200\t%s\n' "$case_dir/bodies/files" >> "$case_dir/routes"
+    fm_test_fake_github_api "$case_dir/fakebin" "$case_dir/api" "$case_dir/routes"
+    set +e
+    FM_GH_API_URL=https://api.test.invalid run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/73 \
+      > "$case_dir/stdout" 2> "$case_dir/stderr"
+    rc=$?
+    set -e
+    expect_code 0 "$rc" "merge-identity-$variant: the merge should succeed"
+    assert_logged_gh_merge "$case_dir" 73 example/repo --squash
+    case "$variant" in
+      bot)
+        assert_grep 'merge-as=bot' "$case_dir/gh.log" "merge-identity-bot: the merge did not run as the bot"
+        assert_grep 'merge identity: the bot account example-bot' "$case_dir/stdout" "merge-identity-bot: the identity was not printed"
+        ;;
+      workflow)
+        assert_grep 'merge-as=login' "$case_dir/gh.log" "merge-identity-workflow: a workflow change merged as the bot"
+        assert_grep "merge identity: this machine's gh login" "$case_dir/stdout" "merge-identity-workflow: the fallback was not printed"
+        assert_grep '.github/workflows' "$case_dir/stdout" "merge-identity-workflow: the fallback reason was not named"
+        ;;
+      no-access)
+        assert_grep 'merge-as=login' "$case_dir/gh.log" "merge-identity-no-access: an unreachable repository merged as the bot"
+        assert_grep 'cannot reach example/repo' "$case_dir/stdout" "merge-identity-no-access: the fallback reason was not named"
+        ;;
+    esac
+    assert_no_grep ghp_FakeBotToken0003 "$case_dir/stdout" "merge-identity-$variant: the bot token was printed"
+    assert_no_grep ghp_FakeBotToken0003 "$case_dir/stderr" "merge-identity-$variant: the bot token was printed"
+    assert_no_grep ghp_FakeBotToken0003 "$case_dir/api/argv" "merge-identity-$variant: the bot token rode on argv"
+  done
+  case_dir=$(make_case merge-identity-unconfigured)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 7474747474747474747474747474747474747474
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/74 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "merge-identity-unconfigured: the merge failed"
+  assert_grep 'merge-as=login' "$case_dir/gh.log" "merge-identity-unconfigured: merged as something other than the gh login"
+  assert_no_grep 'merge identity' "$case_dir/stdout" "merge-identity-unconfigured: a home without a bot printed an identity line"
+  pass "fm-pr-merge merges as the bot when it can, falls back for workflow changes and unreachable repositories, and never prints the token"
 }
 
 # The forge call is the point of no return: once gh-axi has merged, nothing this
@@ -4620,3 +4684,4 @@ test_allow_red_refused_on_forgejo
 test_allow_missing_refused_on_forgejo
 test_allow_no_pipeline_merges_only_a_null_head_pipeline
 test_allow_no_pipeline_is_attended_only_and_gitlab_only
+test_github_merge_identity_prefers_the_bot

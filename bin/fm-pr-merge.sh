@@ -1637,6 +1637,25 @@ forgejo_confirm_merged() {
   [ "$merged" = true ]
 }
 
+# With config/github-bot present, the merge command runs as the bot account
+# whenever bin/fm-gh-bot-check.sh can-merge accepts this pull request, and as
+# this machine's gh login otherwise; the choice is printed either way. Only
+# the merge command changes identity: every read and guard above and below
+# runs exactly as without a bot (docs/configuration.md "GitHub identities").
+FM_PR_GITHUB_MERGE_GH=(gh)
+github_select_merge_identity() {
+  local out status=0
+  [ -e "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/github-bot" ] || return 0
+  out=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-gh-bot-check.sh" can-merge "$URL" 2>/dev/null) || status=$?
+  out=$(printf '%s\n' "$out" | sed -n '1p' | tr -cd '[:print:]' | cut -c1-200)
+  if [ "$status" -eq 0 ] && [ -n "$out" ]; then
+    FM_PR_GITHUB_MERGE_GH=("$SCRIPT_DIR/fm-gh-bot-check.sh" gh)
+    printf 'merge identity: the bot account %s\n' "$out"
+  else
+    printf "merge identity: this machine's gh login, because the bot cannot merge here: %s\n" "${out:-the bot check failed (exit $status)}"
+  fi
+}
+
 # Record before either forge call. This arms the merge poll without claiming a
 # landed outcome, so even a provider read failure after a real merge cannot
 # leave teardown without the PR identity it needs to verify the result.
@@ -1688,6 +1707,7 @@ case "$PROVIDER" in
       fi
       exit 1
     fi
+    github_select_merge_identity
     # The away record is locked first, so this last presence and authority read
     # and the forge command below share one live-owner critical section.
     hold_away_record_for_merge || exit 1
@@ -1696,7 +1716,7 @@ case "$PROVIDER" in
     [ "$away_status" -eq 0 ] || exit "$away_status"
     refuse_github_queue_while_away || exit 2
     merge_status=0
-    merge_output=$(gh pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
+    merge_output=$("${FM_PR_GITHUB_MERGE_GH[@]}" pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
       --match-head-commit "$FM_PR_MERGE_HEAD" \
       "${merge_args[@]+"${merge_args[@]}"}" "$@" 2>&1) || merge_status=$?
     if [ "$merge_status" -eq 0 ]; then
