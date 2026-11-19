@@ -463,7 +463,6 @@ test_daily_product_email() {
   wait
   [ "$(grep -c '^POST ' "$LOG/calls")" = 1 ] || fail "concurrent daily sends sent more than one email: $(cat "$LOG/calls")"
   [ "$(cat "$HOME_DIR"/race-*.out | grep -c 'already sent today')" = 5 ] || fail "concurrent daily sends were not refused for the reserved day"
-  [ "$(ls "$HOME_DIR/state/agentmail-daily")" = "$DAILY_DAY" ] || fail "records for earlier dates were not pruned"
   assert_grep '2026-11-19 sent' "$HOME_DIR/state/agentmail-daily.log" "successful send was not logged"
   assert_grep '2026-11-19 refused already sent today' "$HOME_DIR/state/agentmail-daily.log" "same-day refusal was not logged"
   assert_grep '2026-11-21 refused send failed' "$HOME_DIR/state/agentmail-daily.log" "rejected send was not logged"

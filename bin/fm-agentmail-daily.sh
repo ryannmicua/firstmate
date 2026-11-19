@@ -10,7 +10,7 @@
 # lost response, server error, unrecordable success) or that was interrupted
 # keeps the day consumed. Only a definitive refusal (AgentMail's 4xx with an
 # error message, or a local check before any API call) removes the record so
-# a retry may send. Records for other dates are pruned after a reservation.
+# a retry may send.
 # state/agentmail-daily.log records dates and send/refusal results without
 # mail content or credentials.
 # FM_AGENTMAIL_DAILY_DATE overrides the local YYYY-MM-DD date for testing.
@@ -65,9 +65,6 @@ if ! (set -o noclobber; printf 'pending\n' > "$RECORD") 2>/dev/null; then
   [ ! -e "$RECORD" ] || refuse 'already sent today'
   refuse 'cannot reserve the day'
 fi
-for old in "$DAYS"/*; do
-  [ "$old" = "$RECORD" ] || rm -f -- "$old"
-done
 rc=0
 FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-agentmail-send.sh" --repo "$REPO" --html-file "$HTML" --text-file "$TEXT" --subject "$SUBJECT" >/dev/null 2>&1 || rc=$?
 case "$rc" in
