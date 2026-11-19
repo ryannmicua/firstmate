@@ -213,7 +213,7 @@ test_delivery_ignores_sending_time() {
   done
   make_world delayed-pages
   printf 'fm-agentmail-check-v1\npolled_at=2099-01-01T12:00:00Z\n' > "$HOME_DIR/state/.agentmail-check"
-  msg delayed '<delayed@mail.test>' owner@example.test '{"timestamp":"2000-01-01T11:45:00Z"}'
+  msg delayed '<delayed@mail.test>' owner@example.test '{"timestamp":"2000-01-01T11:45:00Z","created_at":"2000-01-02T08:30:00Z"}'
   list_of delayed
   cp "$BODIES/list" "$BODIES/last-page"
   printf '{"messages":[],"next_page_token":"page2"}' > "$BODIES/first-page"
@@ -224,6 +224,7 @@ test_delivery_ignores_sending_time() {
   route PATCH "$INBOX_PATH/messages/$(enc_id '<delayed@mail.test>')" 200 empty
   run_check poll >/dev/null || fail "poll with an old saved cursor failed"
   [ -n "$(note_with 'text of <delayed@mail.test>')" ] || fail "delayed mail on a later page was lost"
+  assert_grep 'Received: 2000-01-02T08:30:00Z' "$(note_with 'text of <delayed@mail.test>')" "note showed the sending time as the receipt time"
   python3 - "$LOG/calls" <<'PYQUERY'
 import pathlib, sys, urllib.parse
 queries = []

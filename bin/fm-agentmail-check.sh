@@ -121,7 +121,7 @@ note_body() {
   local msg=$1 verdict=$2 from subject received thread mid text from_label rule attach
   from=$(one_line "$(jq -r '.from // "unknown"' <<<"$msg")" "$MAX_FIELD")
   subject=$(one_line "$(jq -r '.subject // "(no subject)"' <<<"$msg")" "$MAX_FIELD")
-  received=$(one_line "$(jq -r '.timestamp // .created_at // "unknown"' <<<"$msg")" 40)
+  received=$(one_line "$(jq -r '.created_at // "unknown"' <<<"$msg")" 40)
   thread=$(one_line "$(jq -r '.thread_id // "unknown"' <<<"$msg")" "$MAX_FIELD")
   mid=$(one_line "$(jq -r '.message_id // "unknown"' <<<"$msg")" "$MAX_FIELD")
   text=$(jq -r '.extracted_text // .preview // ""' <<<"$msg")
