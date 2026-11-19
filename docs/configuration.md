@@ -2146,7 +2146,10 @@ A recipient must be a configured owner address.
 Any other recipient is refused unless that exact address is named by `--allow-recipient` on that one send, which is for an email the owner asked for specifically.
 `--repo <owner/name>` picks the recipient from the `route` lines, so mail about each GitHub owner's repositories reaches the right owner address.
 Replies name their recipients explicitly and never reply to all.
-The once-a-day limit on the Quarterdeck email belongs to whatever sends it, not to this script.
+`bin/fm-agentmail-daily.sh` sends the Quarterdeck product email through this sender, with HTML and a plain-text alternative, only to the configured owner route for its repository.
+It accepts no arbitrary recipient or recipient exception and permits one successful daily email per home per local date, across repositories.
+A home-wide lock serializes calls; failed sends leave the day available for retry.
+Its header and `--help` own the arguments, sent-day record, result log, and test date override.
 `bin/fm-agentmail-send.sh --help` owns the exact options.
 
 ## Mail plane (.env)
