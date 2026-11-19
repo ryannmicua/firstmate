@@ -2035,7 +2035,7 @@ The job has its own timeout (`FM_GH_BOT_POLL_TIMEOUT`, 600 seconds by default) a
 Each poll reads participating notifications updated within an overlapping time window, regardless of read state.
 The first window covers the preceding day; later polls resume the since cursor in `state/.github-bot-check`.
 The [`fm-gh-bot-check.sh` header](../bin/fm-gh-bot-check.sh) owns cursor checkpointing and retry mechanics.
-An @-mention in an issue or pull request body, an issue comment, a pull request review comment, a submitted review summary, or a commit comment becomes one captain inbox note with the repository, the subject title and URL, the mention URL, and up to 4,000 characters of text.
+An @-mention by anyone except the bot itself in an issue or pull request body, an issue comment, a pull request review comment, a submitted review summary, or a commit comment becomes one captain inbox note with the repository, the subject title and URL, the mention URL, and up to 4,000 characters of text.
 An assignment or review request becomes one note identifying the actor, repository, and issue or pull request title and URL.
 A note from the owner says it is an instruction for firstmate.
 Owner-authored mention text counts as the owner's only when one GraphQL response reports the owner as its author and either no edit or the owner as its last editor; the note carries the body from that same response, and unverifiable owner text is headed NOT FROM THE OWNER.
@@ -2050,7 +2050,7 @@ A review that approves or requests changes counts even with no text, and its not
 The owner's items there follow the same provenance rule as owner mentions.
 Any other author's item there is headed NOT FROM THE OWNER and marked as information only, never an instruction.
 Reading the assignment costs one subject read for a participating thread with another reason; a subject that is gone or out of the bot's reach is skipped.
-Activity on a thread the bot is not assigned to is captured only when it mentions the bot.
+Comments and reviews on a thread the bot is not assigned to require a mention; assignments and review requests follow the event rules above.
 
 After a new note is saved, the owner's comment, or the issue or pull request for an assignment or review, gets an eyes reaction so the owner sees it was picked up; nothing from another author gets a reaction.
 Replayed notes and items already carrying the bot's own eyes reaction skip another reaction POST.
@@ -2071,7 +2071,7 @@ Before merging on it, firstmate checks that the current head matches the note's 
 For database changes, firstmate adds the migration label (for example rms-cares uses `migration-approved`) before merging on the owner's approval, regardless of whether the project separately gates migrations with a label.
 Firstmate then replies on the pull request as the bot, so the owner sees the approval was picked up.
 
-Firstmate's own GitHub writes run as the bot whenever it has access to the repository, regardless of assignment, and as this machine's `gh` login only where the bot cannot do it:
+Firstmate's merges and replies use the bot under the following conditions, regardless of assignment:
 
 - `bin/fm-pr-merge.sh` runs the merge command as the bot when the bot has write access and the pull request changes nothing under `.github/workflows/`, which needs a workflow scope the bot token lacks; it prints which identity merged.
 - Replies go through `bin/fm-gh-bot-check.sh reply`, and fall back to firstmate's usual tool when it reports that the bot cannot reach the repository.
